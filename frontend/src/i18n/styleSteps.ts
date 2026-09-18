@@ -2,7 +2,7 @@ import type { FlourType, Method, OvenType, PizzaStyle } from '../calculator';
 import type { Lang } from './translations';
 import type { BaseTimer } from './prefermentSteps';
 
-export type StylePhase = { title: string; steps: string[]; timers?: BaseTimer[] };
+export type StylePhase = { title: string; steps: string[]; timers?: BaseTimer[]; doughHandlingInfo?: string; fermentationInfo?: string; proofingInfo?: string; bakingInfo?: string };
 type RomanTray = false | { width: number; length: number; doughWeight: number };
 
 const timer = (id: string, seconds: number, kind: BaseTimer['kind']): BaseTimer => ({ id, seconds, kind });
@@ -38,36 +38,53 @@ const direct = (mixing: 'hand' | 'mixer', style: 'romana' | 'ny_style', roomHour
           'Ostavite tijesto 5 minuta u posudi miksera prije fermentacije.',
         ],
         timers: [timer(hand ? 'style-rest15m' : 'style-rest5m', (hand ? 15 : 5) * 60, 'rest')],
+        doughHandlingInfo: isTray
+          ? 'Teglia traži vlažnije završno tijesto. Nakon zamjesa ne oblikujte kugle za tondu; tijesto će se učvrstiti kroz nježne Stretch & Fold preklape u posudi.'
+          : 'Tonda nakon završnog zamjesa ide u čvrste, glatke kugle kroz staglio.',
       },
     {
-      title: 'Faza B: Prva fermentacija (Bulking)',
-      steps: [
+      title: isTray ? 'Faza B: Fermentacija i preklapanje' : 'Faza B: Prva fermentacija (Bulking)',
+      steps: isTray ? [
+        'Prebacite tijesto u lagano nauljenu fermentacijsku posudu.',
+        'Ostavite tijesto 30 minuta na sobnoj temperaturi.',
+        'Napravite prvi Stretch & Fold u posudi bez agresivnog izvlačenja.',
+        'Ostavite tijesto još 30 minuta na sobnoj temperaturi.',
+        'Napravite drugi Stretch & Fold i ostavite tijesto kao jednu masu.',
+        ...(fridgeHours > 0 ? [`Pokrijte posudu i prebacite cijelu masu u hladnjak na ${fridgeHours} sati pri 4°C.`] : [`Ostavite tijesto ${roomHours} sati na sobnoj temperaturi kao jednu masu.`]),
+      ] : [
         fridgeHours > 0 ? `Ostavite tijesto 30–45 minuta na sobnoj temperaturi.` : `Ostavite tijesto ${roomHours} sati na sobnoj temperaturi prije oblikovanja kugli.`,
         isGlutenFree ? 'Ne radite Stretch & Fold; ostavite smjesu samo 15 minuta da se vezivo upije.' : isManitoba ? 'Napravite čvrste Stretch & Fold preklopa nakon 30 minuta kako bi se izgradila čvrsta glutenska opna.' : isSpelt || isWholeWheat ? 'Napravite jedno nježno preklapanje nakon 30 minuta; ne silite strukturu.' : hand ? 'Napravite jedno preklapanje nakon 30 minuta.' : 'Napravite jedno lagano oblikovanje ako je potrebno.',
         ...(fridgeHours > 0 ? [`Nakon toga oblikujte kugle i stavite ih u hladnjak na ${fridgeHours} sati pri 4°C.`] : []),
       ],
+      fermentationInfo: isTray ? 'Teglia koristi vlažnije tijesto koje ostaje kao jedna masa. Tijekom fermentacije radite nježne Stretch & Fold preklape u posudi; ne oblikujte kugle za tondu.' : undefined,
       timers: [
         timer('style-room-bulk', 30 * 60, 'rt'),
         ...(fridgeHours > 0 ? [timer('style-fridge-bulk', fridgeHours * 3600, 'fridge')] : []),
       ],
     },
     {
-      title: 'Faza C: Podjela i oblikovanje loptica (Bulice)',
-      steps: [
-        isTray ? `Za tepsiju ${tray.width}×${tray.length} cm izvagajte ${tray.doughWeight} g tijesta.` : 'Nakon bulka oblikujte kugle.',
-        !isTray ? (isRoman ? 'Napravite kugle od 200–220 g.' : isGlutenFree ? 'Oblikujte manje kugle nježno; NY format od 40 cm nije prikladan.' : isManitoba ? 'Napravite veće kugle od 350–450 g.' : isSpelt || isWholeWheat ? 'Napravite kugle od približno 350–400 g; ne planirajte rastezanje u zraku.' : 'Napravite kugle od 350–400 g.') : 'Ne oblikujte malu okruglu kuglu; komad tijesta je namijenjen cijeloj tepsiji.',
+      title: isTray ? 'Faza C: Masa za tepsiju' : 'Faza C: Podjela i oblikovanje loptica (Bulice)',
+      steps: isTray ? [
+        `Ne oblikujte kugle za tondu. Za tepsiju ${tray.width}×${tray.length} cm pripremite jednu masu od ${tray.doughWeight} g.`,
+        fridgeHours > 0 ? 'Nakon hladne fermentacije izvadite cijelu masu iz posude 30–45 minuta prije oblikovanja.' : 'Ostavite masu do trenutka oblikovanja prema odabranom vremenu fermentacije.',
+      ] : [
+        'Nakon bulka oblikujte kugle.',
+        isRoman ? 'Napravite kugle od 200–220 g.' : isGlutenFree ? 'Oblikujte manje kugle nježno; NY format od 40 cm nije prikladan.' : isManitoba ? 'Napravite veće kugle od 350–450 g.' : isSpelt || isWholeWheat ? 'Napravite kugle od približno 350–400 g; ne planirajte rastezanje u zraku.' : 'Napravite kugle od 350–400 g.',
         isNewYork && isManitoba ? 'Za NY style koristite veću kuglu i održavajte kompaktnu sredinu apsolutno ravnomjerno.' : null,
         ...(fridgeHours > 0 ? [`Ostavite kugle 30–60 minuta na sobnoj temperaturi, zatim ih stavite u zatvorenu kutiju u hladnjak na ${fridgeHours} sati pri 4°C.`] : [`Ostavite kugle ${roomHours} sati na sobnoj temperaturi prije pečenja.`]),
       ].filter(Boolean) as string[],
-      timers: fridgeHours > 0 ? [timer('style-balls-fridge', fridgeHours * 3600, 'ballsFridge')] : [timer('style-balls-room', roomHours * 3600, 'ballsRt')],
+      proofingInfo: isTray ? `Za ovu tepsiju koristi se jedna masa od ${tray.doughWeight} g, bez kuglanja. Tijesto se nakon fermentacije nježno utiskuje u nauljenu tepsiju ${tray.width}×${tray.length} cm.` : undefined,
+      timers: fridgeHours > 0 ? [timer(isTray ? 'style-tray-fridge' : 'style-balls-fridge', fridgeHours * 3600, isTray ? 'fridge' : 'ballsFridge')] : [timer(isTray ? 'style-tray-room' : 'style-balls-room', roomHours * 3600, isTray ? 'rt' : 'ballsRt')],
     },
     {
       title: 'Faza D: Priprema, razvlačenje i nadijevanje',
       steps: isTray
         ? ['Izvadite tijesto iz hladnjaka 30–45 minuta prije oblikovanja.', `Tepsiju ${tray.width}×${tray.length} cm obilno nauljite maslinovim uljem.`, 'Istresite tijesto u tepsiju i utiskujte ga prstima od sredine prema rubovima dok ne ispuni cijeli lim; ne rastežite ga u zraku.', 'Ostavite tijesto da se opusti ako se vraća, zatim ponovno utisnite rubove.', 'Dodajte nadjev ravnomjerno i pecite prema odabranoj pećnici.']
         : isRoman
-          ? [`Izvadite loptice iz hladnjaka 15–20 minuta prije oblikovanja ili kada se približno udvostruče, ali pazite da ne predignu.`, 'Brzim i nježnim pokretom izvadite kuglu i stavite je na radnu površinu.', isSpelt ? 'Pirovo tijesto pažljivo utiskujte prstima; ne razvlačite ga agresivno.' : isWholeWheat ? 'Integralno tijesto nježno utiskujte prstima; baza će biti rustikalnija i manje prozračna.' : 'Bez rastezanja u zraku oblikujte ravnu Romanu pažljivim pritiskanjem prstima ili valjkom.', 'Nafilujte tanko i ravnomjerno kako bi sredina ostala hrskava.']
+          ? [`Izvadite loptice iz hladnjaka 15–20 minuta prije oblikovanja ili kada se približno udvostruče, ali pazite da ne predignu.`, 'Brzim i nježnim pokretom izvadite kuglu i stavite je na radnu površinu.', isSpelt ? 'Pirovo tijesto pažljivo utiskujte prstima; ne razvlačite ga agresivno.' : isWholeWheat ? 'Integralno tijesto nježno utiskujte prstima; baza će biti rustikalnija i manje prozračna.' : 'Romanu Tonda oblikujte isključivo pritiskanjem prstiju; ne koristite valjak.', 'Nafilujte tanko i ravnomjerno kako bi sredina ostala hrskava.']
           : [`Izvadite loptice iz hladnjaka 15–20 minuta prije razvlačenja ili kada se približno udvostruče, ali pazite da ne predignu.`, 'Radnu površinu lagano pospite brašnom ili semolom.', isGlutenFree ? 'Bezglutensko tijesto oblikujte samo pritiskanjem prstima; NY format od 40 cm i rastezanje u zraku nisu prikladni.' : isSpelt ? 'Pirovo tijesto otvorite isključivo pritiskanjem prstima; ne radite knuckle stretch.' : isWholeWheat ? 'Integralno tijesto otvorite pritiskanjem prstima; ne radite klasično rastezanje u zraku jer baza ostaje gušća.' : isManitoba ? 'Nakon pritska dlanovima razvucite tijesto preko šaka (knuckle stretch) do tanke baze.' : 'Nakon pritiska dlanovima možete pažljivo razvlačiti tijesto u zraku do tanke baze.', 'Nafilujte ravnomjerno; za NY prvo stavite suhu ribanu mozzarellu, zatim gusti umak i dodatke.'],
+      proofingInfo: isTray ? `Tijesto za Tegliu nježno utisnite prstima u nauljenu tepsiju ${tray.width}×${tray.length} cm. Ne razvlačite ga u zraku i ne pokušavajte napraviti okruglu kuglu.` : undefined,
+      bakingInfo: isTray ? 'Teglia se peče u kućnoj pećnici na približno 250 °C; vrijeme prilagodite debljini tijesta i boji dna.' : 'Tonda se peče pojedinačno na najvišoj temperaturi koju odabrana pećnica može postići.',
       timers: [timer('style-shape-pre-bake', 15 * 60, 'preBake')],
     },
   ];
@@ -124,17 +141,29 @@ const preferment = (method: 'biga' | 'poolish', mixing: 'hand' | 'mixer', style:
               ? `${hand ? 'Ručno mijesite kratko i nježno' : 'Miješajte kratko i nježno u mikseru'}; ulje dodajte na kraju i ne opterećujte strukturu.`
               : `${hand ? 'Ručno mijesite 12–14 minuta' : 'Mijesite u mikseru 7–9 minuta'}; ulje dodajte na kraju i ciljajte temperaturu tijesta 21–23°C.`,
       ],
+      doughHandlingInfo: isTray
+        ? 'Kod Teglie završno tijesto ostaje vlažnije i ne oblikuje se u kugle za tondu. Nakon zamjesa struktura se gradi nježnim Stretch & Fold preklapima u posudi.'
+        : 'Kod Tonde nakon završnog zamjesa tijesto odmorite i oblikujte u čvrste, glatke pojedinačne kugle kroz staglio.',
     },
     {
-      title: 'Faza C: Podjela i oblikovanje loptica (Bulice)',
-      steps: [
+      title: isTray ? 'Faza C: Fermentacija i masa za tepsiju' : 'Faza C: Podjela i oblikovanje loptica (Bulice)',
+      steps: isTray ? [
+        'Prebacite tijesto u lagano nauljenu fermentacijsku posudu.',
+        'Ostavite tijesto 30 minuta na sobnoj temperaturi.',
+        'Napravite prvi Stretch & Fold u posudi bez agresivnog izvlačenja.',
+        'Ostavite tijesto još 30 minuta na sobnoj temperaturi.',
+        'Napravite drugi Stretch & Fold i ostavite tijesto kao jednu masu.',
+        ...(fridgeHours > 0 ? [`Pokrijte posudu i prebacite cijelu masu u hladnjak na ${fridgeHours} sati pri 4°C.`] : [`Ostavite tijesto ${roomHours} sati na sobnoj temperaturi kao jednu masu.`]),
+      ] : [
         fridgeHours > 0 ? 'Ostavite tijesto 30–45 minuta na sobnoj temperaturi.' : `Ostavite tijesto ${roomHours} sati na sobnoj temperaturi prije oblikovanja kugli.`,
         isGlutenFree ? 'Ne radite Stretch & Fold; ostavite smjesu samo 15 minuta da se veže.' : isManitoba ? 'Napravite čvrste Stretch & Fold preklopa kako bi tijesto držalo visoku hidrataciju.' : isSpelt || isWholeWheat ? 'Napravite jedno nježno preklapanje; ne trgajte strukturu.' : hand ? 'Napravite jedno preklapanje na polovici bulka.' : 'Preklapanje nije potrebno, osim ako tijesto traži dodatnu strukturu.',
-        isTray ? `Za tepsiju ${tray.width}×${tray.length} cm izvagajte ${tray.doughWeight} g tijesta.` : 'Nakon bulka oblikujte kugle.',
-        isTray ? 'Ne oblikujte malu okruglu kuglu; komad tijesta je namijenjen cijeloj tepsiji.' : isRoman ? 'Kugle neka budu 200–220 g.' : isGlutenFree ? 'Oblikujte manje kugle nježno; NY format od 40 cm nije prikladan.' : isManitoba ? 'Kugle neka budu 350–450 g.' : isSpelt || isWholeWheat ? 'Kugle neka budu približno 350–400 g; ne planirajte rastezanje u zraku.' : 'Kugle neka budu 350–400 g.',
+        'Nakon bulka oblikujte kugle.',
+        isRoman ? 'Kugle neka budu 200–220 g.' : isGlutenFree ? 'Oblikujte manje kugle nježno; NY format od 40 cm nije prikladan.' : isManitoba ? 'Kugle neka budu 350–450 g.' : isSpelt || isWholeWheat ? 'Kugle neka budu približno 350–400 g; ne planirajte rastezanje u zraku.' : 'Kugle neka budu 350–400 g.',
         ...(fridgeHours > 0 ? [`Ostavite kugle 30–60 minuta na sobnoj temperaturi, zatim ih stavite u hladnjak na ${fridgeHours} sati.`] : [`Ostavite kugle ${roomHours} sati na sobnoj temperaturi prije pečenja.`]),
       ].filter(Boolean) as string[],
-      timers: [timer('style-preferment-bulk', 30 * 60, 'rt'), ...(fridgeHours > 0 ? [timer('style-preferment-fridge', fridgeHours * 3600, 'ballsFridge')] : [timer('style-preferment-room', roomHours * 3600, 'ballsRt')])],
+      fermentationInfo: isTray ? 'Teglia koristi vlažnije tijesto koje ostaje kao jedna masa. Tijekom fermentacije radite nježne Stretch & Fold preklape u posudi; ne oblikujte kugle za tondu.' : undefined,
+      proofingInfo: isTray ? `Za ovu tepsiju koristi se jedna masa od ${tray.doughWeight} g, bez kuglanja. Tijesto se nakon fermentacije nježno utiskuje u nauljenu tepsiju ${tray.width}×${tray.length} cm.` : undefined,
+      timers: [timer(isTray ? 'style-preferment-tray-bulk' : 'style-preferment-bulk', 30 * 60, 'rt'), ...(fridgeHours > 0 ? [timer(isTray ? 'style-preferment-tray-fridge' : 'style-preferment-fridge', fridgeHours * 3600, isTray ? 'fridge' : 'ballsFridge')] : [timer(isTray ? 'style-preferment-tray-room' : 'style-preferment-room', roomHours * 3600, isTray ? 'rt' : 'ballsRt')])],
     },
     {
       title: 'Faza D: Priprema, razvlačenje i nadijevanje',
@@ -143,6 +172,7 @@ const preferment = (method: 'biga' | 'poolish', mixing: 'hand' | 'mixer', style:
         : isRoman
           ? [`Izvadite loptice iz hladnjaka 15–20 minuta prije razvlačenja ili kada se približno udvostruče, ali pazite da ne predignu.`, 'Brzim i nježnim pokretom izvadite kuglu iz posude i stavite je naopako na semolu.', isSpelt ? 'Pirovo tijesto pažljivo utiskujte prstima; ne razvlačite ga agresivno.' : isWholeWheat ? 'Integralno tijesto nježno utiskujte prstima; baza će biti rustikalnija i manje prozračna.' : 'Radnu površinu pospite semolom i bez rastezanja u zraku oblikujte ravnu Romanu pažljivim pritiskanjem prstima ili valjkom.', 'Nafilujte tanko i ravnomjerno te pecite odmah.']
           : [`Izvadite loptice iz hladnjaka 15–20 minuta prije razvlačenja ili kada se približno udvostruče, ali pazite da ne predignu.`, 'Prstima istisnite zrak prema rubu i ostavite tanak centar s izraženim, mekanim rubom.', isGlutenFree ? 'Bezglutensko tijesto oblikujte samo pritiskanjem prstima; NY format od 40 cm i rastezanje u zraku nisu prikladni.' : isSpelt ? 'Pirovo tijesto otvorite isključivo pritiskanjem prstima; ne radite knuckle stretch.' : isWholeWheat ? 'Integralno tijesto otvorite pritiskanjem prstima; ne radite klasično rastezanje u zraku jer baza ostaje gušća.' : isManitoba ? 'Nakon pritiska dlanovima razvucite tijesto preko šaka (knuckle stretch) do tanke baze.' : 'Nakon pritiska dlanovima možete pažljivo razvlačiti tijesto u zraku do tanke baze.', 'Nafilujte ravnomjerno i ne preopterećujte sredinu; za NY prvo stavite suhu ribanu mozzarellu, zatim gusti umak i dodatke.'],
+      bakingInfo: isTray ? 'Teglia se peče u kućnoj pećnici na približno 250 °C; vrijeme prilagodite debljini tijesta i boji dna.' : 'Tonda se peče pojedinačno na najvišoj temperaturi koju odabrana pećnica može postići.',
       timers: [timer('style-preferment-pre-bake', 15 * 60, 'preBake')],
     },
   ];

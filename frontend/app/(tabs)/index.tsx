@@ -1348,6 +1348,10 @@ export default function CalculatorHome() {
                     key={`${pizzaStyle}-${method}-${mixing}-${index}`}
                     title={phase.title}
                     steps={phase.steps}
+                    doughHandlingInfo={phase.doughHandlingInfo}
+                    fermentationInfo={phase.fermentationInfo}
+                    proofingInfo={phase.proofingInfo}
+                    bakingInfo={phase.bakingInfo}
                     phaseKey={`style-${pizzaStyle}-${method}-${mixing}-${index}`}
                     timers={phase.timers}
                     completed={completedSteps}
@@ -2201,15 +2205,15 @@ function PhaseBlock({
         const hasBigaInfo = !!bigaInfo && i === 0;
         const hasWaterInfo = !!waterInfo && /ukupno .*vode|total water|Wasser|skupno .*vode/i.test(s);
         const hasContainerOilInfo = !!containerOilInfo && (/nauljite fermentacijsku posudu|Stavite kugle u zatvorenu fermentacijsku kutiju|oil the fermentation container|Ölen Sie den Fermentationsbehälter|Fermentacijsko posodo rahlo/i.test(s));
-        const hasFermentationInfo = !!fermentationInfo && /završni bulk|final bulk fermentation|abschließende Stockgare|Končno prvo fermentacijo|Lagano nauljite fermentacijsku posudu|Lightly oil the fermentation container|Ölen Sie den Fermentationsbehälter|Fermentacijsko posodo rahlo|Integralno tijesto|Whole wheat dough|Vollkornteig|Integralno testo/i.test(s);
+        const hasFermentationInfo = !!fermentationInfo && /završni bulk|final bulk fermentation|abschließende Stockgare|Končno prvo fermentacijo|Lagano nauljite fermentacijsku posudu|Lightly oil the fermentation container|Ölen Sie den Fermentationsbehälter|Fermentacijsko posodo rahlo|Integralno tijesto|Whole wheat dough|Vollkornteig|Integralno testo|Prebacite tijesto u lagano nauljenu fermentacijsku posudu|Napravite prvi Stretch & Fold/i.test(s);
         const hasFermentationSignsInfo = !!fermentationSignsInfo && /Provjerite jesu li vidljivi|Check whether the first signs|Prüfen Sie, ob erste Anzeichen|Preverite, ali so vidni prvi znaki/i.test(s);
         const hasDegassingInfo = !!degassingInfo && /minimalno degaziranje|minimizing degassing|möglichst starkes Entgasen|čim manj iztisnite plin/i.test(s);
-        const hasBakingInfo = !!bakingInfo && /Zagrijte kamen ili čelik|Preheat the pizza stone|Heizen Sie den Pizzastein|Kamen ali jeklo za pico segrevajte/i.test(s);
-        const hasDoughHandlingInfo = !!doughHandlingInfo && /Nastavite mijesiti|Nastavite miješati|Continue kneading|Continue mixing|Kneten Sie weiter|Mischen Sie weiter|Nadaljujte z gnetenjem|Nadaljujte z mešanjem/i.test(s);
+        const hasBakingInfo = !!bakingInfo && /Zagrijte kamen ili čelik|Preheat the pizza stone|Heizen Sie den Pizzastein|Kamen ali jeklo za pico segrevajte|pecite prema odabranoj pećnici|peče u kućnoj pećnici/i.test(s);
+        const hasDoughHandlingInfo = !!doughHandlingInfo && (i === 0 || /Nastavite mijesiti|Nastavite miješati|Continue kneading|Continue mixing|Kneten Sie weiter|Mischen Sie weiter|Nadaljujte z gnetenjem|Nadaljujte z mešanjem/i.test(s));
         const hasTemperingInfo = !!temperingInfo && /prijeđite na temperiranje|proceed to tempering|fahren Sie mit dem Temperieren|nadaljujte s temperiranjem|Stavite kugle u zatvorenu fermentacijsku kutiju|Place the dough balls in a closed fermentation box|Legen Sie die Teigkugeln in eine verschlossene Teigbox|Kroglice testa položite v zaprto/i.test(s);
         const hasDoughTemperatureInfo = /Zamjes je gotov|The dough is fully mixed|Der Teig ist fertig geknetet|Gnetenje je končano/i.test(s);
         const hasToppingInfo = /Dodajte nadjev|Add the toppings|Belegen Sie die Pizza|Dodajte nadev/i.test(s);
-        const hasProofingReadinessInfo = !!proofingInfo && /Izvadite kugle iz hladnjaka|Take the dough balls out|Nehmen Sie die Teigkugeln|Kroglice vzemite iz hladilnika|Vrhovima prstiju vrlo nježno|Using your fingertips very gently|Mit den Fingerspitzen sehr sanft|S konicami prstov zelo nežno|Integralnog|Integralno|Whole wheat|Vollkorn/i.test(s);
+        const hasProofingReadinessInfo = !!proofingInfo && /Izvadite kugle iz hladnjaka|Take the dough balls out|Nehmen Sie die Teigkugeln|Kroglice vzemite iz hladilnika|Vrhovima prstiju vrlo nježno|Using your fingertips very gently|Mit den Fingerspitzen sehr sanft|S konicami prstov zelo nežno|Integralnog|Integralno|Whole wheat|Vollkorn|Ne oblikujte kugle za tondu|jednu masu od|Tepsiju .*obilno/i.test(s);
         const hasOvenTimingInfo = !!ovenTimingInfo && /Izvadite kugle iz hladnjaka|Take the dough balls out|Nehmen Sie die Teigkugeln|Kroglice vzemite iz hladilnika/i.test(s);
         const hasBakingCheckInfo = !!bakingCheckInfo && /Pecite bez grilla|Bake without the grill|Backen Sie ohne Grill|Pecite brez žara/i.test(s);
         return (
