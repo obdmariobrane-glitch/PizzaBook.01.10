@@ -27,6 +27,9 @@ const CALCULATOR_SETTINGS_KEY = 'calculatorSettings';
 
 type CalculatorSettings = {
   pizzaStyle: PizzaStyle;
+  romanFormat: 'tonda' | 'teglia';
+  trayWidth: number;
+  trayLength: number;
   flour: FlourType;
   blendA: Exclude<FlourType, 'custom'>;
   blendB: Exclude<FlourType, 'custom'>;
@@ -189,6 +192,9 @@ export default function CalculatorHome() {
   const { user } = useAuth();
 
   const [pizzaStyle, setPizzaStyle] = useState<PizzaStyle>('neapolitan');
+  const [romanFormat, setRomanFormat] = useState<'tonda' | 'teglia'>('tonda');
+  const [trayWidth, setTrayWidth] = useState(30);
+  const [trayLength, setTrayLength] = useState(40);
   const [flour, setFlour] = useState<FlourType>('caputo00');
   const [blendA, setBlendA] = useState<Exclude<FlourType, 'custom'>>('caputo00');
   const [blendB, setBlendB] = useState<Exclude<FlourType, 'custom'>>('wholeWheat');
@@ -235,6 +241,9 @@ export default function CalculatorHome() {
         try {
           const saved = JSON.parse(value) as Partial<CalculatorSettings>;
           if (saved.pizzaStyle) setPizzaStyle(saved.pizzaStyle);
+          if (saved.romanFormat) setRomanFormat(saved.romanFormat);
+          if (typeof saved.trayWidth === 'number') setTrayWidth(saved.trayWidth);
+          if (typeof saved.trayLength === 'number') setTrayLength(saved.trayLength);
           if (saved.flour) setFlour(saved.flour);
           if (saved.blendA) setBlendA(saved.blendA);
           if (saved.blendB) setBlendB(saved.blendB);
@@ -270,12 +279,12 @@ export default function CalculatorHome() {
   useEffect(() => {
     if (!settingsLoaded) return;
     const settings: CalculatorSettings = {
-      pizzaStyle, flour, blendA, blendB, blendPctA, pizzas, diameter,
+      pizzaStyle, romanFormat, trayWidth, trayLength, flour, blendA, blendB, blendPctA, pizzas, diameter,
       customBallWeight, method, bigaPct, poolishPct, bigaHours, poolishHours, hydration, saltPct, oilPct,
       roomTemp, roomHours, fridgeTemp, fridgeHours, useIce, oven, ovenTemp, mixing,
     };
     AsyncStorage.setItem(CALCULATOR_SETTINGS_KEY, JSON.stringify(settings)).catch(() => {});
-  }, [settingsLoaded, pizzaStyle, flour, blendA, blendB, blendPctA, pizzas, diameter, customBallWeight, method, bigaPct, poolishPct, bigaHours, poolishHours, hydration, saltPct, oilPct, roomTemp, roomHours, fridgeTemp, fridgeHours, useIce, oven, ovenTemp, mixing]);
+  }, [settingsLoaded, pizzaStyle, romanFormat, trayWidth, trayLength, flour, blendA, blendB, blendPctA, pizzas, diameter, customBallWeight, method, bigaPct, poolishPct, bigaHours, poolishHours, hydration, saltPct, oilPct, roomTemp, roomHours, fridgeTemp, fridgeHours, useIce, oven, ovenTemp, mixing]);
 
   useEffect(() => {
     const active = Object.entries(activeTimers);
@@ -389,6 +398,8 @@ export default function CalculatorHome() {
 
   const flourProfile = FLOUR_PROFILES[flour];
   const styleProfile = PIZZA_STYLE_PROFILES[pizzaStyle];
+  const isRomanTeglia = pizzaStyle === 'romana' && romanFormat === 'teglia';
+  const trayDoughWeight = Math.round(trayWidth * trayLength * 0.4);
   const isIdealSalt = saltPct === styleProfile.saltPct;
   const isIdealOil = oilPct === styleProfile.oilPct;
   const styleImages: Record<PizzaStyle, any> = {
@@ -471,7 +482,7 @@ export default function CalculatorHome() {
 
   // Reactive calculations - RE-COMPUTE on any input change
   const dims = useMemo(() => dimensionsCalc(diameter, pizzas), [diameter, pizzas]);
-  const effectiveBall = customBallWeight ?? (diameter === styleProfile.defaultDiameter ? styleProfile.ballWeight : dims.doughBall);
+  const effectiveBall = isRomanTeglia ? trayDoughWeight : customBallWeight ?? (diameter === styleProfile.defaultDiameter ? styleProfile.ballWeight : dims.doughBall);
   const dough = useMemo(() => doughCalc({
     pizzas, ballWeight: effectiveBall, hydration,
     saltPct, oilPct, method, bigaPct, poolishPct,
@@ -554,7 +565,7 @@ export default function CalculatorHome() {
     oven === 'ooni' ? t.calc.ooniSteps : t.calc.homePanSteps;
   const styleBakingSteps = getStyleBakingSteps(pizzaStyle, oven, lang);
   const styleBakingTemp = getStyleBakingTemp(pizzaStyle, oven, lang);
-  const stylePreparationSteps = getStyleSteps(pizzaStyle, method, mixing, roomHours, fridgeHours, lang, flour);
+  const stylePreparationSteps = getStyleSteps(pizzaStyle, method, mixing, roomHours, fridgeHours, lang, flour, isRomanTeglia);
   const bakingPoints = oven === 'homePan'
     ? [{ temperature: 200, min: 15, max: 20 }, { temperature: 220, min: 13, max: 17 }, { temperature: 230, min: 12, max: 15 }, { temperature: 250, min: 10, max: 14 }, { temperature: 270, min: 8, max: 12 }, { temperature: 280, min: 7, max: 11 }, { temperature: 300, min: 6, max: 9 }]
     : oven === 'ooni'
@@ -563,9 +574,9 @@ export default function CalculatorHome() {
   const calculatedBakingTime = bakingTimeForTemperature(ovenTemp, bakingPoints);
   const bakingDuration = `${ovenTemp} °C · ${formatBakingMinutes(calculatedBakingTime.min, lang)}–${formatBakingMinutes(calculatedBakingTime.max, lang)}`;
   const ovenTempLabel = { hr: 'Temperatura pećnice', en: 'Oven temperature', de: 'Ofentemperatur', sl: 'Temperatura pečice' }[lang];
-  const detailedDirectSteps = method === 'direct' && lang === 'hr'
+  const detailedDirectSteps = !isRomanTeglia && method === 'direct' && lang === 'hr'
     ? getDetailedDirectSteps(mixing, dough.total, dough.totalDough, pizzas, effectiveBall, diameter, fridgeHours, oven, ovenTemp, roomTemp, dims.cheese, undefined, undefined, flour)
-    : method === 'biga' && lang === 'hr'
+    : !isRomanTeglia && method === 'biga' && lang === 'hr'
       ? getDetailedDirectSteps(mixing, dough.total, dough.totalDough, pizzas, effectiveBall, diameter, fridgeHours, oven, ovenTemp, roomTemp, dims.cheese, {
         flour: dough.preferment?.flour ?? 0,
         water: dough.preferment?.water ?? 0,
@@ -574,7 +585,7 @@ export default function CalculatorHome() {
         remainingWater: dough.main.water,
         pct: bigaPct,
       }, undefined, flour)
-    : method === 'poolish' && lang === 'hr'
+    : !isRomanTeglia && method === 'poolish' && lang === 'hr'
       ? getDetailedDirectSteps(mixing, dough.total, dough.totalDough, pizzas, effectiveBall, diameter, fridgeHours, oven, ovenTemp, roomTemp, dims.cheese, undefined, {
         flour: dough.preferment?.flour ?? 0,
         water: dough.preferment?.water ?? 0,
@@ -827,6 +838,19 @@ export default function CalculatorHome() {
         {/* 2. VELIČINA PIZZE */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>3 · {t.calc.dimensions}</Text>
+          {pizzaStyle === 'romana' ? (
+            <>
+              <Text style={[styles.label, { marginTop: SPACING.sm }]}>Romana</Text>
+              <View style={styles.pillGroup}>
+                <Pressable testID="romana-tonda" onPress={() => step(() => setRomanFormat('tonda'))} style={[styles.pill, romanFormat === 'tonda' && styles.pillActive]}>
+                  <Text style={[styles.pillText, romanFormat === 'tonda' && styles.pillTextActive]}>Romana Tonda</Text>
+                </Pressable>
+                <Pressable testID="romana-teglia" onPress={() => step(() => setRomanFormat('teglia'))} style={[styles.pill, romanFormat === 'teglia' && styles.pillActive]}>
+                  <Text style={[styles.pillText, romanFormat === 'teglia' && styles.pillTextActive]}>Romana Teglia</Text>
+                </Pressable>
+              </View>
+            </>
+          ) : null}
           <View style={styles.row}>
             <Text style={styles.label}>{t.calc.pizzas}</Text>
             <View style={styles.stepper}>
@@ -841,7 +865,7 @@ export default function CalculatorHome() {
           </View>
 
           {/* Ball weight (grams) — manual override */}
-          <View style={[styles.ballRow, { marginTop: SPACING.sm }]}>
+          {!isRomanTeglia ? <View style={[styles.ballRow, { marginTop: SPACING.sm }]}>
             <View style={styles.ballLabelCol}>
               <Text style={styles.label}>{t.ballWeight.label}</Text>
               <Text style={styles.subLabel} numberOfLines={2}>
@@ -881,8 +905,8 @@ export default function CalculatorHome() {
                 <Icon name="add" size={20} color={COLORS.brand} />
               </Pressable>
             </View>
-          </View>
-          {customBallWeight != null ? (
+          </View> : null}
+          {!isRomanTeglia && customBallWeight != null ? (
             <Pressable
               testID="ball-reset"
               onPress={() => { setCustomBallWeight(null); setCustomBallInput(''); try { Haptics.selectionAsync(); } catch {} }}
@@ -893,25 +917,52 @@ export default function CalculatorHome() {
             </Pressable>
           ) : null}
 
-          <Text style={[styles.label, { marginTop: SPACING.md }]}>{t.calc.diameter}</Text>
-          <View style={styles.diameterRow}>
-            {DIAMETERS.map((d) => (
-              <Pressable key={d} testID={`diam-${d}`} onPress={() => step(() => { setDiameter(d); setCustomBallWeight(null); setCustomBallInput(''); })} style={[styles.chip, diameter === d && styles.chipActive]}>
-                <Text style={[styles.chipText, diameter === d && styles.chipTextActive]}>{d} cm</Text>
-              </Pressable>
-            ))}
-            <TextInput
-              testID="custom-diameter"
-              value={customDiameter}
-              onChangeText={setCustomDiameter}
-              onBlur={commitCustomDiameter}
-              onSubmitEditing={commitCustomDiameter}
-              keyboardType="number-pad"
-              placeholder="cm"
-              placeholderTextColor={COLORS.muted}
-              style={styles.customInput}
-            />
-          </View>
+          {isRomanTeglia ? (
+            <>
+              <Text style={[styles.label, { marginTop: SPACING.md }]}>Dimenzije tepsije (cm)</Text>
+              <View style={[styles.row, { marginTop: SPACING.sm }]}>
+                <TextInput
+                  testID="tray-width"
+                  value={String(trayWidth)}
+                  onChangeText={(value) => { const next = Number(value.replace(/[^0-9]/g, '')); if (next >= 20 && next <= 60) setTrayWidth(next); }}
+                  keyboardType="number-pad"
+                  style={styles.customInput}
+                />
+                <Text style={styles.stepUnit}>×</Text>
+                <TextInput
+                  testID="tray-length"
+                  value={String(trayLength)}
+                  onChangeText={(value) => { const next = Number(value.replace(/[^0-9]/g, '')); if (next >= 20 && next <= 60) setTrayLength(next); }}
+                  keyboardType="number-pad"
+                  style={styles.customInput}
+                />
+                <Text style={styles.stepUnit}>cm</Text>
+              </View>
+              <Text style={styles.hint}>Izračunato tijesto za jednu tepsiju: {trayDoughWeight} g</Text>
+            </>
+          ) : (
+            <>
+              <Text style={[styles.label, { marginTop: SPACING.md }]}>{t.calc.diameter}</Text>
+              <View style={styles.diameterRow}>
+                {DIAMETERS.map((d) => (
+                  <Pressable key={d} testID={`diam-${d}`} onPress={() => step(() => { setDiameter(d); setCustomBallWeight(null); setCustomBallInput(''); })} style={[styles.chip, diameter === d && styles.chipActive]}>
+                    <Text style={[styles.chipText, diameter === d && styles.chipTextActive]}>{d} cm</Text>
+                  </Pressable>
+                ))}
+                <TextInput
+                  testID="custom-diameter"
+                  value={customDiameter}
+                  onChangeText={setCustomDiameter}
+                  onBlur={commitCustomDiameter}
+                  onSubmitEditing={commitCustomDiameter}
+                  keyboardType="number-pad"
+                  placeholder="cm"
+                  placeholderTextColor={COLORS.muted}
+                  style={styles.customInput}
+                />
+              </View>
+            </>
+          )}
 
         </View>
 
