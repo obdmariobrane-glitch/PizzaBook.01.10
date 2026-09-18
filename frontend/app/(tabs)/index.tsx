@@ -1848,7 +1848,7 @@ function getDetailedDirectSteps(
         isRomanTonda ? 'Nježno pritisnite tijesto prstima ili ga tanko otvorite valjkom; ne rastežite ga agresivno u zraku.' : isGlutenFree ? 'Vrhovima prstiju nježno tapkajte i potiskujte smjesu od sredine prema rubovima. Nema rastezanja u zraku i ne koristite valjak.' : 'Lagano ga prstima raširite prema rubovima. Nemojte jako pritiskati da ne izbacite sav zrak.',
         'Ostavite tijesto u tepsiji da se kratko opusti i prilagodi obliku ako se vraća natrag.',
         'Dodajte umak i nadjev.',
-        'Pećnicu dobro zagrijte na maksimalnu temperaturu.',
+        `Pećnicu dobro zagrijte na ${ovenTemp} °C.`,
         'Ako imate Pizza program, koristite njega; ako nemate Pizza program, koristite gornji i donji grijač bez ventilatora.',
         'Pecite bez grilla dok se dno i rub dobro ne ispeku.',
         'Na kraju uključite grill ako želite jače zapečenu gornju stranu.',
