@@ -1372,6 +1372,7 @@ export default function CalculatorHome() {
                     fermentationInfo={phase.fermentationInfo}
                     proofingInfo={phase.proofingInfo}
                     bakingInfo={phase.bakingInfo}
+                    infoTitleOverrides={isRomanTeglia ? { handling: 'Završni zamjes Teglie', room: 'Fermentacija Teglie', readiness: 'Oblikovanje Teglie', baking: 'Pečenje Teglie' } : undefined}
                     phaseKey={`style-${pizzaStyle}-${method}-${mixing}-${index}`}
                     timers={phase.timers}
                     completed={completedSteps}
@@ -2125,7 +2126,7 @@ function getDirectPhaseTimers(phaseKey: string, roomHours: number, fridgeHours: 
 }
 
 function PhaseBlock({
-  title, steps, phaseKey, timers: customTimers, bigaInfo, waterInfo, containerOilInfo, fermentationInfo, fermentationSignsInfo, degassingInfo, doughHandlingInfo, temperingInfo, proofingInfo, ovenTimingInfo, bakingCheckInfo, bakingInfo, completed, onToggle,
+  title, steps, phaseKey, timers: customTimers, bigaInfo, waterInfo, containerOilInfo, fermentationInfo, fermentationSignsInfo, degassingInfo, doughHandlingInfo, temperingInfo, proofingInfo, ovenTimingInfo, bakingCheckInfo, bakingInfo, infoTitleOverrides, completed, onToggle,
   activeTimers, onStartTimer, onStopTimer, lang,
 }: {
   title: string;
@@ -2144,6 +2145,7 @@ function PhaseBlock({
   ovenTimingInfo?: string;
   bakingCheckInfo?: string;
   bakingInfo?: string;
+  infoTitleOverrides?: Partial<Record<'handling' | 'room' | 'readiness' | 'baking', string>>;
   completed: Record<string, boolean>;
   onToggle: (key: string) => void;
   activeTimers: Record<string, { endsAt: number; label: string; notifId?: string | null }>;
@@ -2177,14 +2179,14 @@ function PhaseBlock({
     proofing: { hr: 'Test prstom', en: 'Finger test', de: 'Fingertest', sl: 'Test s prstom' }[lang],
     water: { hr: 'Voda i led', en: 'Water and ice', de: 'Wasser und Eis', sl: 'Voda in led' }[lang],
     container: { hr: 'Ulje za posudu', en: 'Container oil', de: 'Öl für den Behälter', sl: 'Olje za posodo' }[lang],
-    room: { hr: 'Temperatura prostorije', en: 'Room temperature', de: 'Raumtemperatur', sl: 'Sobna temperatura' }[lang],
+    room: infoTitleOverrides?.room ?? ({ hr: 'Temperatura prostorije', en: 'Room temperature', de: 'Raumtemperatur', sl: 'Sobna temperatura' }[lang]),
     signs: { hr: 'Znakovi fermentacije', en: 'Fermentation signs', de: 'Fermentationszeichen', sl: 'Znaki fermentacije' }[lang],
     degassing: { hr: 'Degaziranje', en: 'Degassing', de: 'Entgasen', sl: 'Degaziranje' }[lang],
-    baking: { hr: 'Položaj kamena ili čelika', en: 'Stone or steel position', de: 'Position von Stein oder Stahl', sl: 'Položaj kamna ali jekla' }[lang],
-    handling: { hr: 'Ljepljivo tijesto', en: 'Sticky dough', de: 'Klebriger Teig', sl: 'Lepljivo testo' }[lang],
+    baking: infoTitleOverrides?.baking ?? ({ hr: 'Položaj kamena ili čelika', en: 'Stone or steel position', de: 'Position von Stein oder Stahl', sl: 'Položaj kamna ali jekla' }[lang]),
+    handling: infoTitleOverrides?.handling ?? ({ hr: 'Ljepljivo tijesto', en: 'Sticky dough', de: 'Klebriger Teig', sl: 'Lepljivo testo' }[lang]),
     tempering: { hr: 'Temperiranje', en: 'Tempering', de: 'Temperieren', sl: 'Temperiranje' }[lang],
     topping: toppingTitle,
-    readiness: { hr: 'Spremnost tijesta', en: 'Dough readiness', de: 'Teigreife', sl: 'Pripravljenost testa' }[lang],
+    readiness: infoTitleOverrides?.readiness ?? ({ hr: 'Spremnost tijesta', en: 'Dough readiness', de: 'Teigreife', sl: 'Pripravljenost testa' }[lang]),
     ovenTiming: { hr: 'Usklađivanje vremena', en: 'Timing coordination', de: 'Zeitliche Abstimmung', sl: 'Časovna uskladitev' }[lang],
   };
   return (
@@ -2231,7 +2233,7 @@ function PhaseBlock({
         const hasFermentationInfo = !!fermentationInfo && /završni bulk|final bulk fermentation|abschließende Stockgare|Končno prvo fermentacijo|Lagano nauljite fermentacijsku posudu|Lightly oil the fermentation container|Ölen Sie den Fermentationsbehälter|Fermentacijsko posodo rahlo|Integralno tijesto|Whole wheat dough|Vollkornteig|Integralno testo|Prebacite tijesto u lagano nauljenu fermentacijsku posudu|Napravite prvi Stretch & Fold/i.test(s);
         const hasFermentationSignsInfo = !!fermentationSignsInfo && /Provjerite jesu li vidljivi|Check whether the first signs|Prüfen Sie, ob erste Anzeichen|Preverite, ali so vidni prvi znaki/i.test(s);
         const hasDegassingInfo = !!degassingInfo && /minimalno degaziranje|minimizing degassing|möglichst starkes Entgasen|čim manj iztisnite plin/i.test(s);
-        const hasBakingInfo = !!bakingInfo && /Zagrijte kamen ili čelik|Preheat the pizza stone|Heizen Sie den Pizzastein|Kamen ali jeklo za pico segrevajte|pecite prema odabranoj pećnici|peče u kućnoj pećnici/i.test(s);
+        const hasBakingInfo = !!bakingInfo && /Zagrijte kamen ili čelik|Zagrijte obrnuti lim|Zagrijte peć|Preheat the pizza stone|Heizen Sie den Pizzastein|Kamen ali jeklo za pico segrevajte|pecite prema odabranoj pećnici|peče u kućnoj pećnici/i.test(s);
         const hasDoughHandlingInfo = !!doughHandlingInfo && (i === 0 || /Nastavite mijesiti|Nastavite miješati|Continue kneading|Continue mixing|Kneten Sie weiter|Mischen Sie weiter|Nadaljujte z gnetenjem|Nadaljujte z mešanjem/i.test(s));
         const hasTemperingInfo = !!temperingInfo && /prijeđite na temperiranje|proceed to tempering|fahren Sie mit dem Temperieren|nadaljujte s temperiranjem|Stavite kugle u zatvorenu fermentacijsku kutiju|Place the dough balls in a closed fermentation box|Legen Sie die Teigkugeln in eine verschlossene Teigbox|Kroglice testa položite v zaprto/i.test(s);
         const hasDoughTemperatureInfo = /Zamjes je gotov|The dough is fully mixed|Der Teig ist fertig geknetet|Gnetenje je končano/i.test(s);
