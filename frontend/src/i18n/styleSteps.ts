@@ -144,6 +144,7 @@ const preferment = (method: 'biga' | 'poolish', mixing: 'hand' | 'mixer', style:
             : isSpelt || isWholeWheat
               ? `${hand ? 'Ručno mijesite kratko i nježno' : 'Miješajte kratko i nježno u mikseru'}; ulje dodajte na kraju i ne opterećujte strukturu.`
               : `${hand ? 'Ručno mijesite 12–14 minuta' : 'Mijesite u mikseru 7–9 minuta'}; ulje dodajte na kraju i ciljajte temperaturu tijesta 21–23°C.`,
+              ...(hand ? ['Prebacite tijesto na radnu površinu i mijesite dlanovima 10–15 minuta dok površina ne postane glatka.', 'Pokrijte tijesto i ostavite ga 15 minuta da se gluten opusti.'] : []),
       ],
       doughHandlingInfo: isTray
         ? 'Kod Teglie završno tijesto ostaje vlažnije i ne oblikuje se u kugle za tondu. Nakon zamjesa struktura se gradi nježnim Stretch & Fold preklapima u posudi.'
