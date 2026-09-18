@@ -2,7 +2,7 @@
   "expo": {
     "name": "Pizzabook",
     "slug": "pizzabook",
-    "version": "1.0.2",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "frontend",
@@ -12,7 +12,7 @@
       "bundleIdentifier": "com.emergent.doughtimer.ia80uq"
     },
     "android": {
-      "versionCode": 3,
+      "versionCode": 2,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#000000"
