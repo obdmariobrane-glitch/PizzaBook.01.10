@@ -94,7 +94,7 @@ function prefermentSteps(shape, flour, method, mode) {
     steps.push('Otopite kvasac u vodi i dodajte brasno.');
     steps.push('Promijesajte do glatke tekuce smjese.');
     steps.push('Ostavite Poolish prema odabranom vremenu fermentacije.');
-    steps.push('Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.');
+    steps.push('Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.');
   }
   steps.push(flourLine(flour));
   steps.push(hand ? 'Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.' : 'Mijesajte u mikseru dok se tijesto ne poveze.');

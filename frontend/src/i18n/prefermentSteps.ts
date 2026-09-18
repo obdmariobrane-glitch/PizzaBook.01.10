@@ -63,7 +63,7 @@ const HR_POOLISH_P1: Phase = {
 const HR_POOLISH_HAND_P2: Phase = {
   title: 'Faza B: Dodavanje Poolisha i ručni zamjes',
   steps: [
-    'Hladni Poolish prelijte u posudu za miješenje.',
+    'Nakon fermentacije Poolish prelijte u posudu za miješenje.',
     'Dodajte preostalo brašno i veći dio vode.',
     'Rukama ili kuhačom povežite Poolish s brašnom dok ne dobijete grubu smjesu.',
     'Polako dolijevajte ostatak vode i nastavite mijesiti dok se tijesto ne poveže.',
@@ -74,7 +74,7 @@ const HR_POOLISH_HAND_P2: Phase = {
 const HR_POOLISH_MIXER_P2: Phase = {
   title: 'Faza B: Dodavanje Poolisha i zamjes mikserom',
   steps: [
-    'Hladni Poolish prelijte izravno u posudu miksera.',
+    'Nakon fermentacije Poolish prelijte izravno u posudu miksera.',
     'Dodajte preostalo brašno i veći dio vode te pokrenite mikser u 1. brzini.',
     'Ubacite sol i polako u tankom mlazu dolijevajte ostatak vode dok mikser radi.',
     'Ulijte maslinovo ulje i mijesite dok tijesto u potpunosti ne upije ulje i ne postane glatko.',
