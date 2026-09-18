@@ -1679,7 +1679,7 @@ function getDetailedDirectSteps(
         hand ? 'Nastavite mijesiti dok tijesto ne postane glatko, elastično i povezano.' : 'Nastavite miješati na većoj brzini dok tijesto ne razvije gluten i postane glatko, elastično i povezano.',
         ...(ingredients.oil > 0 ? [hand ? `Dodajte ${ingredients.oil} g maslinovog ulja i mijesite dok ga tijesto potpuno ne upije.` : `Dodajte ${ingredients.oil} g maslinovog ulja i miješajte dok ga tijesto potpuno ne upije.`] : []),
         ...(isGlutenFree ? [`Obavezno dodajte ${psylliumAmount} g psylliuma (2% od ukupne količine brašna) kako bi smjesa zadržala strukturu.`] : []),
-        ...(!isGlutenFree && hand ? ['Prebacite tijesto na radnu površinu i mijesite dlanovima 10–15 minuta dok površina ne postane glatka.'] : []),
+        ...(!isGlutenFree && hand ? [isSpelt ? 'Mijesite kratko i nježno, samo dok se tijesto ne poveže i postane ujednačeno; ne premijesite.' : 'Prebacite tijesto na radnu površinu i mijesite dlanovima 10–15 minuta dok površina ne postane glatka.'] : []),
         'Zamjes je gotov kada je tijesto glatko, elastično i homogeno.',
         !isGlutenFree && hand ? 'Pokrijte tijesto i ostavite ga 15 minuta da se gluten opusti.' : hand ? 'Ostavite tijesto da odmori 5–6 minuta.' : 'Ostavite tijesto da odmori 5–6 minuta u posudi miksera.',
       ] : poolish ? [
@@ -1694,7 +1694,7 @@ function getDetailedDirectSteps(
         hand ? 'Nastavite mijesiti dok tijesto ne postane glatko, elastično i povezano.' : 'Nastavite miješati na većoj brzini dok tijesto ne razvije gluten i postane glatko, elastično i povezano.',
         ...(ingredients.oil > 0 ? [hand ? `Dodajte ${ingredients.oil} g maslinovog ulja i mijesite dok ga tijesto potpuno ne upije.` : `Dodajte ${ingredients.oil} g maslinovog ulja i miješajte dok ga tijesto potpuno ne upije.`] : []),
         ...(isGlutenFree ? [`Obavezno dodajte ${psylliumAmount} g psylliuma (2% od ukupne količine brašna) kako bi smjesa zadržala strukturu.`] : []),
-        ...(!isGlutenFree && hand ? ['Prebacite tijesto na radnu površinu i mijesite dlanovima 10–15 minuta dok površina ne postane glatka.'] : []),
+        ...(!isGlutenFree && hand ? [isSpelt ? 'Mijesite kratko i nježno, samo dok se tijesto ne poveže i postane ujednačeno; ne premijesite.' : 'Prebacite tijesto na radnu površinu i mijesite dlanovima 10–15 minuta dok površina ne postane glatka.'] : []),
         'Zamjes je gotov kada je tijesto glatko, elastično i homogeno.',
         !isGlutenFree && hand ? 'Pokrijte tijesto i ostavite ga 15 minuta da se gluten opusti.' : hand ? 'Ostavite tijesto da odmori 5–6 minuta.' : 'Ostavite tijesto da odmori 5–6 minuta u posudi miksera.',
       ] : isGlutenFree ? [
@@ -1718,7 +1718,7 @@ function getDetailedDirectSteps(
         hand ? 'Nastavite mijesiti dok tijesto ne postane glatko, elastično i povezano.' : isSpelt ? 'Nastavite miješati na sporijoj do umjerenoj brzini, kraće nego obično, samo dok tijesto ne postane glatko, homogeno i povezano.' : 'Nastavite miješati na većoj brzini dok tijesto ne razvije gluten i postane glatko, elastično i povezano.',
         ...(ingredients.oil > 0 ? [hand ? `Dodajte ${ingredients.oil} g maslinovog ulja i mijesite dok ga tijesto potpuno ne upije.` : `Dodajte ${ingredients.oil} g maslinovog ulja i miješajte dok ga tijesto potpuno ne upije.`] : []),
         ...(isGlutenFree ? [`Obavezno dodajte ${psylliumAmount} g psylliuma (2% od ukupne količine brašna) kako bi smjesa zadržala strukturu.`] : []),
-        ...(!isGlutenFree && hand ? ['Prebacite tijesto na radnu površinu i mijesite dlanovima 10–15 minuta dok površina ne postane glatka.'] : []),
+        ...(!isGlutenFree && hand ? [isSpelt ? 'Mijesite kratko i nježno, samo dok se tijesto ne poveže i postane ujednačeno; ne premijesite.' : 'Prebacite tijesto na radnu površinu i mijesite dlanovima 10–15 minuta dok površina ne postane glatka.'] : []),
         'Zamjes je gotov kada je tijesto glatko, elastično i homogeno.',
         !isGlutenFree && hand ? 'Pokrijte tijesto i ostavite ga 15 minuta da se gluten opusti.' : hand ? 'Ostavite tijesto da odmori 5–6 minuta.' : 'Ostavite tijesto da odmori 5–6 minuta u posudi miksera.',
       ],
@@ -1727,7 +1727,7 @@ function getDetailedDirectSteps(
     {
       title: isRomanTeglia && isGlutenFree ? 'Faza B: Kratki odmor' : isRomanTeglia ? 'Faza B: Fermentacija i preklapanje' : isGlutenFree ? 'Faza B: Kratki odmor' : hasPreferment ? 'Faza C: Bulk fermentacija i foldovi' : 'Faza B: Bulk fermentacija i foldovi',
       fermentationInfo: isRomanTeglia && isGlutenFree
-        ? 'Bezglutenska Teglia ne radi Stretch & Fold. Ostavite smjesu 15 minuta da psyllium poveže strukturu prije utiskivanja u tepsiju.'
+        ? 'Bezglutenska Teglia se nježno preklapa ili poravnava mokrim ili nauljenim rukama, bez pokušaja razvoja glutenske strukture.'
         : isRomanTeglia
         ? 'Teglia koristi vlažnije tijesto koje ostaje kao jedna masa. Napravite dva nježna Stretch & Fold preklapanja u posudi prije hladne fermentacije.'
         : isWholeWheat
@@ -1739,6 +1739,7 @@ function getDetailedDirectSteps(
       containerOilInfo: 'Koristite čistu posudu sigurnu za hranu koja je dovoljno velika da tijesto naraste. Posudu pokrijte poklopcem ili folijom, ali je nemojte hermetički zatvoriti: fermentacija stvara plinove i posuda ne smije biti pod pritiskom. Možete uzeti plastičnu posudu s poklopcem, staklenu zdjelu s folijom, posudu za tijesto ili fermentacijsku kutiju s poklopcem koji nije potpuno zrakonepropusan. Posudu samo lagano premažite pomoćnim uljem; to ulje ne ulazi u izračun recepta i nije isto što i ulje u tijestu.',
       steps: isRomanTeglia && isGlutenFree ? [
         'Lagano nauljite fermentacijsku posudu i prebacite smjesu u nju.',
+        'Nježno preklopite ili poravnajte tijesto mokrim ili nauljenim rukama, bez pokušaja razvoja glutenske strukture.',
         'Pokrijte posudu i ostavite smjesu 15 minuta na sobnoj temperaturi da psyllium poveže strukturu.',
       ] : isRomanTeglia ? [
         'Lagano nauljite fermentacijsku posudu i prebacite tijesto u nju.',

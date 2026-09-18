@@ -29,7 +29,7 @@ function shapeSteps(shape, flour) {
   const glutenFree = flour.key === 'glutenFree';
   if (shape.kind === 'teglia') return [
     'Ne oblikujte kugle; tijesto ostaje kao jedna masa.',
-    glutenFree ? 'Ne radite Stretch & Fold; ostavite smjesu 15 minuta da psyllium poveze strukturu.' : 'Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.',
+    glutenFree ? 'Njezno preklopite ili poravnajte tijesto mokrim ili nauljenim rukama, bez pokusaja razvoja glutenske strukture.' : 'Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.',
     'Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.',
     'Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.',
     'Dodajte nadjev bez pretjerivanja s vlaznim sastojcima.',
@@ -73,7 +73,7 @@ function directSteps(shape, flour, mode) {
     steps.push('Ostavite smjesu 15 minuta da psyllium povuce vlagu.');
   } else {
     steps.push('Dodajte izracunatu kolicinu ulja ili masti.');
-    steps.push(hand ? 'Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.' : 'Mijesajte u posudi dok se tijesto ne poveze i postane glatko.');
+    steps.push(hand ? (flour.key === 'spelt' ? 'Mijesite kratko i njezno, samo dok se tijesto ne poveze i postane ujednaceno; ne premijesite.' : 'Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.') : 'Mijesajte u posudi dok se tijesto ne poveze i postane glatko.');
     steps.push(hand ? 'Pokrijte tijesto i ostavite ga 15 minuta.' : 'Ostavite tijesto 5 minuta u posudi miksera.');
   }
   steps.push(...shapeSteps(shape, flour));
@@ -97,7 +97,7 @@ function prefermentSteps(shape, flour, method, mode) {
     steps.push('Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.');
   }
   steps.push(flourLine(flour));
-  steps.push(hand ? 'Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.' : 'Mijesajte u mikseru dok se tijesto ne poveze.');
+  steps.push(hand ? (flour.key === 'spelt' ? 'Mijesite kratko i njezno, samo dok se tijesto ne poveze i postane ujednaceno; ne premijesite.' : 'Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.') : 'Mijesajte u mikseru dok se tijesto ne poveze.');
   steps.push(hand ? 'Pokrijte tijesto i ostavite ga 15 minuta.' : 'Ostavite tijesto 5 minuta u posudi miksera.');
   steps.push(...shapeSteps(shape, flour));
   return steps;
