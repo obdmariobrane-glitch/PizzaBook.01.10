@@ -195,6 +195,8 @@ export default function CalculatorHome() {
   const [romanFormat, setRomanFormat] = useState<'tonda' | 'teglia'>('tonda');
   const [trayWidth, setTrayWidth] = useState(30);
   const [trayLength, setTrayLength] = useState(40);
+  const [trayWidthInput, setTrayWidthInput] = useState('30');
+  const [trayLengthInput, setTrayLengthInput] = useState('40');
   const [flour, setFlour] = useState<FlourType>('caputo00');
   const [blendA, setBlendA] = useState<Exclude<FlourType, 'custom'>>('caputo00');
   const [blendB, setBlendB] = useState<Exclude<FlourType, 'custom'>>('wholeWheat');
@@ -242,8 +244,14 @@ export default function CalculatorHome() {
           const saved = JSON.parse(value) as Partial<CalculatorSettings>;
           if (saved.pizzaStyle) setPizzaStyle(saved.pizzaStyle);
           if (saved.romanFormat) setRomanFormat(saved.romanFormat);
-          if (typeof saved.trayWidth === 'number') setTrayWidth(saved.trayWidth);
-          if (typeof saved.trayLength === 'number') setTrayLength(saved.trayLength);
+          if (typeof saved.trayWidth === 'number') {
+            setTrayWidth(saved.trayWidth);
+            setTrayWidthInput(String(saved.trayWidth));
+          }
+          if (typeof saved.trayLength === 'number') {
+            setTrayLength(saved.trayLength);
+            setTrayLengthInput(String(saved.trayLength));
+          }
           if (saved.flour) setFlour(saved.flour);
           if (saved.blendA) setBlendA(saved.blendA);
           if (saved.blendB) setBlendB(saved.blendB);
@@ -919,9 +927,15 @@ export default function CalculatorHome() {
 
           {isRomanTeglia ? (
             <>
-              <View style={[styles.row, { marginTop: SPACING.md }]}>
-                <Text style={styles.label}>Tijesto po tepsiji</Text>
+              <View style={[styles.ballRow, { marginTop: SPACING.md }] }>
+                <View style={styles.ballLabelCol}>
+                  <Text style={styles.label}>Gramaža tijesta</Text>
+                  <Text style={styles.subLabel}>Automatski prema dimenzijama tepsije</Text>
+                </View>
                 <View style={styles.ballStepper}>
+                  <Pressable testID="tray-dough-minus" onPress={() => step(() => setCustomBallWeight(Math.max(100, effectiveBall - 5)))} style={styles.stepBtn}>
+                    <Icon name="remove" size={20} color={COLORS.brand} />
+                  </Pressable>
                   <TextInput
                     testID="tray-dough-weight"
                     value={customBallInput !== '' ? customBallInput : String(effectiveBall)}
@@ -936,6 +950,9 @@ export default function CalculatorHome() {
                     style={styles.stepInput}
                   />
                   <Text style={styles.stepUnit}>g</Text>
+                  <Pressable testID="tray-dough-plus" onPress={() => step(() => setCustomBallWeight(Math.min(2000, effectiveBall + 5)))} style={styles.stepBtn}>
+                    <Icon name="add" size={20} color={COLORS.brand} />
+                  </Pressable>
                 </View>
               </View>
               <Text style={styles.hint}>Automatski izračun: {trayDoughWeight} g</Text>
@@ -943,16 +960,28 @@ export default function CalculatorHome() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
                 <TextInput
                   testID="tray-width"
-                  value={String(trayWidth)}
-                  onChangeText={(value) => { const next = Number(value.replace(/[^0-9]/g, '')); if (next >= 20 && next <= 60) setTrayWidth(next); }}
+                  value={trayWidthInput}
+                  onChangeText={(value) => {
+                    const clean = value.replace(/[^0-9]/g, '').slice(0, 2);
+                    setTrayWidthInput(clean);
+                    const next = Number(clean);
+                    if (next >= 20 && next <= 60) { setTrayWidth(next); setCustomBallWeight(null); setCustomBallInput(''); }
+                  }}
+                  onBlur={() => { if (trayWidth < 20 || trayWidth > 60) setTrayWidthInput(String(trayWidth)); }}
                   keyboardType="number-pad"
                   style={styles.customInput}
                 />
                 <Text style={styles.stepUnit}>×</Text>
                 <TextInput
                   testID="tray-length"
-                  value={String(trayLength)}
-                  onChangeText={(value) => { const next = Number(value.replace(/[^0-9]/g, '')); if (next >= 20 && next <= 60) setTrayLength(next); }}
+                  value={trayLengthInput}
+                  onChangeText={(value) => {
+                    const clean = value.replace(/[^0-9]/g, '').slice(0, 2);
+                    setTrayLengthInput(clean);
+                    const next = Number(clean);
+                    if (next >= 20 && next <= 60) { setTrayLength(next); setCustomBallWeight(null); setCustomBallInput(''); }
+                  }}
+                  onBlur={() => { if (trayLength < 20 || trayLength > 60) setTrayLengthInput(String(trayLength)); }}
                   keyboardType="number-pad"
                   style={styles.customInput}
                 />
