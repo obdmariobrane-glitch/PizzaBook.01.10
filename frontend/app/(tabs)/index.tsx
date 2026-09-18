@@ -630,7 +630,9 @@ export default function CalculatorHome() {
         sl: `Poolish vsebuje ${poolishPct}% celotne moke pri 100% hidraciji predtesta.`,
       }[lang]),
       steps: [
-        ({ hr: 'Operite i temeljito osušite ruke.', en: 'Wash and thoroughly dry your hands.', de: 'Waschen und trocknen Sie Ihre Hände gründlich.', sl: 'Umijte in temeljito osušite roke.' }[lang]),
+        ((mixing === 'hand' || isRomanTeglia)
+          ? ({ hr: 'Operite i temeljito osušite ruke.', en: 'Wash and thoroughly dry your hands.', de: 'Waschen und trocknen Sie Ihre Hände gründlich.', sl: 'Umijte in temeljito osušite roke.' }[lang])
+          : ({ hr: 'Pripremite mikser i njegovu posudu.', en: 'Prepare the mixer and its bowl.', de: 'Bereiten Sie den Mixer und seine Schüssel vor.', sl: 'Pripravite mešalnik in njegovo posodo.' }[lang])),
         ({
           hr: `Pripremite ${dough.preferment?.flour ?? 0} g brašna, ${dough.preferment?.water ?? 0} g vode i ${dough.preferment?.yeast ?? 0} g kvasca za Poolish.`,
           en: `Prepare ${dough.preferment?.flour ?? 0} g flour, ${dough.preferment?.water ?? 0} g water, and ${dough.preferment?.yeast ?? 0} g yeast for the Poolish.`,
