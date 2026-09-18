@@ -3,10 +3,11 @@ import type { Lang } from './translations';
 import type { BaseTimer } from './prefermentSteps';
 
 export type StylePhase = { title: string; steps: string[]; timers?: BaseTimer[] };
+type RomanTray = false | { width: number; length: number; doughWeight: number };
 
 const timer = (id: string, seconds: number, kind: BaseTimer['kind']): BaseTimer => ({ id, seconds, kind });
 
-const direct = (mixing: 'hand' | 'mixer', style: 'romana' | 'ny_style', roomHours: number, fridgeHours: number, flour: FlourType, romanTray: boolean): StylePhase[] => {
+const direct = (mixing: 'hand' | 'mixer', style: 'romana' | 'ny_style', roomHours: number, fridgeHours: number, flour: FlourType, romanTray: RomanTray): StylePhase[] => {
   const isRoman = style === 'romana';
   const isNewYork = style === 'ny_style';
   const isManitoba = flour === 'manitoba';
@@ -14,6 +15,8 @@ const direct = (mixing: 'hand' | 'mixer', style: 'romana' | 'ny_style', roomHour
   const isWholeWheat = flour === 'wholeWheat';
   const isGlutenFree = flour === 'glutenFree';
   const hand = mixing === 'hand';
+  const tray = romanTray || { width: 30, length: 40, doughWeight: 475 };
+  const isTray = romanTray !== false;
     return [
       {
         title: hand ? 'Faza A: Priprema i ručni zamjes' : 'Faza A: Priprema i zamjes mikserom',
@@ -51,8 +54,8 @@ const direct = (mixing: 'hand' | 'mixer', style: 'romana' | 'ny_style', roomHour
     {
       title: 'Faza C: Podjela i oblikovanje loptica (Bulice)',
       steps: [
-        romanTray ? 'Za kućni lim 30×40 cm izvagajte 450–500 g tijesta po tepsiji (preporuka 475 g).' : 'Nakon bulka oblikujte kugle.',
-        !romanTray ? (isRoman ? 'Napravite kugle od 200–220 g.' : isGlutenFree ? 'Oblikujte manje kugle nježno; NY format od 40 cm nije prikladan.' : isManitoba ? 'Napravite veće kugle od 350–450 g.' : isSpelt || isWholeWheat ? 'Napravite kugle od približno 350–400 g; ne planirajte rastezanje u zraku.' : 'Napravite kugle od 350–400 g.') : 'Ne oblikujte malu okruglu kuglu; komad tijesta je namijenjen cijeloj tepsiji.',
+        isTray ? `Za tepsiju ${tray.width}×${tray.length} cm izvagajte ${tray.doughWeight} g tijesta.` : 'Nakon bulka oblikujte kugle.',
+        !isTray ? (isRoman ? 'Napravite kugle od 200–220 g.' : isGlutenFree ? 'Oblikujte manje kugle nježno; NY format od 40 cm nije prikladan.' : isManitoba ? 'Napravite veće kugle od 350–450 g.' : isSpelt || isWholeWheat ? 'Napravite kugle od približno 350–400 g; ne planirajte rastezanje u zraku.' : 'Napravite kugle od 350–400 g.') : 'Ne oblikujte malu okruglu kuglu; komad tijesta je namijenjen cijeloj tepsiji.',
         isNewYork && isManitoba ? 'Za NY style koristite veću kuglu i održavajte kompaktnu sredinu apsolutno ravnomjerno.' : null,
         ...(fridgeHours > 0 ? [`Ostavite kugle 30–60 minuta na sobnoj temperaturi, zatim ih stavite u zatvorenu kutiju u hladnjak na ${fridgeHours} sati pri 4°C.`] : [`Ostavite kugle ${roomHours} sati na sobnoj temperaturi prije pečenja.`]),
       ].filter(Boolean) as string[],
@@ -60,8 +63,8 @@ const direct = (mixing: 'hand' | 'mixer', style: 'romana' | 'ny_style', roomHour
     },
     {
       title: 'Faza D: Priprema, razvlačenje i nadijevanje',
-      steps: romanTray
-        ? ['Izvadite tijesto iz hladnjaka 30–45 minuta prije oblikovanja.', 'Tepsiju 30×40 cm obilno nauljite maslinovim uljem.', 'Istresite tijesto u tepsiju i utiskujte ga prstima od sredine prema rubovima dok ne ispuni cijeli lim; ne rastežite ga u zraku.', 'Ostavite tijesto da se opusti ako se vraća, zatim ponovno utisnite rubove.', 'Dodajte nadjev ravnomjerno i pecite prema odabranoj pećnici.']
+      steps: isTray
+        ? ['Izvadite tijesto iz hladnjaka 30–45 minuta prije oblikovanja.', `Tepsiju ${tray.width}×${tray.length} cm obilno nauljite maslinovim uljem.`, 'Istresite tijesto u tepsiju i utiskujte ga prstima od sredine prema rubovima dok ne ispuni cijeli lim; ne rastežite ga u zraku.', 'Ostavite tijesto da se opusti ako se vraća, zatim ponovno utisnite rubove.', 'Dodajte nadjev ravnomjerno i pecite prema odabranoj pećnici.']
         : isRoman
           ? [`Izvadite loptice iz hladnjaka 15–20 minuta prije oblikovanja ili kada se približno udvostruče, ali pazite da ne predignu.`, 'Brzim i nježnim pokretom izvadite kuglu i stavite je na radnu površinu.', isSpelt ? 'Pirovo tijesto pažljivo utiskujte prstima; ne razvlačite ga agresivno.' : isWholeWheat ? 'Integralno tijesto nježno utiskujte prstima; baza će biti rustikalnija i manje prozračna.' : 'Bez rastezanja u zraku oblikujte ravnu Romanu pažljivim pritiskanjem prstima ili valjkom.', 'Nafilujte tanko i ravnomjerno kako bi sredina ostala hrskava.']
           : [`Izvadite loptice iz hladnjaka 15–20 minuta prije razvlačenja ili kada se približno udvostruče, ali pazite da ne predignu.`, 'Radnu površinu lagano pospite brašnom ili semolom.', isGlutenFree ? 'Bezglutensko tijesto oblikujte samo pritiskanjem prstima; NY format od 40 cm i rastezanje u zraku nisu prikladni.' : isSpelt ? 'Pirovo tijesto otvorite isključivo pritiskanjem prstima; ne radite knuckle stretch.' : isWholeWheat ? 'Integralno tijesto otvorite pritiskanjem prstima; ne radite klasično rastezanje u zraku jer baza ostaje gušća.' : isManitoba ? 'Nakon pritska dlanovima razvucite tijesto preko šaka (knuckle stretch) do tanke baze.' : 'Nakon pritiska dlanovima možete pažljivo razvlačiti tijesto u zraku do tanke baze.', 'Nafilujte ravnomjerno; za NY prvo stavite suhu ribanu mozzarellu, zatim gusti umak i dodatke.'],
@@ -70,7 +73,7 @@ const direct = (mixing: 'hand' | 'mixer', style: 'romana' | 'ny_style', roomHour
   ];
 };
 
-const preferment = (method: 'biga' | 'poolish', mixing: 'hand' | 'mixer', style: 'romana' | 'ny_style', roomHours: number, fridgeHours: number, flour: FlourType, romanTray: boolean): StylePhase[] => {
+const preferment = (method: 'biga' | 'poolish', mixing: 'hand' | 'mixer', style: 'romana' | 'ny_style', roomHours: number, fridgeHours: number, flour: FlourType, romanTray: RomanTray): StylePhase[] => {
   const isRoman = style === 'romana';
   const isNewYork = style === 'ny_style';
   const isBiga = method === 'biga';
@@ -79,6 +82,8 @@ const preferment = (method: 'biga' | 'poolish', mixing: 'hand' | 'mixer', style:
   const isSpelt = flour === 'spelt';
   const isWholeWheat = flour === 'wholeWheat';
   const isGlutenFree = flour === 'glutenFree';
+  const tray = romanTray || { width: 30, length: 40, doughWeight: 475 };
+  const isTray = romanTray !== false;
   const p1Timers = isBiga
     ? [timer('style-biga-room', 8 * 3600, 'rt'), timer('style-biga-fridge', 16 * 3600, 'fridge')]
     : [
@@ -125,16 +130,16 @@ const preferment = (method: 'biga' | 'poolish', mixing: 'hand' | 'mixer', style:
       steps: [
         fridgeHours > 0 ? 'Ostavite tijesto 30–45 minuta na sobnoj temperaturi.' : `Ostavite tijesto ${roomHours} sati na sobnoj temperaturi prije oblikovanja kugli.`,
         isGlutenFree ? 'Ne radite Stretch & Fold; ostavite smjesu samo 15 minuta da se veže.' : isManitoba ? 'Napravite čvrste Stretch & Fold preklopa kako bi tijesto držalo visoku hidrataciju.' : isSpelt || isWholeWheat ? 'Napravite jedno nježno preklapanje; ne trgajte strukturu.' : hand ? 'Napravite jedno preklapanje na polovici bulka.' : 'Preklapanje nije potrebno, osim ako tijesto traži dodatnu strukturu.',
-        romanTray ? 'Za kućni lim 30×40 cm izvagajte 450–500 g tijesta po tepsiji (preporuka 475 g).' : 'Nakon bulka oblikujte kugle.',
-        romanTray ? 'Ne oblikujte malu okruglu kuglu; komad tijesta je namijenjen cijeloj tepsiji.' : isRoman ? 'Kugle neka budu 200–220 g.' : isGlutenFree ? 'Oblikujte manje kugle nježno; NY format od 40 cm nije prikladan.' : isManitoba ? 'Kugle neka budu 350–450 g.' : isSpelt || isWholeWheat ? 'Kugle neka budu približno 350–400 g; ne planirajte rastezanje u zraku.' : 'Kugle neka budu 350–400 g.',
+        isTray ? `Za tepsiju ${tray.width}×${tray.length} cm izvagajte ${tray.doughWeight} g tijesta.` : 'Nakon bulka oblikujte kugle.',
+        isTray ? 'Ne oblikujte malu okruglu kuglu; komad tijesta je namijenjen cijeloj tepsiji.' : isRoman ? 'Kugle neka budu 200–220 g.' : isGlutenFree ? 'Oblikujte manje kugle nježno; NY format od 40 cm nije prikladan.' : isManitoba ? 'Kugle neka budu 350–450 g.' : isSpelt || isWholeWheat ? 'Kugle neka budu približno 350–400 g; ne planirajte rastezanje u zraku.' : 'Kugle neka budu 350–400 g.',
         ...(fridgeHours > 0 ? [`Ostavite kugle 30–60 minuta na sobnoj temperaturi, zatim ih stavite u hladnjak na ${fridgeHours} sati.`] : [`Ostavite kugle ${roomHours} sati na sobnoj temperaturi prije pečenja.`]),
       ].filter(Boolean) as string[],
       timers: [timer('style-preferment-bulk', 30 * 60, 'rt'), ...(fridgeHours > 0 ? [timer('style-preferment-fridge', fridgeHours * 3600, 'ballsFridge')] : [timer('style-preferment-room', roomHours * 3600, 'ballsRt')])],
     },
     {
       title: 'Faza D: Priprema, razvlačenje i nadijevanje',
-      steps: romanTray
-        ? ['Izvadite tijesto 30–45 minuta prije oblikovanja.', 'Tepsiju 30×40 cm obilno nauljite.', 'Istresite tijesto u tepsiju i utiskujte ga prstima od sredine prema rubovima bez rastezanja u zraku.', 'Dodajte nadjev ravnomjerno i pecite prema odabranoj pećnici.']
+      steps: isTray
+        ? ['Izvadite tijesto 30–45 minuta prije oblikovanja.', `Tepsiju ${tray.width}×${tray.length} cm obilno nauljite.`, 'Istresite tijesto u tepsiju i utiskujte ga prstima od sredine prema rubovima bez rastezanja u zraku.', 'Dodajte nadjev ravnomjerno i pecite prema odabranoj pećnici.']
         : isRoman
           ? [`Izvadite loptice iz hladnjaka 15–20 minuta prije razvlačenja ili kada se približno udvostruče, ali pazite da ne predignu.`, 'Brzim i nježnim pokretom izvadite kuglu iz posude i stavite je naopako na semolu.', isSpelt ? 'Pirovo tijesto pažljivo utiskujte prstima; ne razvlačite ga agresivno.' : isWholeWheat ? 'Integralno tijesto nježno utiskujte prstima; baza će biti rustikalnija i manje prozračna.' : 'Radnu površinu pospite semolom i bez rastezanja u zraku oblikujte ravnu Romanu pažljivim pritiskanjem prstima ili valjkom.', 'Nafilujte tanko i ravnomjerno te pecite odmah.']
           : [`Izvadite loptice iz hladnjaka 15–20 minuta prije razvlačenja ili kada se približno udvostruče, ali pazite da ne predignu.`, 'Prstima istisnite zrak prema rubu i ostavite tanak centar s izraženim, mekanim rubom.', isGlutenFree ? 'Bezglutensko tijesto oblikujte samo pritiskanjem prstima; NY format od 40 cm i rastezanje u zraku nisu prikladni.' : isSpelt ? 'Pirovo tijesto otvorite isključivo pritiskanjem prstima; ne radite knuckle stretch.' : isWholeWheat ? 'Integralno tijesto otvorite pritiskanjem prstima; ne radite klasično rastezanje u zraku jer baza ostaje gušća.' : isManitoba ? 'Nakon pritiska dlanovima razvucite tijesto preko šaka (knuckle stretch) do tanke baze.' : 'Nakon pritiska dlanovima možete pažljivo razvlačiti tijesto u zraku do tanke baze.', 'Nafilujte ravnomjerno i ne preopterećujte sredinu; za NY prvo stavite suhu ribanu mozzarellu, zatim gusti umak i dodatke.'],
@@ -143,7 +148,7 @@ const preferment = (method: 'biga' | 'poolish', mixing: 'hand' | 'mixer', style:
   ];
 };
 
-export function getStyleSteps(style: PizzaStyle, method: Method, mixing: 'hand' | 'mixer', roomHours: number, fridgeHours: number, lang: Lang, flour: FlourType, romanTray = false): StylePhase[] | null {
+export function getStyleSteps(style: PizzaStyle, method: Method, mixing: 'hand' | 'mixer', roomHours: number, fridgeHours: number, lang: Lang, flour: FlourType, romanTray: RomanTray = false): StylePhase[] | null {
   if (lang !== 'hr') return null;
   if (style === 'neapolitan') return null;
   const actualMixing = mixing === 'hand' ? 'hand' : 'mixer';
