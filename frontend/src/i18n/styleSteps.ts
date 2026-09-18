@@ -63,16 +63,15 @@ const direct = (mixing: 'hand' | 'mixer', style: 'romana' | 'ny_style', roomHour
         ...(fridgeHours > 0 ? [`Nakon toga oblikujte kugle i stavite ih u hladnjak na ${fridgeHours} sati pri 4°C.`] : []),
       ],
       fermentationInfo: isTray ? 'Teglia koristi vlažnije tijesto koje ostaje kao jedna masa. Tijekom fermentacije radite nježne Stretch & Fold preklape u posudi; ne oblikujte kugle za tondu.' : undefined,
-      timers: [
-        timer('style-room-bulk', 30 * 60, 'rt'),
-        ...(fridgeHours > 0 ? [timer('style-fridge-bulk', fridgeHours * 3600, 'fridge')] : []),
-      ],
+      timers: isTray
+        ? [timer('style-tray-rest-1', 30 * 60, 'rt'), timer('style-tray-rest-2', 30 * 60, 'rt'), ...(fridgeHours > 0 ? [timer('style-tray-fridge', fridgeHours * 3600, 'fridge')] : [])]
+        : [timer('style-room-bulk', 30 * 60, 'rt'), ...(fridgeHours > 0 ? [timer('style-fridge-bulk', fridgeHours * 3600, 'fridge')] : [])],
     },
     {
       title: isTray ? 'Faza C: Masa za tepsiju' : 'Faza C: Podjela i oblikovanje loptica (Bulice)',
       steps: isTray ? [
         `Ne oblikujte kugle za tondu. Za tepsiju ${tray.width}×${tray.length} cm pripremite jednu masu od ${tray.doughWeight} g.`,
-        fridgeHours > 0 ? 'Nakon hladne fermentacije izvadite cijelu masu iz posude 30–45 minuta prije oblikovanja.' : 'Ostavite masu do trenutka oblikovanja prema odabranom vremenu fermentacije.',
+        'Ostavite masu do trenutka oblikovanja prema odabranom vremenu fermentacije.',
       ] : [
         'Nakon bulka oblikujte kugle.',
         isRoman ? 'Napravite kugle od 200–220 g.' : isGlutenFree ? 'Oblikujte manje kugle nježno; NY format od 40 cm nije prikladan.' : isManitoba ? 'Napravite veće kugle od 350–450 g.' : isSpelt || isWholeWheat ? 'Napravite kugle od približno 350–400 g; ne planirajte rastezanje u zraku.' : 'Napravite kugle od 350–400 g.',
@@ -83,7 +82,7 @@ const direct = (mixing: 'hand' | 'mixer', style: 'romana' | 'ny_style', roomHour
       timers: fridgeHours > 0 ? [timer(isTray ? 'style-tray-fridge' : 'style-balls-fridge', fridgeHours * 3600, isTray ? 'fridge' : 'ballsFridge')] : [timer(isTray ? 'style-tray-room' : 'style-balls-room', roomHours * 3600, isTray ? 'rt' : 'ballsRt')],
     },
     {
-      title: 'Faza D: Priprema, razvlačenje i nadijevanje',
+      title: isTray ? 'Faza D: Utiskivanje u tepsiju i pečenje' : 'Faza D: Priprema, razvlačenje i nadijevanje',
       steps: isTray
         ? ['Izvadite tijesto iz hladnjaka 30–45 minuta prije oblikovanja.', `Tepsiju ${tray.width}×${tray.length} cm obilno nauljite maslinovim uljem.`, 'Istresite tijesto u tepsiju i utiskujte ga prstima od sredine prema rubovima dok ne ispuni cijeli lim; ne rastežite ga u zraku.', 'Ostavite tijesto da se opusti ako se vraća, zatim ponovno utisnite rubove.', 'Dodajte nadjev ravnomjerno.', ...(('bakingSteps' in tray && tray.bakingSteps) ? tray.bakingSteps : [])]
         : isRoman
@@ -173,7 +172,9 @@ const preferment = (method: 'biga' | 'poolish', mixing: 'hand' | 'mixer', style:
       ].filter(Boolean) as string[],
       fermentationInfo: isTray ? 'Teglia koristi vlažnije tijesto koje ostaje kao jedna masa. Tijekom fermentacije radite nježne Stretch & Fold preklape u posudi; ne oblikujte kugle za tondu.' : undefined,
       proofingInfo: undefined,
-      timers: [timer(isTray ? 'style-preferment-tray-bulk' : 'style-preferment-bulk', 30 * 60, 'rt'), ...(fridgeHours > 0 ? [timer(isTray ? 'style-preferment-tray-fridge' : 'style-preferment-fridge', fridgeHours * 3600, isTray ? 'fridge' : 'ballsFridge')] : [timer(isTray ? 'style-preferment-tray-room' : 'style-preferment-room', roomHours * 3600, isTray ? 'rt' : 'ballsRt')])],
+      timers: isTray
+        ? [timer('style-preferment-tray-rest-1', 30 * 60, 'rt'), timer('style-preferment-tray-rest-2', 30 * 60, 'rt'), ...(fridgeHours > 0 ? [timer('style-preferment-tray-fridge', fridgeHours * 3600, 'fridge')] : [])]
+        : [timer('style-preferment-bulk', 30 * 60, 'rt'), ...(fridgeHours > 0 ? [timer('style-preferment-fridge', fridgeHours * 3600, 'ballsFridge')] : [timer('style-preferment-room', roomHours * 3600, 'ballsRt')])],
     },
     ...(isTray ? [{
       title: 'Faza D: Masa za tepsiju',
