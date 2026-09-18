@@ -146,7 +146,7 @@ const preferment = (method: 'biga' | 'poolish', mixing: 'hand' | 'mixer', style:
         : 'Kod Tonde nakon završnog zamjesa tijesto odmorite i oblikujte u čvrste, glatke pojedinačne kugle kroz staglio.',
     },
     {
-      title: isTray ? 'Faza C: Fermentacija i masa za tepsiju' : 'Faza C: Podjela i oblikovanje loptica (Bulice)',
+      title: isTray ? 'Faza C: Fermentacija i preklapanje' : 'Faza C: Podjela i oblikovanje loptica (Bulice)',
       steps: isTray ? [
         'Prebacite tijesto u lagano nauljenu fermentacijsku posudu.',
         'Ostavite tijesto 30 minuta na sobnoj temperaturi.',
@@ -162,11 +162,19 @@ const preferment = (method: 'biga' | 'poolish', mixing: 'hand' | 'mixer', style:
         ...(fridgeHours > 0 ? [`Ostavite kugle 30–60 minuta na sobnoj temperaturi, zatim ih stavite u hladnjak na ${fridgeHours} sati.`] : [`Ostavite kugle ${roomHours} sati na sobnoj temperaturi prije pečenja.`]),
       ].filter(Boolean) as string[],
       fermentationInfo: isTray ? 'Teglia koristi vlažnije tijesto koje ostaje kao jedna masa. Tijekom fermentacije radite nježne Stretch & Fold preklape u posudi; ne oblikujte kugle za tondu.' : undefined,
-      proofingInfo: isTray ? `Za ovu tepsiju koristi se jedna masa od ${tray.doughWeight} g, bez kuglanja. Tijesto se nakon fermentacije nježno utiskuje u nauljenu tepsiju ${tray.width}×${tray.length} cm.` : undefined,
+      proofingInfo: undefined,
       timers: [timer(isTray ? 'style-preferment-tray-bulk' : 'style-preferment-bulk', 30 * 60, 'rt'), ...(fridgeHours > 0 ? [timer(isTray ? 'style-preferment-tray-fridge' : 'style-preferment-fridge', fridgeHours * 3600, isTray ? 'fridge' : 'ballsFridge')] : [timer(isTray ? 'style-preferment-tray-room' : 'style-preferment-room', roomHours * 3600, isTray ? 'rt' : 'ballsRt')])],
     },
+    ...(isTray ? [{
+      title: 'Faza D: Masa za tepsiju',
+      steps: [
+        `Nakon fermentacije pripremite jednu masu od ${tray.doughWeight} g za tepsiju ${tray.width}×${tray.length} cm.`,
+        'Ne oblikujte kuglu za tondu; tijesto ostaje kao jedna masa do utiskivanja u tepsiju.',
+      ],
+      proofingInfo: `Za ovu tepsiju koristi se jedna masa od ${tray.doughWeight} g, bez kuglanja. Tijesto se nakon fermentacije nježno utiskuje u nauljenu tepsiju ${tray.width}×${tray.length} cm.`,
+    }] : []),
     {
-      title: 'Faza D: Priprema, razvlačenje i nadijevanje',
+      title: isTray ? 'Faza E: Utiskivanje u tepsiju i pečenje' : 'Faza D: Priprema, razvlačenje i nadijevanje',
       steps: isTray
         ? ['Izvadite tijesto 30–45 minuta prije oblikovanja.', `Tepsiju ${tray.width}×${tray.length} cm obilno nauljite.`, 'Istresite tijesto u tepsiju i utiskujte ga prstima od sredine prema rubovima bez rastezanja u zraku.', 'Dodajte nadjev ravnomjerno i pecite prema odabranoj pećnici.']
         : isRoman
