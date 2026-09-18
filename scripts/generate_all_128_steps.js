@@ -25,7 +25,8 @@ const mixing = [
 function flourLine(flour) {
   return `Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. ${flour.rule}`;
 }
-function shapeSteps(shape) {
+function shapeSteps(shape, flour) {
+  const glutenFree = flour.key === 'glutenFree';
   if (shape.kind === 'teglia') return [
     'Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.',
     'Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.',
@@ -37,20 +38,20 @@ function shapeSteps(shape) {
   if (shape.kind === 'tonda') return [
     'Oblikujte pojedinacne cvrste kugle, priblizno 200-220 g.',
     'Nakon fermentacije otvorite kuglu u tanku i ravnu Romanu Tonda.',
-    'Oblikujte pritiskanjem prstiju; ne rastezite agresivno u zraku.',
+    glutenFree ? 'Oblikujte podlogu laganim pritiskanjem prstima; rub ce biti nizi i kompaktniji jer nema glutenske strukture.' : 'Oblikujte pritiskanjem prstiju; ne rastezite agresivno u zraku.',
     'Dodajte tanak i ravnomjeran nadjev.',
     'Pecite pojedinacno na visokoj temperaturi prema odabranoj pecnici.',
   ];
   if (shape.key === 'napolitana') return [
     'Oblikujte pojedinacne kugle prema odabranom promjeru.',
     'Otvorite kuglu pritiskanjem od sredine prema rubu.',
-    'Ostavite izrazen i prozracen rub.',
+    glutenFree ? 'Oblikujte rub laganim pritiskanjem prstima; ne ocekujte visok i prozracen rub jer nema glutenske strukture.' : 'Ostavite izrazen i prozracen rub.',
     'Dodajte nadjev bez preopterecenja sredine.',
     'Pecite kratko na visokoj temperaturi i rotirajte prema potrebi.',
   ];
   return [
     'Oblikujte vece kugle, priblizno 350-400 g.',
-    'Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.',
+    glutenFree ? 'Otvorite podlogu laganim pritiskanjem; rub ce biti nizi i kompaktniji jer nema glutenske strukture.' : 'Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.',
     'Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.',
     'Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.',
   ];
@@ -75,7 +76,7 @@ function directSteps(shape, flour, mode) {
     steps.push(hand ? 'Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.' : 'Mijesajte u posudi dok se tijesto ne poveze i postane glatko.');
     steps.push(hand ? 'Pokrijte tijesto i ostavite ga 15 minuta.' : 'Ostavite tijesto 5 minuta u posudi miksera.');
   }
-  steps.push(...shapeSteps(shape));
+  steps.push(...shapeSteps(shape, flour));
   return steps;
 }
 function prefermentSteps(shape, flour, method, mode) {
@@ -98,7 +99,7 @@ function prefermentSteps(shape, flour, method, mode) {
   steps.push(flourLine(flour));
   steps.push(hand ? 'Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.' : 'Mijesajte u mikseru dok se tijesto ne poveze.');
   steps.push(hand ? 'Pokrijte tijesto i ostavite ga 15 minuta.' : 'Ostavite tijesto 5 minuta u posudi miksera.');
-  steps.push(...shapeSteps(shape));
+  steps.push(...shapeSteps(shape, flour));
   return steps;
 }
 function section(shape, flour, method, mode) {

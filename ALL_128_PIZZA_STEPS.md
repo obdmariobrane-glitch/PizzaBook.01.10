@@ -617,7 +617,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 9. Ostavite smjesu 15 minuta da psyllium povuce vlagu.
 10. Oblikujte pojedinacne kugle prema odabranom promjeru.
 11. Otvorite kuglu pritiskanjem od sredine prema rubu.
-12. Ostavite izrazen i prozracen rub.
+12. Oblikujte rub laganim pritiskanjem prstima; ne ocekujte visok i prozracen rub jer nema glutenske strukture.
 13. Dodajte nadjev bez preopterecenja sredine.
 14. Pecite kratko na visokoj temperaturi i rotirajte prema potrebi.
 
@@ -637,7 +637,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 9. Ostavite smjesu 15 minuta da psyllium povuce vlagu.
 10. Oblikujte pojedinacne kugle prema odabranom promjeru.
 11. Otvorite kuglu pritiskanjem od sredine prema rubu.
-12. Ostavite izrazen i prozracen rub.
+12. Oblikujte rub laganim pritiskanjem prstima; ne ocekujte visok i prozracen rub jer nema glutenske strukture.
 13. Dodajte nadjev bez preopterecenja sredine.
 14. Pecite kratko na visokoj temperaturi i rotirajte prema potrebi.
 
@@ -1257,7 +1257,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 9. Ostavite smjesu 15 minuta da psyllium povuce vlagu.
 10. Oblikujte pojedinacne cvrste kugle, priblizno 200-220 g.
 11. Nakon fermentacije otvorite kuglu u tanku i ravnu Romanu Tonda.
-12. Oblikujte pritiskanjem prstiju; ne rastezite agresivno u zraku.
+12. Oblikujte podlogu laganim pritiskanjem prstima; rub ce biti nizi i kompaktniji jer nema glutenske strukture.
 13. Dodajte tanak i ravnomjeran nadjev.
 14. Pecite pojedinacno na visokoj temperaturi prema odabranoj pecnici.
 
@@ -1277,7 +1277,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 9. Ostavite smjesu 15 minuta da psyllium povuce vlagu.
 10. Oblikujte pojedinacne cvrste kugle, priblizno 200-220 g.
 11. Nakon fermentacije otvorite kuglu u tanku i ravnu Romanu Tonda.
-12. Oblikujte pritiskanjem prstiju; ne rastezite agresivno u zraku.
+12. Oblikujte podlogu laganim pritiskanjem prstima; rub ce biti nizi i kompaktniji jer nema glutenske strukture.
 13. Dodajte tanak i ravnomjeran nadjev.
 14. Pecite pojedinacno na visokoj temperaturi prema odabranoj pecnici.
 
@@ -2538,7 +2538,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 8. Mijesajte samo dok se smjesa ne poveze; ne razvijajte gluten.
 9. Ostavite smjesu 15 minuta da psyllium povuce vlagu.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite podlogu laganim pritiskanjem; rub ce biti nizi i kompaktniji jer nema glutenske strukture.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2557,7 +2557,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 8. Mijesajte samo dok se smjesa ne poveze; ne razvijajte gluten.
 9. Ostavite smjesu 15 minuta da psyllium povuce vlagu.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite podlogu laganim pritiskanjem; rub ce biti nizi i kompaktniji jer nema glutenske strukture.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
