@@ -591,7 +591,7 @@ export default function CalculatorHome() {
       oil: dough.main.oil,
       yeast: dough.main.yeast,
       psyllium: dough.total.psyllium,
-      preferment: dough.preferment ? { flour: dough.preferment.flour, water: dough.preferment.water, yeast: dough.preferment.yeast } : undefined,
+      preferment: dough.preferment ? { flour: dough.preferment.flour, water: dough.preferment.water, yeast: dough.preferment.yeast, roomTemp, fridgeTemp, totalHours: selectedPrefermentHours } : undefined,
     },
     bakingSteps: styleBakingSteps ?? undefined,
   } : false);

@@ -3,7 +3,7 @@ import type { Lang } from './translations';
 import type { BaseTimer } from './prefermentSteps';
 
 export type StylePhase = { title: string; steps: string[]; timers?: BaseTimer[]; doughHandlingInfo?: string; fermentationInfo?: string; proofingInfo?: string; bakingInfo?: string };
-type StepAmounts = { flour: number; water: number; salt: number; oil: number; yeast: number; psyllium?: number; preferment?: { flour: number; water: number; yeast: number } };
+type StepAmounts = { flour: number; water: number; salt: number; oil: number; yeast: number; psyllium?: number; preferment?: { flour: number; water: number; yeast: number; roomTemp: number; fridgeTemp: number; totalHours: number } };
 type RomanTray = false | { width: number; length: number; doughWeight: number; amounts?: StepAmounts; bakingSteps?: string[] };
 
 const timer = (id: string, seconds: number, kind: BaseTimer['kind']): BaseTimer => ({ id, seconds, kind });
@@ -121,11 +121,7 @@ const preferment = (method: 'biga' | 'poolish', mixing: 'hand' | 'mixer', style:
           ? [
               hand ? 'Operite i temeljito osušite ruke.' : 'Pripremite mikser i njegovu posudu.',
               ...(amounts?.preferment ? [`Pripremite ${amounts.preferment.flour} g brašna, ${amounts.preferment.water} g vode i ${amounts.preferment.yeast} g kvasca za Bigu.`] : []),
-              'U posudu stavite brašno i ravnomjerno izmrvite kvasac.',
-              'Ulijte izračunatu hladnu vodu i rukama kratko pomiješajte sastojke.',
-              'Ne mijesite glatko tijesto; smjesa treba ostati gruba i mrvičasta.',
-              'Pokrijte posudu i ostavite bigu 8 sati na sobnoj temperaturi.',
-              'Prebacite bigu u hladnjak na još 16 sati pri 4°C.',
+              ...(isTray && amounts?.preferment ? [`Rukama kratko povežite sastojke; smjesa treba ostati mrvičasta. Ostavite Bigu 8 sati na ${amounts.preferment.roomTemp} °C.`, `Pokrijte Bigu i prebacite je u hladnjak na 16 sati pri ${amounts.preferment.fridgeTemp} °C. Ukupno: ${amounts.preferment.totalHours} sati.`] : ['U posudu stavite brašno i ravnomjerno izmrvite kvasac.', 'Ulijte izračunatu hladnu vodu i rukama kratko pomiješajte sastojke.', 'Ne mijesite glatko tijesto; smjesa treba ostati gruba i mrvičasta.', 'Pokrijte posudu i ostavite bigu 8 sati na sobnoj temperaturi.', 'Prebacite bigu u hladnjak na još 16 sati pri 4°C.']),
             ]
           : [
               hand ? 'Operite i temeljito osušite ruke.' : 'Pripremite mikser i njegovu posudu.',
