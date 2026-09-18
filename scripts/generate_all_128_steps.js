@@ -29,7 +29,7 @@ function shapeSteps(shape, flour) {
   const glutenFree = flour.key === 'glutenFree';
   if (shape.kind === 'teglia') return [
     'Ne oblikujte kugle; tijesto ostaje kao jedna masa.',
-    glutenFree ? 'Njezno preklopite ili poravnajte tijesto mokrim ili nauljenim rukama, bez pokusaja razvoja glutenske strukture.' : 'Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.',
+    glutenFree ? 'Ne radite Stretch & Fold; ostavite smjesu 15 minuta da psyllium poveze strukturu.' : 'Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.',
     'Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.',
     'Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.',
     'Dodajte nadjev bez pretjerivanja s vlaznim sastojcima.',
