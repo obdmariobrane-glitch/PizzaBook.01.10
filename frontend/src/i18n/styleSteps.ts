@@ -3,7 +3,8 @@ import type { Lang } from './translations';
 import type { BaseTimer } from './prefermentSteps';
 
 export type StylePhase = { title: string; steps: string[]; timers?: BaseTimer[]; doughHandlingInfo?: string; fermentationInfo?: string; proofingInfo?: string; bakingInfo?: string };
-type RomanTray = false | { width: number; length: number; doughWeight: number };
+type StepAmounts = { flour: number; water: number; salt: number; oil: number; yeast: number; psyllium?: number; preferment?: { flour: number; water: number; yeast: number } };
+type RomanTray = false | { width: number; length: number; doughWeight: number; amounts?: StepAmounts };
 
 const timer = (id: string, seconds: number, kind: BaseTimer['kind']): BaseTimer => ({ id, seconds, kind });
 
@@ -17,11 +18,13 @@ const direct = (mixing: 'hand' | 'mixer', style: 'romana' | 'ny_style', roomHour
   const hand = mixing === 'hand';
   const tray = romanTray || { width: 30, length: 40, doughWeight: 475 };
   const isTray = romanTray !== false;
+  const amounts = 'amounts' in tray ? tray.amounts : undefined;
     return [
       {
         title: hand ? 'Faza A: Priprema i ručni zamjes' : 'Faza A: Priprema i zamjes mikserom',
         steps: hand ? [
           'Operite i temeljito osušite ruke.',
+          ...(amounts ? [`Pripremite ${amounts.flour} g brašna, ${amounts.salt} g soli, ${amounts.yeast} g svježeg kvasca, ${amounts.oil} g maslinovog ulja i ukupno ${amounts.water} g vode.`] : []),
           isGlutenFree ? 'U posudi otopite kvasac u 90% ukupne hladne vode.' : isRoman ? 'U posudi otopite kvasac u 90% ukupne predviđene vode.' : 'U posudi otopite kvasac i šećer u 90% ukupne predviđene vode.',
           'Postupno dodajte polovicu brašna i miješajte dok ne dobijete glatku smjesu bez grudica.',
           'Dodajte sol i dobro promiješajte kako sol ne bi došla u izravan kontakt s kvascem.',
@@ -31,6 +34,7 @@ const direct = (mixing: 'hand' | 'mixer', style: 'romana' | 'ny_style', roomHour
           ...(!isGlutenFree ? ['Prebacite tijesto na radnu površinu i mijesite dlanovima 10–15 minuta dok površina ne postane glatka.', 'Pokrijte tijesto i ostavite ga 15 minuta da se gluten opusti.'] : ['Ostavite smjesu 15 minuta da psyllium povuče vlagu.']),
         ] : [
           'Pripremite mikser i njegovu posudu.',
+          ...(amounts ? [`Pripremite ${amounts.flour} g brašna, ${amounts.salt} g soli, ${amounts.yeast} g svježeg kvasca, ${amounts.oil} g maslinovog ulja i ukupno ${amounts.water} g vode.`] : []),
           isGlutenFree ? 'U posudu miksera stavite brašno i obaveznih 2% psylliuma, dodajte 90% hladne vode i kvasac.' : isRoman ? 'U posudu miksera stavite 85% vode i brašno.' : 'U posudu miksera stavite 85% vode, kvasac i šećer.',
           'Pokrenite mikser u prvoj brzini i dodajte preostalo brašno.',
           'Postupno dodajte preostalih 15% vode zajedno sa soli.',
@@ -103,6 +107,7 @@ const preferment = (method: 'biga' | 'poolish', mixing: 'hand' | 'mixer', style:
   const isGlutenFree = flour === 'glutenFree';
   const tray = romanTray || { width: 30, length: 40, doughWeight: 475 };
   const isTray = romanTray !== false;
+  const amounts = 'amounts' in tray ? tray.amounts : undefined;
   const p1Timers = isBiga
     ? [timer('style-biga-room', 8 * 3600, 'rt'), timer('style-biga-fridge', 16 * 3600, 'fridge')]
     : [
@@ -115,6 +120,7 @@ const preferment = (method: 'biga' | 'poolish', mixing: 'hand' | 'mixer', style:
         steps: isBiga
           ? [
               hand ? 'Operite i temeljito osušite ruke.' : 'Pripremite mikser i njegovu posudu.',
+              ...(amounts?.preferment ? [`Pripremite ${amounts.preferment.flour} g brašna, ${amounts.preferment.water} g vode i ${amounts.preferment.yeast} g kvasca za Bigu.`] : []),
               'U posudu stavite brašno i ravnomjerno izmrvite kvasac.',
               'Ulijte izračunatu hladnu vodu i rukama kratko pomiješajte sastojke.',
               'Ne mijesite glatko tijesto; smjesa treba ostati gruba i mrvičasta.',
@@ -123,6 +129,7 @@ const preferment = (method: 'biga' | 'poolish', mixing: 'hand' | 'mixer', style:
             ]
           : [
               hand ? 'Operite i temeljito osušite ruke.' : 'Pripremite mikser i njegovu posudu.',
+              ...(amounts?.preferment ? [`Pripremite ${amounts.preferment.flour} g brašna, ${amounts.preferment.water} g vode i ${amounts.preferment.yeast} g kvasca za Poolish.`] : []),
               'U posudi otopite kvasac u izračunatoj vodi za Poolish.',
               'Dodajte brašno za Poolish i promiješajte pjenjačom ili vilicom do glatke tekuće smjese.',
               `Pokrijte posudu i ostavite Poolish ${roomHours} ${roomHours === 1 ? 'sat' : 'sati'} na sobnoj temperaturi.`,
@@ -144,8 +151,10 @@ const preferment = (method: 'biga' | 'poolish', mixing: 'hand' | 'mixer', style:
             : isSpelt || isWholeWheat
               ? `${hand ? 'Ručno mijesite kratko i nježno' : 'Miješajte kratko i nježno u mikseru'}; ulje dodajte na kraju i ne opterećujte strukturu.`
               : `${hand ? 'Ručno mijesite 12–14 minuta' : 'Mijesite u mikseru 7–9 minuta'}; ulje dodajte na kraju i ciljajte temperaturu tijesta 21–23°C.`,
+                  ...(amounts ? [`Za završni zamjes pripremite ukupno ${amounts.flour} g brašna, ${amounts.water} g vode, ${amounts.salt} g soli, ${amounts.oil} g ulja i ${amounts.yeast} g kvasca.`] : []),
               ...(hand ? ['Prebacite tijesto na radnu površinu i mijesite dlanovima 10–15 minuta dok površina ne postane glatka.', 'Pokrijte tijesto i ostavite ga 15 minuta da se gluten opusti.'] : []),
       ],
+                timers: [timer(hand ? 'style-preferment-rest15m' : 'style-preferment-rest5m', (hand ? 15 : 5) * 60, 'rest')],
       doughHandlingInfo: isTray
         ? 'Kod Teglie završno tijesto ostaje vlažnije i ne oblikuje se u kugle za tondu. Nakon zamjesa struktura se gradi nježnim Stretch & Fold preklapima u posudi.'
         : 'Kod Tonde nakon završnog zamjesa tijesto odmorite i oblikujte u čvrste, glatke pojedinačne kugle kroz staglio.',

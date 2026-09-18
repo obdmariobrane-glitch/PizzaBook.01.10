@@ -580,7 +580,20 @@ export default function CalculatorHome() {
     oven === 'ooni' ? t.calc.ooniSteps : t.calc.homePanSteps;
   const styleBakingSteps = getStyleBakingSteps(pizzaStyle, oven, lang);
   const styleBakingTemp = getStyleBakingTemp(pizzaStyle, oven, lang);
-  const stylePreparationSteps = getStyleSteps(pizzaStyle, method, mixing, roomHours, fridgeHours, lang, flour, isRomanTeglia ? { width: trayWidth, length: trayLength, doughWeight: effectiveBall } : false);
+  const stylePreparationSteps = getStyleSteps(pizzaStyle, method, mixing, roomHours, fridgeHours, lang, flour, isRomanTeglia ? {
+    width: trayWidth,
+    length: trayLength,
+    doughWeight: effectiveBall,
+    amounts: {
+      flour: dough.main.flour,
+      water: dough.main.water,
+      salt: dough.main.salt,
+      oil: dough.main.oil,
+      yeast: dough.main.yeast,
+      psyllium: dough.total.psyllium,
+      preferment: dough.preferment ? { flour: dough.preferment.flour, water: dough.preferment.water, yeast: dough.preferment.yeast } : undefined,
+    },
+  } : false);
   const bakingPoints = oven === 'homePan'
     ? [{ temperature: 200, min: 15, max: 20 }, { temperature: 220, min: 13, max: 17 }, { temperature: 230, min: 12, max: 15 }, { temperature: 250, min: 10, max: 14 }, { temperature: 270, min: 8, max: 12 }, { temperature: 280, min: 7, max: 11 }, { temperature: 300, min: 6, max: 9 }]
     : oven === 'ooni'
@@ -1743,7 +1756,7 @@ function getDetailedDirectSteps(
         'Zamjes je gotov kada je tijesto glatko, elastično i homogeno.',
         !isGlutenFree && hand ? 'Pokrijte tijesto i ostavite ga 15 minuta da se gluten opusti.' : hand ? 'Ostavite tijesto da odmori 5–6 minuta.' : 'Ostavite tijesto da odmori 5–6 minuta u posudi miksera.',
       ],
-      timers: [timer('post-mix-rest', 5 * 60, 'rest')],
+      timers: [timer(hand && !isGlutenFree ? 'post-mix-rest15m' : 'post-mix-rest', (hand && !isGlutenFree ? 15 : 5) * 60, 'rest')],
     },
     {
       title: isGlutenFree ? 'Faza B: Kratki odmor' : hasPreferment ? 'Faza C: Bulk fermentacija i foldovi' : 'Faza B: Bulk fermentacija i foldovi',
