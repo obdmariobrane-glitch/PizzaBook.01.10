@@ -1248,7 +1248,7 @@ export default function CalculatorHome() {
           <Text style={styles.cardTitle}>6 · {t.calc.baking}</Text>
           <View style={styles.ovenRow}>
             {isRomanTeglia ? (
-              <OvenCard active={oven === 'homePan'} onPress={() => step(() => selectOven('homePan', 250))} imageSrc={require('../../assets/images/oven-home-pan.png')} title={t.calc.homePan} testID="oven-homePan" />
+              <OvenCard active={oven === 'homePan'} onPress={() => step(() => selectOven('homePan', 250))} imageSrc={require('../../assets/images/oven-home-pan.png')} title="Pećnica" testID="oven-homePan" />
             ) : (
               <>
                 <OvenCard active={oven === 'homeStone'} onPress={() => step(() => selectOven('homeStone', 300))} imageSrc={require('../../assets/images/oven-home-stone.png')} title={t.calc.homeStone} testID="oven-homeStone" />
