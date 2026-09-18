@@ -585,7 +585,7 @@ export default function CalculatorHome() {
   const bakingDuration = `${ovenTemp} °C · ${formatBakingMinutes(calculatedBakingTime.min, lang)}–${formatBakingMinutes(calculatedBakingTime.max, lang)}`;
   const ovenTempLabel = { hr: 'Temperatura pećnice', en: 'Oven temperature', de: 'Ofentemperatur', sl: 'Temperatura pečice' }[lang];
   const detailedDirectSteps = method === 'direct' && lang === 'hr'
-    ? getDetailedDirectSteps(mixing, dough.total, dough.totalDough, pizzas, effectiveBall, diameter, fridgeHours, oven, ovenTemp, roomTemp, dims.cheese, undefined, undefined, flour, pizzaStyle === 'romana' && romanFormat === 'tonda', isRomanTeglia)
+    ? getDetailedDirectSteps(mixing, dough.total, dough.totalDough, pizzas, effectiveBall, diameter, fridgeHours, oven, ovenTemp, roomTemp, dims.cheese, undefined, undefined, flour, pizzaStyle === 'romana' && romanFormat === 'tonda', isRomanTeglia, pizzaStyle === 'ny_style')
     : method === 'biga' && lang === 'hr'
       ? getDetailedDirectSteps(mixing, dough.total, dough.totalDough, pizzas, effectiveBall, diameter, fridgeHours, oven, ovenTemp, roomTemp, dims.cheese, {
         flour: dough.preferment?.flour ?? 0,
@@ -594,7 +594,7 @@ export default function CalculatorHome() {
         remainingFlour: dough.main.flour,
         remainingWater: dough.main.water,
         pct: bigaPct,
-      }, undefined, flour, pizzaStyle === 'romana' && romanFormat === 'tonda', isRomanTeglia)
+      }, undefined, flour, pizzaStyle === 'romana' && romanFormat === 'tonda', isRomanTeglia, pizzaStyle === 'ny_style')
     : method === 'poolish' && lang === 'hr'
       ? getDetailedDirectSteps(mixing, dough.total, dough.totalDough, pizzas, effectiveBall, diameter, fridgeHours, oven, ovenTemp, roomTemp, dims.cheese, undefined, {
         flour: dough.preferment?.flour ?? 0,
@@ -603,7 +603,7 @@ export default function CalculatorHome() {
         remainingFlour: dough.main.flour,
         remainingWater: dough.main.water,
         pct: poolishPct,
-      }, flour, pizzaStyle === 'romana' && romanFormat === 'tonda', isRomanTeglia)
+      }, flour, pizzaStyle === 'romana' && romanFormat === 'tonda', isRomanTeglia, pizzaStyle === 'ny_style')
     : method === 'direct' && (lang === 'de' || lang === 'en' || lang === 'sl') && (oven === 'homeStone' || oven === 'ooni' || oven === 'homePan')
       ? getDetailedDirectStepsLocalized(lang, dough.total, dough.totalDough, pizzas, effectiveBall, diameter, fridgeHours, roomTemp, dims.cheese, oven, ovenTemp, mixing)
     : null;
@@ -1615,6 +1615,7 @@ function getDetailedDirectSteps(
   flourType?: FlourType,
   romanTonda = false,
   romanTeglia = false,
+  newYork = false,
 ) {
   const hand = mixing === 'hand';
   const instructionFlour = flourType === 'custom' ? 'caputo00' : flourType;
@@ -1623,6 +1624,7 @@ function getDetailedDirectSteps(
   const isGlutenFree = instructionFlour === 'glutenFree';
   const isRomanTonda = romanTonda;
   const isRomanTeglia = romanTeglia;
+  const isNewYork = newYork;
   const cheeseAmount = Math.round(cheesePerPizza);
   const psylliumAmount = flourType === 'glutenFree' ? Math.round(ingredients.flour * 0.02) : 0;
   const initialWater = Math.round(ingredients.water * 0.9);
@@ -1774,7 +1776,7 @@ function getDetailedDirectSteps(
       degassingInfo: 'Degaziranje znači izbacivanje plinova iz tijesta nastalih tijekom fermentacije.',
       steps: isRomanTeglia ? [
         `Pripremite jednu masu od ${totalDough} g za tepsiju prema unesenoj gramaži od ${ballWeight} g.`,
-        'Ne oblikujte kugle za tondu; tijesto ostaje kao jedna masa do utiskivanja u tepsiju.',
+        'Ne oblikujte kugle; tijesto ostaje kao jedna masa do utiskivanja u tepsiju.',
       ] : isGlutenFree ? [
         'Radnu površinu obilno pospite bezglutenskim ili rižinim brašnom. Brašno za radnu površinu ne ulazi u izračun recepta.',
         'Nježno izvadite ljepljivu smjesu iz posude uz minimalno degaziranje.',
@@ -1846,7 +1848,7 @@ function getDetailedDirectSteps(
         'Brzim i nježnim pokretom izvadite kuglu iz posude i stavite je na pobrašnjenu podlogu.',
         'Lagano nauljite tepsiju.',
         isRomanTonda ? `Stavite tijesto direktno na podlogu i oblikujte tanku, ravnu Romanu do ${diameter} cm.` : isGlutenFree ? `Stavite smjesu direktno u tepsiju i nježno je utapkajte do ciljnog promjera od ${diameter} cm.` : `Stavite oblikovano tijesto direktno u tepsiju i razvucite ga do ciljnog promjera od ${diameter} cm.`,
-        isRomanTonda ? 'Nježno pritisnite tijesto prstima ili ga tanko otvorite valjkom; ne rastežite ga agresivno u zraku.' : isGlutenFree ? 'Vrhovima prstiju nježno tapkajte i potiskujte smjesu od sredine prema rubovima. Nema rastezanja u zraku i ne koristite valjak.' : 'Lagano ga prstima raširite prema rubovima. Nemojte jako pritiskati da ne izbacite sav zrak.',
+        isRomanTonda ? 'Nježno pritisnite tijesto prstima ili ga tanko otvorite valjkom; ne rastežite ga agresivno u zraku.' : isNewYork ? 'Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izražen.' : isGlutenFree ? 'Vrhovima prstiju nježno tapkajte i potiskujte smjesu od sredine prema rubovima. Nema rastezanja u zraku i ne koristite valjak.' : 'Lagano ga prstima raširite prema rubovima. Nemojte jako pritiskati da ne izbacite sav zrak.',
         'Ostavite tijesto u tepsiji da se kratko opusti i prilagodi obliku ako se vraća natrag.',
         'Dodajte umak i nadjev.',
         `Pećnicu dobro zagrijte na ${ovenTemp} °C.`,
@@ -1859,7 +1861,7 @@ function getDetailedDirectSteps(
         `Izvadite kugle iz hladnjaka i ostavite ih ${temperingMin}–${temperingMax} minuta prije oblikovanja. Pazite da se kugle ne predignu.`,
         isRomanTonda ? 'Radnu površinu lagano pospite brašnom ili semolom.' : isGlutenFree ? 'Radnu površinu obilno pospite bezglutenskim ili rižinim brašnom.' : 'Površinu lagano pospite minimalnom količinom semole.',
         isRomanTonda ? 'Brzim i nježnim pokretom izvadite kuglu i stavite je na pobrašnjenu podlogu.' : isGlutenFree ? 'Brzim i nježnim pokretom izvadite kuglu i stavite je na pobrašnjenu podlogu.' : 'Brzim i nježnim pokretom izvadite kuglu iz posude i stavite je naopako na semolu.',
-        isRomanTonda ? 'Oblikujte tanku i ravnu Romanu pritiskanjem prstima ili valjkom; ne rastežite je agresivno u zraku.' : isGlutenFree ? 'Nema rastezanja u zraku. Vrhovima prstiju nježno tapkajte i potiskujte smjesu od sredine prema rubovima kako biste formirali krug. Ne koristite valjak.' : 'Vrhovima prstiju potiskujte zrak iz sredine prema rubovima. Ne koristite valjak.',
+        isRomanTonda ? 'Oblikujte tanku i ravnu Romanu pritiskanjem prstima ili valjkom; ne rastežite je agresivno u zraku.' : isNewYork ? 'Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izražen.' : isGlutenFree ? 'Nema rastezanja u zraku. Vrhovima prstiju nježno tapkajte i potiskujte smjesu od sredine prema rubovima kako biste formirali krug. Ne koristite valjak.' : 'Vrhovima prstiju potiskujte zrak iz sredine prema rubovima. Ne koristite valjak.',
         'Ostavite cornicione približno 1–2 cm kao vizualnu preporuku.',
         isRomanTonda ? `Oblikujte Romanu Tonda do ciljnog promjera od ${diameter} cm.` : isGlutenFree ? `Nježno utapkajte smjesu do ciljnog promjera od ${diameter} cm.` : `Razvucite tijesto do ciljnog promjera od ${diameter} cm.`,
         isGlutenFree ? 'Otresite višak bezglutenskog ili rižinog brašna i prebacite podlogu na lopaticu.' : 'Otresite višak semole i prebacite tijesto na lopaticu.',
