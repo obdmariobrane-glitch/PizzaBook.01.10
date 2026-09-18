@@ -51,7 +51,7 @@ function shapeSteps(shape, flour) {
   ];
   return [
     'Oblikujte vece kugle, priblizno 350-400 g.',
-    glutenFree ? 'Otvorite podlogu laganim pritiskanjem; rub ce biti nizi i kompaktniji jer nema glutenske strukture.' : 'Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.',
+    glutenFree ? 'Otvorite podlogu laganim pritiskanjem; rub ce biti nizi i kompaktniji jer nema glutenske strukture.' : 'Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.',
     'Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.',
     'Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.',
   ];
