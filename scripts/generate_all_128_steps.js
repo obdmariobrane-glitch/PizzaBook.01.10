@@ -28,7 +28,7 @@ function flourLine(flour) {
 function shapeSteps(shape, flour) {
   const glutenFree = flour.key === 'glutenFree';
   if (shape.kind === 'teglia') return [
-    'Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.',
+    'Ne oblikujte kugle; tijesto ostaje kao jedna masa.',
     'Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.',
     'Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.',
     'Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.',
