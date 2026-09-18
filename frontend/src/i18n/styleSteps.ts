@@ -27,8 +27,8 @@ const direct = (mixing: 'hand' | 'mixer', style: 'romana' | 'ny_style', roomHour
           'Dodajte sol i dobro promiješajte kako sol ne bi došla u izravan kontakt s kvascem.',
           'Postupno dodajte preostalo brašno i ostatak vode te umijesite kompaktno tijesto.',
           'Dodajte izračunatu količinu maslinovog ulja ili masti na samom kraju zamjesa, zajedno s preostalom vodom.',
-          isGlutenFree ? 'Bezglutensku smjesu miješajte rukom ili špatulom bez razvoja glutena; obavezno dodajte psyllium u količini od 2% brašna.' : isSpelt ? 'Mijesite vrlo nježno i kratko; pirovi proteini su krhki.' : isWholeWheat ? 'Mijesite kratko i nježno jer mekinje mogu oslabiti glutensku strukturu.' : isManitoba ? 'Mijesite snažno i dovoljno dugo da se razvije čvrsta glutenska opna.' : 'Prebacite tijesto na radnu površinu i mijesite dlanovima 10–15 minuta dok površina ne postane glatka.',
-          'Pokrijte tijesto i ostavite ga 15 minuta da se gluten opusti.',
+          isGlutenFree ? 'Bezglutensku smjesu miješajte rukom ili špatulom bez razvoja glutena; obavezno dodajte psyllium u količini od 2% brašna.' : isSpelt ? 'Mijesite vrlo nježno i kratko; pirovi proteini su krhki.' : isWholeWheat ? 'Mijesite kratko i nježno jer mekinje mogu oslabiti glutensku strukturu.' : isManitoba ? 'Mijesite snažno i dovoljno dugo da se razvije čvrsta glutenska opna.' : 'Miješajte dok se tijesto ne poveže.',
+          ...(!isGlutenFree ? ['Prebacite tijesto na radnu površinu i mijesite dlanovima 10–15 minuta dok površina ne postane glatka.', 'Pokrijte tijesto i ostavite ga 15 minuta da se gluten opusti.'] : ['Ostavite smjesu 15 minuta da psyllium povuče vlagu.']),
         ] : [
           'Pripremite mikser i njegovu posudu.',
           isGlutenFree ? 'U posudu miksera stavite brašno i obaveznih 2% psylliuma, dodajte 90% hladne vode i kvasac.' : isRoman ? 'U posudu miksera stavite 85% vode i brašno.' : 'U posudu miksera stavite 85% vode, kvasac i šećer.',
