@@ -482,7 +482,7 @@ export default function CalculatorHome() {
 
   // Reactive calculations - RE-COMPUTE on any input change
   const dims = useMemo(() => dimensionsCalc(diameter, pizzas), [diameter, pizzas]);
-  const effectiveBall = isRomanTeglia ? trayDoughWeight : customBallWeight ?? (diameter === styleProfile.defaultDiameter ? styleProfile.ballWeight : dims.doughBall);
+  const effectiveBall = isRomanTeglia ? customBallWeight ?? trayDoughWeight : customBallWeight ?? (diameter === styleProfile.defaultDiameter ? styleProfile.ballWeight : dims.doughBall);
   const dough = useMemo(() => doughCalc({
     pizzas, ballWeight: effectiveBall, hydration,
     saltPct, oilPct, method, bigaPct, poolishPct,
@@ -919,8 +919,28 @@ export default function CalculatorHome() {
 
           {isRomanTeglia ? (
             <>
-              <Text style={[styles.label, { marginTop: SPACING.md }]}>Dimenzije tepsije (cm)</Text>
-              <View style={[styles.row, { marginTop: SPACING.sm }]}>
+              <View style={[styles.row, { marginTop: SPACING.md }]}>
+                <Text style={styles.label}>Tijesto po tepsiji</Text>
+                <View style={styles.ballStepper}>
+                  <TextInput
+                    testID="tray-dough-weight"
+                    value={customBallInput !== '' ? customBallInput : String(effectiveBall)}
+                    onChangeText={(value) => {
+                      const clean = value.replace(/[^0-9]/g, '').slice(0, 4);
+                      setCustomBallInput(clean);
+                      const next = Number(clean);
+                      if (next >= 100 && next <= 2000) setCustomBallWeight(next);
+                    }}
+                    onBlur={() => setCustomBallInput('')}
+                    keyboardType="number-pad"
+                    style={styles.stepInput}
+                  />
+                  <Text style={styles.stepUnit}>g</Text>
+                </View>
+              </View>
+              <Text style={styles.hint}>Automatski izračun: {trayDoughWeight} g</Text>
+              <Text style={[styles.label, { marginTop: SPACING.sm }]}>Dimenzije tepsije (cm)</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
                 <TextInput
                   testID="tray-width"
                   value={String(trayWidth)}
@@ -938,7 +958,12 @@ export default function CalculatorHome() {
                 />
                 <Text style={styles.stepUnit}>cm</Text>
               </View>
-              <Text style={styles.hint}>Izračunato tijesto za jednu tepsiju: {trayDoughWeight} g</Text>
+              {customBallWeight != null ? (
+                <Pressable testID="tray-dough-reset" onPress={() => { setCustomBallWeight(null); setCustomBallInput(''); }} style={styles.resetInlineBtn}>
+                  <Icon name="refresh" size={12} color={COLORS.muted} />
+                  <Text style={styles.resetInlineText}>Vrati automatski izračun</Text>
+                </Pressable>
+              ) : null}
             </>
           ) : (
             <>
