@@ -593,6 +593,7 @@ export default function CalculatorHome() {
       psyllium: dough.total.psyllium,
       preferment: dough.preferment ? { flour: dough.preferment.flour, water: dough.preferment.water, yeast: dough.preferment.yeast } : undefined,
     },
+    bakingSteps: styleBakingSteps ?? undefined,
   } : false);
   const bakingPoints = oven === 'homePan'
     ? [{ temperature: 200, min: 15, max: 20 }, { temperature: 220, min: 13, max: 17 }, { temperature: 230, min: 12, max: 15 }, { temperature: 250, min: 10, max: 14 }, { temperature: 270, min: 8, max: 12 }, { temperature: 280, min: 7, max: 11 }, { temperature: 300, min: 6, max: 9 }]
