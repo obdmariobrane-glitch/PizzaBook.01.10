@@ -1776,7 +1776,7 @@ function getDetailedDirectSteps(
       degassingInfo: 'Degaziranje znači izbacivanje plinova iz tijesta nastalih tijekom fermentacije.',
       steps: isRomanTeglia ? [
         `Pripremite jednu masu od ${totalDough} g za tepsiju prema unesenoj gramaži od ${ballWeight} g.`,
-        'Ne oblikujte kugle; tijesto ostaje kao jedna masa do utiskivanja u tepsiju.',
+        'Ne oblikujte kugle; tijesto ostaje kao jedna masa.',
       ] : isGlutenFree ? [
         'Radnu površinu obilno pospite bezglutenskim ili rižinim brašnom. Brašno za radnu površinu ne ulazi u izračun recepta.',
         'Nježno izvadite ljepljivu smjesu iz posude uz minimalno degaziranje.',
