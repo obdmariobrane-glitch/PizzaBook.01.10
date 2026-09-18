@@ -850,12 +850,22 @@ export default function CalculatorHome() {
             <>
               <Text style={[styles.label, { marginTop: SPACING.sm }]}>Romana</Text>
               <View style={styles.pillGroup}>
-                <Pressable testID="romana-tonda" onPress={() => step(() => setRomanFormat('tonda'))} style={[styles.pill, romanFormat === 'tonda' && styles.pillActive]}>
-                  <Text style={[styles.pillText, romanFormat === 'tonda' && styles.pillTextActive]}>Romana Tonda</Text>
-                </Pressable>
-                <Pressable testID="romana-teglia" onPress={() => step(() => setRomanFormat('teglia'))} style={[styles.pill, romanFormat === 'teglia' && styles.pillActive]}>
-                  <Text style={[styles.pillText, romanFormat === 'teglia' && styles.pillTextActive]}>Romana Teglia</Text>
-                </Pressable>
+                <View style={[styles.pill, romanFormat === 'tonda' && styles.pillActive]}>
+                  <Pressable testID="romana-tonda" onPress={() => step(() => setRomanFormat('tonda'))} style={styles.pillSelect}>
+                    <Text style={[styles.pillText, romanFormat === 'tonda' && styles.pillTextActive]}>Romana Tonda</Text>
+                  </Pressable>
+                  <Pressable testID="romana-tonda-info" onPress={() => Alert.alert('Romana Tonda', 'Okrugla, tanka i hrskava pizza. Tijesto se oblikuje iz kugle i rasteže ručno prije pečenja.')} hitSlop={8} style={styles.infoBtn}>
+                    <Icon name="information-circle-outline" size={18} color={romanFormat === 'tonda' ? '#fff' : COLORS.muted} />
+                  </Pressable>
+                </View>
+                <View style={[styles.pill, romanFormat === 'teglia' && styles.pillActive]}>
+                  <Pressable testID="romana-teglia" onPress={() => step(() => setRomanFormat('teglia'))} style={styles.pillSelect}>
+                    <Text style={[styles.pillText, romanFormat === 'teglia' && styles.pillTextActive]}>Romana Teglia</Text>
+                  </Pressable>
+                  <Pressable testID="romana-teglia-info" onPress={() => Alert.alert('Romana Teglia', 'Pravokutna pizza iz tepsije. Tijesto se utiskuje u nauljenu tepsiju prema unesenim dimenzijama.')} hitSlop={8} style={styles.infoBtn}>
+                    <Icon name="information-circle-outline" size={18} color={romanFormat === 'teglia' ? '#fff' : COLORS.muted} />
+                  </Pressable>
+                </View>
               </View>
             </>
           ) : null}
