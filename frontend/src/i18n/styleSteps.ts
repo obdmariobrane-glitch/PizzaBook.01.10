@@ -21,6 +21,7 @@ const direct = (mixing: 'hand' | 'mixer', style: 'romana' | 'ny_style', roomHour
       {
         title: hand ? 'Faza A: Priprema i ručni zamjes' : 'Faza A: Priprema i zamjes mikserom',
         steps: hand ? [
+          'Operite i temeljito osušite ruke.',
           isGlutenFree ? 'U posudi otopite kvasac u 90% ukupne hladne vode.' : isRoman ? 'U posudi otopite kvasac u 90% ukupne predviđene vode.' : 'U posudi otopite kvasac i šećer u 90% ukupne predviđene vode.',
           'Postupno dodajte polovicu brašna i miješajte dok ne dobijete glatku smjesu bez grudica.',
           'Dodajte sol i dobro promiješajte kako sol ne bi došla u izravan kontakt s kvascem.',
@@ -29,6 +30,7 @@ const direct = (mixing: 'hand' | 'mixer', style: 'romana' | 'ny_style', roomHour
           isGlutenFree ? 'Bezglutensku smjesu miješajte rukom ili špatulom bez razvoja glutena; obavezno dodajte psyllium u količini od 2% brašna.' : isSpelt ? 'Mijesite vrlo nježno i kratko; pirovi proteini su krhki.' : isWholeWheat ? 'Mijesite kratko i nježno jer mekinje mogu oslabiti glutensku strukturu.' : isManitoba ? 'Mijesite snažno i dovoljno dugo da se razvije čvrsta glutenska opna.' : 'Prebacite tijesto na radnu površinu i mijesite dlanovima 10–15 minuta dok površina ne postane glatka.',
           'Pokrijte tijesto i ostavite ga 15 minuta da se gluten opusti.',
         ] : [
+          'Pripremite mikser i njegovu posudu.',
           isGlutenFree ? 'U posudu miksera stavite brašno i obaveznih 2% psylliuma, dodajte 90% hladne vode i kvasac.' : isRoman ? 'U posudu miksera stavite 85% vode i brašno.' : 'U posudu miksera stavite 85% vode, kvasac i šećer.',
           'Pokrenite mikser u prvoj brzini i dodajte preostalo brašno.',
           'Postupno dodajte preostalih 15% vode zajedno sa soli.',
@@ -112,6 +114,7 @@ const preferment = (method: 'biga' | 'poolish', mixing: 'hand' | 'mixer', style:
         title: isBiga ? 'Faza A: Izrada Bige' : 'Faza A: Izrada Poolisha',
         steps: isBiga
           ? [
+              hand ? 'Operite i temeljito osušite ruke.' : 'Pripremite mikser i njegovu posudu.',
               'U posudu stavite brašno i ravnomjerno izmrvite kvasac.',
               'Ulijte izračunatu hladnu vodu i rukama kratko pomiješajte sastojke.',
               'Ne mijesite glatko tijesto; smjesa treba ostati gruba i mrvičasta.',
@@ -119,6 +122,7 @@ const preferment = (method: 'biga' | 'poolish', mixing: 'hand' | 'mixer', style:
               'Prebacite bigu u hladnjak na još 16 sati pri 4°C.',
             ]
           : [
+              hand ? 'Operite i temeljito osušite ruke.' : 'Pripremite mikser i njegovu posudu.',
               'U posudi otopite kvasac u izračunatoj vodi za Poolish.',
               'Dodajte brašno za Poolish i promiješajte pjenjačom ili vilicom do glatke tekuće smjese.',
               `Pokrijte posudu i ostavite Poolish ${roomHours} ${roomHours === 1 ? 'sat' : 'sati'} na sobnoj temperaturi.`,
