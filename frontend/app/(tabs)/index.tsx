@@ -1502,9 +1502,10 @@ function getDetailedDirectSteps(
   flourType?: FlourType,
 ) {
   const hand = mixing === 'hand';
-  const isSpelt = flourType === 'spelt';
-  const isWholeWheat = flourType === 'wholeWheat';
-  const isGlutenFree = flourType === 'glutenFree';
+  const instructionFlour = flourType === 'custom' ? 'caputo00' : flourType;
+  const isSpelt = instructionFlour === 'spelt';
+  const isWholeWheat = instructionFlour === 'wholeWheat';
+  const isGlutenFree = instructionFlour === 'glutenFree';
   const cheeseAmount = Math.round(cheesePerPizza);
   const psylliumAmount = flourType === 'glutenFree' ? Math.round(ingredients.flour * 0.02) : 0;
   const initialWater = Math.round(ingredients.water * 0.9);

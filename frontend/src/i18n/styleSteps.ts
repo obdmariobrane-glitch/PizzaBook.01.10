@@ -147,8 +147,9 @@ export function getStyleSteps(style: PizzaStyle, method: Method, mixing: 'hand' 
   if (lang !== 'hr') return null;
   if (style === 'neapolitan') return null;
   const actualMixing = mixing === 'hand' ? 'hand' : 'mixer';
-  if (method === 'direct') return direct(actualMixing, style, roomHours, fridgeHours, flour, romanTray);
-  return preferment(method, actualMixing, style, roomHours, fridgeHours, flour, romanTray);
+  const instructionFlour = flour === 'custom' ? 'caputo00' : flour;
+  if (method === 'direct') return direct(actualMixing, style, roomHours, fridgeHours, instructionFlour, romanTray);
+  return preferment(method, actualMixing, style, roomHours, fridgeHours, instructionFlour, romanTray);
 }
 const baking = (style: 'romana' | 'ny_style', oven: OvenType): string[] => {
   const isRoman = style === 'romana';
