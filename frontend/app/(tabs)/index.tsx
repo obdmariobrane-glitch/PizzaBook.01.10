@@ -408,6 +408,13 @@ export default function CalculatorHome() {
   const styleProfile = PIZZA_STYLE_PROFILES[pizzaStyle];
   const isRomanTeglia = pizzaStyle === 'romana' && romanFormat === 'teglia';
   const trayDoughWeight = Math.round(trayWidth * trayLength * 0.4);
+  useEffect(() => {
+    if (isRomanTeglia && oven !== 'homePan') {
+      setOven('homePan');
+      setOvenTemp(250);
+      setOvenTempInput('250');
+    }
+  }, [isRomanTeglia, oven]);
   const isIdealSalt = saltPct === styleProfile.saltPct;
   const isIdealOil = oilPct === styleProfile.oilPct;
   const styleImages: Record<PizzaStyle, any> = {
@@ -859,7 +866,7 @@ export default function CalculatorHome() {
                   </Pressable>
                 </View>
                 <View style={[styles.pill, romanFormat === 'teglia' && styles.pillActive]}>
-                  <Pressable testID="romana-teglia" onPress={() => step(() => setRomanFormat('teglia'))} style={styles.pillSelect}>
+                  <Pressable testID="romana-teglia" onPress={() => step(() => { setRomanFormat('teglia'); setOven('homePan'); setOvenTemp(250); setOvenTempInput('250'); })} style={styles.pillSelect}>
                     <Text style={[styles.pillText, romanFormat === 'teglia' && styles.pillTextActive]}>Romana Teglia</Text>
                   </Pressable>
                   <Pressable testID="romana-teglia-info" onPress={() => Alert.alert('Romana Teglia', 'Pravokutna pizza iz tepsije. Tijesto se utiskuje u nauljenu tepsiju prema unesenim dimenzijama.')} hitSlop={8} style={styles.infoBtn}>
@@ -1240,9 +1247,15 @@ export default function CalculatorHome() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>6 · {t.calc.baking}</Text>
           <View style={styles.ovenRow}>
-            <OvenCard active={oven === 'homeStone'} onPress={() => step(() => selectOven('homeStone', 300))} imageSrc={require('../../assets/images/oven-home-stone.png')} title={t.calc.homeStone} testID="oven-homeStone" />
-            <OvenCard active={oven === 'ooni'} onPress={() => step(() => selectOven('ooni', 450))} imageSrc={require('../../assets/images/oven-ooni.png')} title={t.calc.ooni} testID="oven-ooni" />
-            <OvenCard active={oven === 'homePan'} onPress={() => step(() => selectOven('homePan', 250))} imageSrc={require('../../assets/images/oven-home-pan.png')} title={t.calc.homePan} testID="oven-homePan" />
+            {isRomanTeglia ? (
+              <OvenCard active={oven === 'homePan'} onPress={() => step(() => selectOven('homePan', 250))} imageSrc={require('../../assets/images/oven-home-pan.png')} title={t.calc.homePan} testID="oven-homePan" />
+            ) : (
+              <>
+                <OvenCard active={oven === 'homeStone'} onPress={() => step(() => selectOven('homeStone', 300))} imageSrc={require('../../assets/images/oven-home-stone.png')} title={t.calc.homeStone} testID="oven-homeStone" />
+                <OvenCard active={oven === 'ooni'} onPress={() => step(() => selectOven('ooni', 450))} imageSrc={require('../../assets/images/oven-ooni.png')} title={t.calc.ooni} testID="oven-ooni" />
+                <OvenCard active={oven === 'homePan'} onPress={() => step(() => selectOven('homePan', 250))} imageSrc={require('../../assets/images/oven-home-pan.png')} title={t.calc.homePan} testID="oven-homePan" />
+              </>
+            )}
           </View>
           <View style={styles.bakeInstructions}>
             <View style={styles.bakeTemperatureInputRow}>
