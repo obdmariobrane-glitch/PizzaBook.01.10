@@ -28,12 +28,12 @@ export const PIZZA_STYLE_PROFILES: Record<PizzaStyle, PizzaStyleProfile> = {
     shaping: 'Ručno širenje zraka prema rubu',
   },
   romana: {
-    defaultDiameter: 33, ballWeight: 210, hydration: 70, saltPct: 2.8, oilPct: 2.5,
+    defaultDiameter: 33, ballWeight: 210, hydration: 59, saltPct: 2.8, oilPct: 4,
     flourTypes: ['caputo00', 'spelt'], fermentation: 'coldLong', bakeTemp: '250–300°C', bakeTime: '5–7 min',
     shaping: 'Razvlačenje valjkom za tanku, hrskavu koru',
   },
   ny_style: {
-    defaultDiameter: 35, ballWeight: 375, hydration: 68, saltPct: 2.3, oilPct: 3,
+    defaultDiameter: 35, ballWeight: 375, hydration: 64, saltPct: 2.3, oilPct: 3,
     flourTypes: ['manitoba', 'caputo00'], fermentation: 'coldLong', bakeTemp: '280–350°C', bakeTime: '5–7 min',
     shaping: 'Ručno širenje uz izražen, savitljiv rub',
   },
@@ -45,7 +45,7 @@ export const FLOUR_PROFILES: Record<FlourType, { label: string; ideal: number; m
   spelt: { label: 'Pirovo brašno', ideal: 62, min: 60, max: 65 },
   wholeWheat: { label: 'Integralno brašno', ideal: 70, min: 68, max: 75 },
   glutenFree: { label: 'Bezglutensko brašno', ideal: 80, min: 75, max: 85 },
-  custom: { label: 'Mješavina brašna', ideal: 65, min: 60, max: 70 },
+  custom: { label: 'Mješavina brašna', ideal: 68, min: 55, max: 90 },
 };
 
 // Base flours available for blending (excludes 'custom' itself)
@@ -104,6 +104,7 @@ export function doughCalc(opts: {
   prefermentFridgeHours?: number;
   yeastType?: YeastType;
   mixing?: Mixing;
+  flourType?: FlourType;
 }) {
   // === Fermentation math (dynamic yeast) ===
   // E_RT = roomHours × (1 + 0.08 × (roomTemp - 20))
@@ -125,12 +126,14 @@ export function doughCalc(opts: {
 
   // === Baker's percentages ===
   const totalDough = opts.pizzas * opts.ballWeight;
-  const totalPercent = 100 + opts.hydration + opts.saltPct + effectiveYeastPct + opts.oilPct;
+  const psylliumPct = opts.flourType === 'glutenFree' ? 2 : 0;
+  const totalPercent = 100 + opts.hydration + opts.saltPct + effectiveYeastPct + opts.oilPct + psylliumPct;
   const flour = (totalDough / totalPercent) * 100;
   const water = flour * (opts.hydration / 100);
   const salt = flour * (opts.saltPct / 100);
   const yeast = flour * (yeastPct / 100);
   const oil = flour * (opts.oilPct / 100);
+  const psyllium = flour * (psylliumPct / 100);
 
   // Water temp — rule 55/60 (spiral 55, hand/home 60), clamped by cold ferment
   const rule = opts.mixing === 'spiral' ? 55 : 60;
@@ -146,6 +149,7 @@ export function doughCalc(opts: {
   const buildBlock = () => ({
     flour: R0(flour), water: R0(water),
     salt: R1(salt), oil: R0(oil), yeast: R2(yeast),
+    psyllium: R0(psyllium),
   });
 
   if (opts.method === 'biga') {
@@ -160,6 +164,7 @@ export function doughCalc(opts: {
       main: {
         flour: R0(flour - bigaFlour), water: R0(water - bigaWater),
         salt: R1(salt), oil: R0(oil), yeast: R2(mainYeast),
+        psyllium: R0(psyllium),
       },
       total: { ...buildBlock(), yeast: R2(bigaYeast + mainYeast) },
       totalDough: R0(totalDough),
@@ -181,6 +186,7 @@ export function doughCalc(opts: {
       main: {
         flour: R0(flour - pFlour), water: R0(water - pWater),
         salt: R1(salt), oil: R0(oil), yeast: R2(mainYeast),
+        psyllium: R0(psyllium),
       },
       total: { ...buildBlock(), yeast: R2(pYeast + mainYeast) },
       totalDough: R0(totalDough),

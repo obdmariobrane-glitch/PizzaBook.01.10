@@ -23,10 +23,10 @@ const direct = (mixing: 'hand' | 'mixer', style: 'romana' | 'ny_style', roomHour
           'Dodajte sol i dobro promiješajte kako sol ne bi došla u izravan kontakt s kvascem.',
           'Postupno dodajte preostalo brašno i ostatak vode te umijesite kompaktno tijesto.',
           isRoman ? 'Dodajte 20–30 g maslinovog ulja ili svinjske masti na 1 kg brašna direktno u zamjes.' : 'Dodajte 2–4% ulja ili maslaca na samom kraju, zajedno s preostalom soli i vodom.',
-          isGlutenFree ? 'Bezglutensku smjesu miješajte rukom ili špatulom bez razvoja glutena; ako koristite psyllium, dodajte 2% na količinu brašna.' : isSpelt ? 'Mijesite vrlo nježno i kratko; pirovi proteini su krhki.' : isWholeWheat ? 'Mijesite kratko i nježno jer mekinje mogu oslabiti glutensku strukturu.' : isManitoba ? 'Mijesite snažno i dovoljno dugo da se razvije čvrsta glutenska opna.' : 'Prebacite tijesto na radnu površinu i mijesite dlanovima 10–15 minuta dok površina ne postane glatka.',
+          isGlutenFree ? 'Bezglutensku smjesu miješajte rukom ili špatulom bez razvoja glutena; obavezno dodajte psyllium u količini od 2% brašna.' : isSpelt ? 'Mijesite vrlo nježno i kratko; pirovi proteini su krhki.' : isWholeWheat ? 'Mijesite kratko i nježno jer mekinje mogu oslabiti glutensku strukturu.' : isManitoba ? 'Mijesite snažno i dovoljno dugo da se razvije čvrsta glutenska opna.' : 'Prebacite tijesto na radnu površinu i mijesite dlanovima 10–15 minuta dok površina ne postane glatka.',
           'Pokrijte tijesto i ostavite ga 15 minuta da se gluten opusti.',
         ] : [
-          isGlutenFree ? 'U posudu miksera stavite brašno i psyllium (2% na brašno), dodajte 90% hladne vode i kvasac.' : isRoman ? 'U posudu miksera stavite 85% vode i brašno.' : 'U posudu miksera stavite 85% vode, kvasac i šećer.',
+          isGlutenFree ? 'U posudu miksera stavite brašno i obaveznih 2% psylliuma, dodajte 90% hladne vode i kvasac.' : isRoman ? 'U posudu miksera stavite 85% vode i brašno.' : 'U posudu miksera stavite 85% vode, kvasac i šećer.',
           'Pokrenite mikser u prvoj brzini i dodajte preostalo brašno.',
           'Postupno dodajte preostalih 15% vode zajedno sa soli.',
           isRoman ? 'Ulje ili mast dodajte u zadnjoj minuti.' : 'U drugoj polovici mijesenja dodajte preostalu vodu, sol i ulje.',
@@ -150,7 +150,6 @@ export function getStyleSteps(style: PizzaStyle, method: Method, mixing: 'hand' 
   if (method === 'direct') return direct(actualMixing, style, roomHours, fridgeHours, flour, romanTray);
   return preferment(method, actualMixing, style, roomHours, fridgeHours, flour, romanTray);
 }
-
 const baking = (style: 'romana' | 'ny_style', oven: OvenType): string[] => {
   const isRoman = style === 'romana';
   if (oven === 'ooni') {
@@ -180,3 +179,4 @@ export function getStyleBakingTemp(style: PizzaStyle, oven: OvenType, lang: Lang
   }
   return oven === 'ooni' ? '320–350°C · 3–4 min' : oven === 'homeStone' ? '250–280°C · 5–7 min' : '250°C · 7–9 min';
 }
+
