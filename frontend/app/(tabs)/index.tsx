@@ -1757,15 +1757,12 @@ function getDetailedDirectSteps(
       containerOilInfo: 'Koristite čistu posudu sigurnu za hranu koja je dovoljno velika da tijesto naraste. Posudu pokrijte poklopcem ili folijom, ali je nemojte hermetički zatvoriti: fermentacija stvara plinove i posuda ne smije biti pod pritiskom. Možete uzeti plastičnu posudu s poklopcem, staklenu zdjelu s folijom, posudu za tijesto ili fermentacijsku kutiju s poklopcem koji nije potpuno zrakonepropusan. Posudu samo lagano premažite pomoćnim uljem; to ulje ne ulazi u izračun recepta i nije isto što i ulje u tijestu.',
       steps: isRomanTeglia && isGlutenFree ? [
         'Lagano nauljite fermentacijsku posudu i prebacite smjesu u nju.',
-        `Ukupno odabrano vrijeme fermentacije na sobnoj temperaturi: ${croatianHours(roomHours)}.`,
         'Pokrijte posudu i ostavite smjesu 15 minuta na sobnoj temperaturi da psyllium poveže strukturu.',
       ] : isNapolitana && isGlutenFree ? [
         'Prebacite smjesu u fermentacijsku posudu i pokrijte je.',
-        `Ukupno odabrano vrijeme fermentacije na sobnoj temperaturi: ${croatianHours(roomHours)}.`,
         ...(napolitanaGlutenFreeRemainingMinutes > 0 ? [`Nakon početnog odmora nastavite fermentirati smjesu još ${napolitanaGlutenFreeRemainingMinutes} minuta na sobnoj temperaturi. Ne radite Stretch & Fold.`] : ['Početni odmor pokriva ukupno odabrano vrijeme fermentacije. Ne radite Stretch & Fold.']),
       ] : isRomanTeglia ? [
         'Lagano nauljite fermentacijsku posudu i prebacite tijesto u nju.',
-        `Ukupno odabrano vrijeme fermentacije na sobnoj temperaturi: ${croatianHours(roomHours)}.`,
         `Pokrijte posudu i ostavite tijesto ${bulkRestMinutes} minuta na sobnoj temperaturi.`,
         'Napravite prvi Stretch & Fold.',
         `Ostavite tijesto ponovno ${bulkRestMinutes} minuta.`,
@@ -1773,11 +1770,9 @@ function getDetailedDirectSteps(
         `Ostavite tijesto još ${bulkRestMinutes} minuta na sobnoj temperaturi.`,
       ] : isGlutenFree ? [
         'Lagano nauljite fermentacijsku posudu i prebacite smjesu u nju.',
-        `Ukupno odabrano vrijeme fermentacije na sobnoj temperaturi: ${croatianHours(roomHours)}.`,
         `Pokrijte posudu i ostavite smjesu 15 minuta na sobnoj temperaturi da se kratko opusti prije dijeljenja.`,
       ] : [
         'Lagano nauljite fermentacijsku posudu i prebacite tijesto u nju.',
-        `Ukupno odabrano vrijeme fermentacije na sobnoj temperaturi: ${croatianHours(roomHours)}.`,
         `Pokrijte posudu i ostavite tijesto ${bulkRestMinutes} minuta na sobnoj temperaturi.`,
         'Napravite prvi Stretch & Fold.',
         `Ostavite tijesto ponovno ${bulkRestMinutes} minuta.`,
@@ -1874,7 +1869,7 @@ function getDetailedDirectSteps(
         'Pecite bez grilla dok se dno i rub dobro ne ispeku.',
         'Na kraju uključite grill ako želite jače zapečenu gornju stranu.',
       ] : oven === 'homePan' ? [
-        hasColdFermentation ? `Izvadite kugle iz hladnjaka i ostavite ih ${temperingMin}–${temperingMax} minuta prije oblikovanja. Pazite da se kugle ne predignu.` : `Ostavite kugle na sobnoj temperaturi do završetka odabranog odmora prije oblikovanja.`,
+        hasColdFermentation ? `Izvadite kugle iz hladnjaka i ostavite ih ${temperingMin}–${temperingMax} minuta prije oblikovanja. Pazite da se kugle ne predignu.` : roomHours === 0 ? `Ostavite kugle ${temperingMin}–${temperingMax} minuta na sobnoj temperaturi prije oblikovanja.` : 'Nastavite na oblikovanje nakon završetka odabranog odmora.',
         'Brzim i nježnim pokretom izvadite kuglu iz posude i stavite je na pobrašnjenu podlogu.',
         'Lagano nauljite tepsiju.',
         isRomanTonda ? `Stavite tijesto direktno na podlogu i oblikujte tanku, ravnu Romanu do ${diameter} cm.` : isGlutenFree ? `Stavite smjesu direktno u tepsiju i nježno je utapkajte do ciljnog promjera od ${diameter} cm.` : `Stavite oblikovano tijesto direktno u tepsiju i razvucite ga do ciljnog promjera od ${diameter} cm.`,
@@ -1888,7 +1883,7 @@ function getDetailedDirectSteps(
         'Izvadite pizzu iz pećnice i ostavite je kratko prije rezanja.',
       ] : [
         ovenSteps[0],
-        hasColdFermentation ? `Izvadite kugle iz hladnjaka i ostavite ih ${temperingMin}–${temperingMax} minuta prije oblikovanja. Pazite da se kugle ne predignu.` : `Ostavite kugle na sobnoj temperaturi do završetka odabranog odmora prije oblikovanja.`,
+        hasColdFermentation ? `Izvadite kugle iz hladnjaka i ostavite ih ${temperingMin}–${temperingMax} minuta prije oblikovanja. Pazite da se kugle ne predignu.` : roomHours === 0 ? `Ostavite kugle ${temperingMin}–${temperingMax} minuta na sobnoj temperaturi prije oblikovanja.` : 'Nastavite na oblikovanje nakon završetka odabranog odmora.',
         isRomanTonda ? 'Radnu površinu lagano pospite brašnom ili semolom.' : isGlutenFree ? 'Radnu površinu obilno pospite bezglutenskim ili rižinim brašnom.' : 'Površinu lagano pospite minimalnom količinom semole.',
         isRomanTonda ? 'Brzim i nježnim pokretom izvadite kuglu i stavite je na pobrašnjenu podlogu.' : isGlutenFree ? 'Brzim i nježnim pokretom izvadite kuglu i stavite je na pobrašnjenu podlogu.' : 'Brzim i nježnim pokretom izvadite kuglu iz posude i stavite je naopako na semolu.',
         isRomanTonda ? 'Oblikujte tanku i ravnu Romanu pritiskanjem prstima ili valjkom; ne rastežite je agresivno u zraku.' : isNewYork ? 'Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izražen.' : isGlutenFree ? 'Nema rastezanja u zraku. Vrhovima prstiju nježno tapkajte i potiskujte smjesu od sredine prema rubovima kako biste formirali krug. Ne koristite valjak.' : 'Vrhovima prstiju potiskujte zrak iz sredine prema rubovima. Ne koristite valjak.',
