@@ -1843,7 +1843,9 @@ function getDetailedDirectSteps(
         ? 'Teglia se nakon hladne fermentacije nježno utiskuje u nauljenu tepsiju. Ne oblikujte kuglu i ne rastežite tijesto u zraku.'
         : hasColdFermentation
           ? `Vrijeme temperiranja automatski se prilagođava temperaturi prostorije od ${roomTemp} °C: približno ${temperingMin}–${temperingMax} minuta. Na hladnijoj temperaturi može trebati 1–2 sata. Pazite da se kugle ne predignu.`
-          : `Nakon završetka završnog odmora prijeđite na oblikovanje. Vrijeme odmora automatski je prilagođeno korisničkom odabiru od ${roomHours} sati.`,
+          : roomHours === 0
+            ? `Ostavite kugle ${temperingMin}–${temperingMax} minuta na sobnoj temperaturi prije oblikovanja.`
+            : `Nakon završetka odabranog odmora od ${croatianHours(roomHours)} prijeđite na oblikovanje.`,
       proofingInfo: isRomanTonda
         ? 'Romana Tonda treba ostati tanka i ravna. Nježno je otvorite prstima ili valjkom, bez agresivnog rastezanja u zraku.'
         : isGlutenFree
