@@ -1654,18 +1654,10 @@ function getDetailedDirectSteps(
       ? [`Zagrijte kućnu pećnicu na ${ovenTemp} °C s ventilacijom.`, 'Pecite pizzu na dnu pećnice 5–7 minuta.', 'Prebacite je pod gornji grill još 2–3 minute.']
       : [`Zagrijte kamen ili čelik 45–60 minuta na ${ovenTemp} °C.`, 'Isključite grill i prebacite pećnicu na Pizza program, ako je dostupan. Ako Pizza program nije dostupan, odaberite gornji i donji grijač bez ventilatora te postavite maksimalnu temperaturu. Pecite pizzu približno 4–5 minuta.', 'Zatim uključite grill i pecite dok rub i vrh ne dobiju željenu boju.'];
   const bulkRestMinutes = Math.max(15, Math.round(30 * (22 / Math.max(10, roomTemp))));
-  const napolitanaRoomMinutes = Math.max(0, Math.round(roomHours * 60));
-  const napolitanaMixRestMinutes = isNapolitana && isGlutenFree
-    ? Math.min(15, napolitanaRoomMinutes)
-    : isNapolitana
-      ? Math.min(hand ? 15 : 5, napolitanaRoomMinutes)
-      : hand ? 15 : 5;
-  const napolitanaRemainingMinutes = Math.max(0, napolitanaRoomMinutes - napolitanaMixRestMinutes);
-  const napolitanaRequiredRest = Math.min(15, Math.floor(napolitanaRemainingMinutes / 3));
-  const napolitanaFinalRest = Math.max(0, napolitanaRemainingMinutes - (napolitanaRequiredRest * 2));
-  const firstBulkRestMinutes = isNapolitana && !isGlutenFree ? napolitanaRequiredRest : bulkRestMinutes;
-  const secondBulkRestMinutes = isNapolitana && !isGlutenFree ? napolitanaRequiredRest : bulkRestMinutes;
-  const finalBulkRestMinutes = isNapolitana && !isGlutenFree ? napolitanaFinalRest : bulkRestMinutes;
+  const mixRestMinutes = hand ? 15 : 5;
+  const napolitanaGlutenFreeRemainingMinutes = isNapolitana && isGlutenFree
+    ? Math.max(0, Math.round(roomHours * 60) - Math.min(15, Math.round(roomHours * 60)))
+    : 0;
   const temperingMin = Math.min(120, Math.max(15, Math.round(30 + (22 - roomTemp) * 7.5)));
   const temperingMax = Math.min(120, temperingMin + 15);
   const ovenPreheatMin = oven === 'homeStone' ? 45 : 20;
@@ -1705,7 +1697,7 @@ function getDetailedDirectSteps(
         ...(isGlutenFree ? [`Obavezno dodajte ${psylliumAmount} g psylliuma (2% od ukupne količine brašna) kako bi smjesa zadržala strukturu.`] : []),
         ...(!isGlutenFree && hand ? [isSpelt ? 'Mijesite kratko i nježno, samo dok se tijesto ne poveže i postane ujednačeno; ne premijesite.' : isWholeWheat ? 'Mijesite umjereno i bez agresivnog rastezanja dok se tijesto ne poveže i razvije dovoljnu strukturu.' : 'Prebacite tijesto na radnu površinu i mijesite dlanovima 10–15 minuta dok površina ne postane glatka.'] : []),
         'Zamjes je gotov kada je tijesto glatko, elastično i homogeno.',
-        !isGlutenFree && hand ? `Pokrijte tijesto i ostavite ga ${napolitanaMixRestMinutes} minuta da se gluten opusti.` : hand ? `Ostavite tijesto da odmori ${napolitanaMixRestMinutes} minuta.` : `Ostavite tijesto da odmori ${napolitanaMixRestMinutes} minuta u posudi miksera.`,
+        !isGlutenFree && hand ? `Pokrijte tijesto i ostavite ga ${mixRestMinutes} minuta da se gluten opusti.` : hand ? `Ostavite tijesto da odmori ${mixRestMinutes} minuta.` : `Ostavite tijesto da odmori ${mixRestMinutes} minuta u posudi miksera.`,
       ] : poolish ? [
         hand ? 'Operite i temeljito osušite ruke.' : 'Pripremite mikser i njegovu posudu.',
         hand ? 'Nakon fermentacije Poolish prelijte u posudu za ručni zamjes.' : 'Nakon fermentacije Poolish prelijte u posudu miksera.',
@@ -1720,7 +1712,7 @@ function getDetailedDirectSteps(
         ...(isGlutenFree ? [`Obavezno dodajte ${psylliumAmount} g psylliuma (2% od ukupne količine brašna) kako bi smjesa zadržala strukturu.`] : []),
         ...(!isGlutenFree && hand ? [isSpelt ? 'Mijesite kratko i nježno, samo dok se tijesto ne poveže i postane ujednačeno; ne premijesite.' : isWholeWheat ? 'Mijesite umjereno i bez agresivnog rastezanja dok se tijesto ne poveže i razvije dovoljnu strukturu.' : 'Prebacite tijesto na radnu površinu i mijesite dlanovima 10–15 minuta dok površina ne postane glatka.'] : []),
         'Zamjes je gotov kada je tijesto glatko, elastično i homogeno.',
-        !isGlutenFree && hand ? `Pokrijte tijesto i ostavite ga ${napolitanaMixRestMinutes} minuta da se gluten opusti.` : hand ? `Ostavite tijesto da odmori ${napolitanaMixRestMinutes} minuta.` : `Ostavite tijesto da odmori ${napolitanaMixRestMinutes} minuta u posudi miksera.`,
+        !isGlutenFree && hand ? `Pokrijte tijesto i ostavite ga ${mixRestMinutes} minuta da se gluten opusti.` : hand ? `Ostavite tijesto da odmori ${mixRestMinutes} minuta.` : `Ostavite tijesto da odmori ${mixRestMinutes} minuta u posudi miksera.`,
       ] : isGlutenFree ? [
         hand ? 'Operite i temeljito osušite ruke.' : 'Pripremite mikser i njegovu posudu.',
         `Pripremite ${ingredients.flour} g bezglutenskog brašna, ${psylliumAmount} g psyllium ljuskica, ${ingredients.salt} g soli, ${ingredients.yeast} g svježeg kvasca, ${ingredients.oil} g maslinovog ulja i ukupno ${ingredients.water} g hladne vode (visoka hidratacija).`,
@@ -1731,7 +1723,7 @@ function getDetailedDirectSteps(
         'Bezglutenska smjesa se ne mijesi za razvoj glutena; miješajte je samo dok se svi sastojci ne povežu u homogenu, ljepljivu masu.',
         `Dodajte ${ingredients.oil} g maslinovog ulja i miješajte dok ga smjesa potpuno ne upije.`,
         'Zamjes je gotov kada je masa ujednačena, glatka i ljepljiva.',
-        `Ostavite smjesu ${isNapolitana ? napolitanaMixRestMinutes : 5} minuta kako bi psyllium povukao vlagu i dao joj potrebnu čvrstoću.`,
+        'Ostavite smjesu 5 minuta kako bi psyllium povukao vlagu i dao joj potrebnu čvrstoću.',
       ] : [
         hand ? 'Operite i temeljito osušite ruke.' : 'Pripremite mikser i njegovu posudu.',
         `Prosijte i precizno izmjerite ${ingredients.flour} g ${isSpelt ? 'pirovog ' : ''}brašna, ${ingredients.salt} g soli, ${ingredients.yeast} g svježeg kvasca i ukupno ${ingredients.water} g ${isSpelt ? 'hladne ' : ''}vode${isGlutenFree ? ` te ${psylliumAmount} g psylliuma` : ''}.`,
@@ -1744,9 +1736,9 @@ function getDetailedDirectSteps(
         ...(isGlutenFree ? [`Obavezno dodajte ${psylliumAmount} g psylliuma (2% od ukupne količine brašna) kako bi smjesa zadržala strukturu.`] : []),
         ...(!isGlutenFree && hand ? [isSpelt ? 'Mijesite kratko i nježno, samo dok se tijesto ne poveže i postane ujednačeno; ne premijesite.' : isWholeWheat ? 'Mijesite umjereno i bez agresivnog rastezanja dok se tijesto ne poveže i razvije dovoljnu strukturu.' : 'Prebacite tijesto na radnu površinu i mijesite dlanovima 10–15 minuta dok površina ne postane glatka.'] : []),
         'Zamjes je gotov kada je tijesto glatko, elastično i homogeno.',
-        !isGlutenFree && hand ? `Pokrijte tijesto i ostavite ga ${napolitanaMixRestMinutes} minuta da se gluten opusti.` : hand ? `Ostavite tijesto da odmori ${napolitanaMixRestMinutes} minuta.` : `Ostavite tijesto da odmori ${napolitanaMixRestMinutes} minuta u posudi miksera.`,
+        !isGlutenFree && hand ? `Pokrijte tijesto i ostavite ga ${mixRestMinutes} minuta da se gluten opusti.` : hand ? `Ostavite tijesto da odmori ${mixRestMinutes} minuta.` : `Ostavite tijesto da odmori ${mixRestMinutes} minuta u posudi miksera.`,
       ],
-      timers: [timer(hand && !isGlutenFree ? 'post-mix-rest15m' : 'post-mix-rest', napolitanaMixRestMinutes * 60, 'rest')],
+      timers: [timer(hand && !isGlutenFree ? 'post-mix-rest15m' : 'post-mix-rest', mixRestMinutes * 60, 'rest')],
     },
     {
       title: isRomanTeglia && isGlutenFree ? 'Faza B: Kratki odmor' : isRomanTeglia ? 'Faza B: Fermentacija i preklapanje' : isGlutenFree ? 'Faza B: Kratki odmor' : hasPreferment ? 'Faza C: Bulk fermentacija i foldovi' : 'Faza B: Bulk fermentacija i foldovi',
@@ -1755,9 +1747,7 @@ function getDetailedDirectSteps(
         : isRomanTeglia
         ? 'Teglia koristi vlažnije tijesto koje ostaje kao jedna masa. Napravite dva nježna Stretch & Fold preklapanja u posudi prije hladne fermentacije.'
         : isNapolitana && isGlutenFree
-        ? `Početni odmor od ${napolitanaMixRestMinutes} minuta služi hidrataciji psylliuma i uračunat je u ukupno odabrano vrijeme od ${napolitanaRoomMinutes} minuta. Nakon njega tijesto samo nastavlja fermentirati još ${napolitanaRemainingMinutes} minuta bez preklapanja.`
-        : isNapolitana && !isGlutenFree
-        ? `Završna fermentacija počinje nakon završetka zamjesa i ukupno traje ${napolitanaRoomMinutes} minuta prema korisničkom odabiru: početni odmor ${firstBulkRestMinutes} minuta, odmor između preklapanja ${secondBulkRestMinutes} minuta i završni odmor ${finalBulkRestMinutes} minuta prije podjele na kugle. Biga ili Poolish fermentiraju se zasebno.`
+        ? 'Početni odmor služi hidrataciji psylliuma. Nakon njega tijesto nastavlja fermentirati bez Stretch & Fold preklapanja.'
         : isWholeWheat
         ? `Integralno tijesto ima slabiju elastičnost i lakše se lomi, pa budite vrlo nježni sa Stretch & Fold. Ponavljajte je ukupno 3 puta svakih približno ${bulkRestMinutes} minuta, bez agresivnih pokreta.`
         : isSpelt
@@ -1770,7 +1760,7 @@ function getDetailedDirectSteps(
         'Pokrijte posudu i ostavite smjesu 15 minuta na sobnoj temperaturi da psyllium poveže strukturu.',
       ] : isNapolitana && isGlutenFree ? [
         'Prebacite smjesu u fermentacijsku posudu i pokrijte je.',
-        ...(napolitanaRemainingMinutes > 0 ? [`Nakon početnog odmora nastavite fermentirati smjesu još ${napolitanaRemainingMinutes} minuta na sobnoj temperaturi. Ne radite Stretch & Fold.`] : ['Početni odmor pokriva ukupno odabrano vrijeme fermentacije. Ne radite Stretch & Fold.']),
+        ...(napolitanaGlutenFreeRemainingMinutes > 0 ? [`Nakon početnog odmora nastavite fermentirati smjesu još ${napolitanaGlutenFreeRemainingMinutes} minuta na sobnoj temperaturi. Ne radite Stretch & Fold.`] : ['Početni odmor pokriva ukupno odabrano vrijeme fermentacije. Ne radite Stretch & Fold.']),
       ] : isRomanTeglia ? [
         'Lagano nauljite fermentacijsku posudu i prebacite tijesto u nju.',
         `Pokrijte posudu i ostavite tijesto ${bulkRestMinutes} minuta na sobnoj temperaturi.`,
@@ -1783,25 +1773,25 @@ function getDetailedDirectSteps(
         `Pokrijte posudu i ostavite smjesu 15 minuta na sobnoj temperaturi da se kratko opusti prije dijeljenja.`,
       ] : [
         'Lagano nauljite fermentacijsku posudu i prebacite tijesto u nju.',
-        `Pokrijte posudu i ostavite tijesto ${firstBulkRestMinutes} minuta na sobnoj temperaturi.`,
+        `Pokrijte posudu i ostavite tijesto ${bulkRestMinutes} minuta na sobnoj temperaturi.`,
         'Napravite prvi Stretch & Fold.',
-        `Ostavite tijesto ponovno ${secondBulkRestMinutes} minuta.`,
+        `Ostavite tijesto ponovno ${bulkRestMinutes} minuta.`,
         'Napravite drugi Stretch & Fold.',
-        `Ostavite završni bulk još ${finalBulkRestMinutes} minuta na sobnoj temperaturi.`,
+        `Ostavite završni bulk još ${bulkRestMinutes} minuta na sobnoj temperaturi.`,
         'Provjerite jesu li vidljivi prvi znakovi fermentacije.',
       ],
       timers: isRomanTeglia && isGlutenFree
         ? [timer('gluten-free-teglia-rest', 15 * 60, 'rt')]
         : isNapolitana && isGlutenFree
-        ? [timer('gluten-free-napolitana-rest', napolitanaRemainingMinutes * 60, 'rt')]
+        ? [timer('gluten-free-napolitana-rest', napolitanaGlutenFreeRemainingMinutes * 60, 'rt')]
         : isRomanTeglia
         ? [timer('roman-tray-bulk-1', bulkRestMinutes * 60, 'rt'), timer('roman-tray-bulk-2', bulkRestMinutes * 60, 'rt'), timer('roman-tray-bulk-final', bulkRestMinutes * 60, 'rt')]
         : isGlutenFree
         ? [timer('gluten-free-short-rest', 15 * 60, 'rt')]
         : [
-          timer('bulk-rest-1', firstBulkRestMinutes * 60, 'rt'),
-          timer('bulk-rest-2', secondBulkRestMinutes * 60, 'rt'),
-          timer('bulk-final', finalBulkRestMinutes * 60, 'rt'),
+          timer('bulk-rest-1', bulkRestMinutes * 60, 'rt'),
+          timer('bulk-rest-2', bulkRestMinutes * 60, 'rt'),
+          timer('bulk-final', bulkRestMinutes * 60, 'rt'),
           ],
     },
     {
