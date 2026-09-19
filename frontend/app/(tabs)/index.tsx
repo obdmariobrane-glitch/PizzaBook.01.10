@@ -1637,7 +1637,7 @@ function getDetailedDirectSteps(
     : 0;
   const idealWater = ingredients.water - idealIce;
   const ovenSteps = oven === 'ooni'
-    ? [`Zagrijte pizza peć najmanje 20 minuta na ${ovenTemp} °C.`, 'Stavite pizzu i rotirajte je svakih 20–30 sekundi.', 'Pecite približno 60–90 sekundi i izvadite kada rub dobije tamne mrlje.']
+    ? [`Zagrijte pizza peć najmanje 20 minuta na ${ovenTemp} °C.`, 'Ubacite pizzu u zagrijanu pizza peć.', 'Tijekom pečenja rotirajte pizzu svakih 20–30 sekundi.', 'Pecite približno 60–90 sekundi i izvadite kada rub dobije tamne mrlje.']
     : oven === 'homePan'
       ? [`Zagrijte kućnu pećnicu na ${ovenTemp} °C s ventilacijom.`, 'Pecite pizzu na dnu pećnice 5–7 minuta.', 'Prebacite je pod gornji grill još 2–3 minute.']
       : [`Zagrijte kamen ili čelik 45–60 minuta na ${ovenTemp} °C.`, 'Isključite grill i prebacite pećnicu na Pizza program, ako je dostupan. Ako Pizza program nije dostupan, odaberite gornji i donji grijač bez ventilatora te postavite maksimalnu temperaturu. Pecite pizzu približno 4–5 minuta.', 'Zatim uključite grill i pecite dok rub i vrh ne dobiju željenu boju.'];
@@ -1867,9 +1867,9 @@ function getDetailedDirectSteps(
         isGlutenFree ? 'Otresite višak bezglutenskog ili rižinog brašna i prebacite podlogu na lopaticu.' : 'Otresite višak semole i prebacite tijesto na lopaticu.',
         'Dodajte nadjev prema promjeru pizze, a rub ostavite bez nadjeva.',
         `Za pizzu od ${diameter} cm zadana količina mozzarelle je približno ${cheeseAmount} g.`,
-        'Ubacite pizzu u zagrijanu pećnicu.',
-        ovenSteps[1],
-        ovenSteps[2],
+        oven === 'ooni' ? ovenSteps[1] : 'Ubacite pizzu u zagrijanu pećnicu.',
+        oven === 'ooni' ? ovenSteps[2] : ovenSteps[1],
+        oven === 'ooni' ? ovenSteps[3] : ovenSteps[2],
       ],
       timers: [timer('tempering', temperingMidpoint, 'preBake')],
     },
