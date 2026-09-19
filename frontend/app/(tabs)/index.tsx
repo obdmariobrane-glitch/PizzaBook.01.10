@@ -1649,6 +1649,8 @@ function getDetailedDirectSteps(
   const temperingMidpoint = Math.round(((temperingMin + temperingMax) / 2) * 60);
   const timer = (id: string, seconds: number, kind: BaseTimer['kind']): BaseTimer => ({ id, seconds, kind });
   const ballCount = Math.round(totalDough / ballWeight);
+  const ballWord = ballCount % 10 === 1 && ballCount % 100 !== 11 ? 'kuglu' : ballCount % 10 >= 2 && ballCount % 10 <= 4 && (ballCount % 100 < 10 || ballCount % 100 >= 20) ? 'kugle' : 'kugli';
+  const pizzaWord = pizzas % 10 === 1 && pizzas % 100 !== 11 ? 'pizzu' : pizzas % 10 >= 2 && pizzas % 10 <= 4 && (pizzas % 100 < 10 || pizzas % 100 >= 20) ? 'pizze' : 'pizza';
 
   return [
     {
@@ -1779,13 +1781,13 @@ function getDetailedDirectSteps(
         'Radnu površinu obilno pospite bezglutenskim ili rižinim brašnom. Brašno za radnu površinu ne ulazi u izračun recepta.',
         'Nježno izvadite ljepljivu smjesu iz posude uz minimalno degaziranje.',
         `Podijelite ukupnu masu tijesta od ${totalDough} g na jednake dijelove od ${ballWeight} g.`,
-        `Dobit ćete približno ${ballCount} kugli za ${pizzas} pizza.`,
+        `Dobit ćete približno ${ballCount} ${ballWord} za ${pizzas} ${pizzaWord}.`,
         'Uz pomoć pobrašnjenih ili nauljenih ruku oblikujte kugle.',
       ] : [
         'Lagano pospite radnu površinu brašnom. Brašno za radnu površinu ne ulazi u izračun recepta.',
         'Nježno izvadite tijesto iz posude uz minimalno degaziranje.',
         `Podijelite ukupno ${totalDough} g tijesta na kugle od ${ballWeight} g.`,
-        `Dobit ćete približno ${ballCount} kugli za ${pizzas} pizza.`,
+        `Dobit ćete približno ${ballCount} ${ballWord} za ${pizzas} ${pizzaWord}.`,
         'Svaki komad oblikujte u glatku i zategnutu kuglu.',
       ],
     },
