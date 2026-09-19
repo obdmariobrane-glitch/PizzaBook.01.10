@@ -23,6 +23,14 @@ import { useAuth } from '../../src/auth';
 const DIAMETERS = [28, 30, 33, 35];
 const CALCULATOR_SETTINGS_KEY = 'calculatorSettings';
 
+function croatianHours(hours: number): string {
+  const absoluteHours = Math.abs(hours);
+  const lastTwo = absoluteHours % 100;
+  const last = absoluteHours % 10;
+  const unit = last === 1 && lastTwo !== 11 ? 'sat' : last >= 2 && last <= 4 && (lastTwo < 10 || lastTwo >= 20) ? 'sata' : 'sati';
+  return `${hours} ${unit}`;
+}
+
 type CalculatorSettings = {
   pizzaStyle: PizzaStyle;
   romanFormat: 'tonda' | 'teglia';
@@ -614,8 +622,8 @@ export default function CalculatorHome() {
       steps: [
         ({ hr: 'Operite i temeljito osušite ruke.', en: 'Wash and thoroughly dry your hands.', de: 'Waschen und trocknen Sie Ihre Hände gründlich.', sl: 'Umijte in temeljito osušite roke.' }[lang]),
         ({ hr: `Pripremite ${dough.preferment?.flour ?? 0} g brašna, ${dough.preferment?.water ?? 0} g vode i ${dough.preferment?.yeast ?? 0} g kvasca.`, en: `Prepare ${dough.preferment?.flour ?? 0} g flour, ${dough.preferment?.water ?? 0} g water, and ${dough.preferment?.yeast ?? 0} g yeast.`, de: `Bereiten Sie ${dough.preferment?.flour ?? 0} g Mehl, ${dough.preferment?.water ?? 0} g Wasser und ${dough.preferment?.yeast ?? 0} g Hefe vor.`, sl: `Pripravite ${dough.preferment?.flour ?? 0} g moke, ${dough.preferment?.water ?? 0} g vode in ${dough.preferment?.yeast ?? 0} g kvasa.` }[lang]),
-        ({ hr: `Rukama kratko povežite sastojke; smjesa treba ostati mrvičasta. Ostavite Bigu ${prefermentRoomHours} sati na ${roomTemp} °C.`, en: `Briefly combine the ingredients; keep the mixture crumbly. Leave the Biga for ${prefermentRoomHours} hours at ${roomTemp} °C.`, de: `Vermengen Sie die Zutaten kurz; die Masse soll krümelig bleiben. Lassen Sie die Biga ${prefermentRoomHours} Stunden bei ${roomTemp} °C stehen.`, sl: `Sestavine na kratko povežite; zmes naj ostane drobtinasta. Bigo pustite ${prefermentRoomHours} ur pri ${roomTemp} °C.` }[lang]),
-        ({ hr: `Pokrijte Bigu i prebacite je u hladnjak na ${prefermentFridgeHours} sati pri ${fridgeTemp} °C. Ukupno: ${bigaHours} sati.`, en: `Cover the Biga and refrigerate it for ${prefermentFridgeHours} hours at ${fridgeTemp} °C. Total: ${bigaHours} hours.`, de: `Decken Sie die Biga ab und stellen Sie sie ${prefermentFridgeHours} Stunden bei ${fridgeTemp} °C in den Kühlschrank. Gesamt: ${bigaHours} Stunden.`, sl: `Bigo pokrijte in jo prestavite v hladilnik za ${prefermentFridgeHours} ur pri ${fridgeTemp} °C. Skupaj: ${bigaHours} ur.` }[lang]),
+        ({ hr: `Rukama kratko povežite sastojke; smjesa treba ostati mrvičasta. Ostavite Bigu ${croatianHours(prefermentRoomHours)} na ${roomTemp} °C.`, en: `Briefly combine the ingredients; keep the mixture crumbly. Leave the Biga for ${prefermentRoomHours} hours at ${roomTemp} °C.`, de: `Vermengen Sie die Zutaten kurz; die Masse soll krümelig bleiben. Lassen Sie die Biga ${prefermentRoomHours} Stunden bei ${roomTemp} °C stehen.`, sl: `Sestavine na kratko povežite; zmes naj ostane drobtinasta. Bigo pustite ${prefermentRoomHours} ur pri ${roomTemp} °C.` }[lang]),
+        ({ hr: `Pokrijte Bigu i prebacite je u hladnjak na ${croatianHours(prefermentFridgeHours)} pri ${fridgeTemp} °C. Ukupno: ${croatianHours(bigaHours)}.`, en: `Cover the Biga and refrigerate it for ${prefermentFridgeHours} hours at ${fridgeTemp} °C. Total: ${bigaHours} hours.`, de: `Decken Sie die Biga ab und stellen Sie sie ${prefermentFridgeHours} Stunden bei ${fridgeTemp} °C in den Kühlschrank. Gesamt: ${bigaHours} Stunden.`, sl: `Bigo pokrijte in jo prestavite v hladilnik za ${prefermentFridgeHours} ur pri ${fridgeTemp} °C. Skupaj: ${bigaHours} ur.` }[lang]),
       ],
       timers: [{ id: `biga-fermentation-${mixing}`, seconds: bigaHours * 3600, kind: 'preferment' as const }],
     }
@@ -652,13 +660,13 @@ export default function CalculatorHome() {
           sl: `Dodajte ${dough.preferment?.flour ?? 0} g moke in mešajte, dokler zmes ni gladka in tekoča.`,
         }[lang]),
         ({
-          hr: `Pokrijte Poolish i ostavite ga ${prefermentRoomHours} sati na ${roomTemp} °C.`,
+          hr: `Pokrijte Poolish i ostavite ga ${croatianHours(prefermentRoomHours)} na ${roomTemp} °C.`,
           en: `Cover the Poolish and leave it at ${roomTemp} °C for ${prefermentRoomHours} hours.`,
           de: `Decken Sie den Poolish ab und lassen Sie ihn ${prefermentRoomHours} Stunden bei ${roomTemp} °C stehen.`,
           sl: `Poolish pokrijte in ga pustite ${prefermentRoomHours} ur pri ${roomTemp} °C.`,
         }[lang]),
         ({
-          hr: `Prebacite Poolish u hladnjak na ${prefermentFridgeHours} sati pri ${fridgeTemp} °C. Ukupna fermentacija Poolisha traje ${poolishHours} sati.`,
+          hr: `Prebacite Poolish u hladnjak na ${croatianHours(prefermentFridgeHours)} pri ${fridgeTemp} °C. Ukupna fermentacija Poolisha traje ${croatianHours(poolishHours)}.`,
           en: `Move the Poolish to the refrigerator at ${fridgeTemp} °C for ${prefermentFridgeHours} hours. Total Poolish fermentation: ${poolishHours} hours.`,
           de: `Stellen Sie den Poolish für ${prefermentFridgeHours} Stunden bei ${fridgeTemp} °C in den Kühlschrank. Gesamte Poolish-Fermentation: ${poolishHours} Stunden.`,
           sl: `Poolish prestavite v hladilnik pri ${fridgeTemp} °C za ${prefermentFridgeHours} ur. Skupna fermentacija Poolisha traja ${poolishHours} ur.`,
@@ -1304,7 +1312,7 @@ export default function CalculatorHome() {
                   bigaInfo={(bigaPreparation || poolishPreparation)!.info}
                   phaseKey={`${method}-${mixing}-preparation`}
                   timers={bigaPreparation ? [
-                    { id: `biga-fermentation-${mixing}`, seconds: bigaHours * 3600, kind: 'preferment' as const },
+                    { id: `biga-fermentation-${mixing}`, seconds: bigaHours * 3600, kind: 'rt' as const },
                   ] : (poolishPreparation || { timers: [] }).timers}
                   completed={completedSteps}
                   onToggle={toggleStep}
