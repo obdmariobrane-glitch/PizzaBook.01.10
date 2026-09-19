@@ -510,7 +510,6 @@ export default function CalculatorHome() {
   const selectedPrefermentHours = method === 'biga' ? bigaHours : poolishHours;
   const prefermentRoomHours = method === 'biga' ? Math.min(8, selectedPrefermentHours) : Math.min(1, selectedPrefermentHours);
   const prefermentFridgeHours = Math.max(0, selectedPrefermentHours - prefermentRoomHours);
-  const formatHoursHr = (hours: number) => `${hours} ${hours % 10 === 1 && hours % 100 !== 11 ? 'sat' : hours % 10 >= 2 && hours % 10 <= 4 && (hours % 100 < 10 || hours % 100 >= 20) ? 'sata' : 'sati'}`;
   const psylliumGrams = flour === 'glutenFree' ? (dough.total.psyllium ?? 0) : 0;
   const idealFermentationText = method === 'biga'
     ? ({
@@ -653,13 +652,13 @@ export default function CalculatorHome() {
           sl: `Dodajte ${dough.preferment?.flour ?? 0} g moke in mešajte, dokler zmes ni gladka in tekoča.`,
         }[lang]),
         ({
-          hr: `Pokrijte Poolish i ostavite ga ${formatHoursHr(prefermentRoomHours)} na ${roomTemp} °C.`,
+          hr: `Pokrijte Poolish i ostavite ga ${prefermentRoomHours} sati na ${roomTemp} °C.`,
           en: `Cover the Poolish and leave it at ${roomTemp} °C for ${prefermentRoomHours} hours.`,
           de: `Decken Sie den Poolish ab und lassen Sie ihn ${prefermentRoomHours} Stunden bei ${roomTemp} °C stehen.`,
           sl: `Poolish pokrijte in ga pustite ${prefermentRoomHours} ur pri ${roomTemp} °C.`,
         }[lang]),
         ({
-          hr: `Prebacite Poolish u hladnjak na ${formatHoursHr(prefermentFridgeHours)} pri ${fridgeTemp} °C. Ukupna fermentacija Poolisha traje ${formatHoursHr(poolishHours)}.`,
+          hr: `Prebacite Poolish u hladnjak na ${prefermentFridgeHours} sati pri ${fridgeTemp} °C. Ukupna fermentacija Poolisha traje ${poolishHours} sati.`,
           en: `Move the Poolish to the refrigerator at ${fridgeTemp} °C for ${prefermentFridgeHours} hours. Total Poolish fermentation: ${poolishHours} hours.`,
           de: `Stellen Sie den Poolish für ${prefermentFridgeHours} Stunden bei ${fridgeTemp} °C in den Kühlschrank. Gesamte Poolish-Fermentation: ${poolishHours} Stunden.`,
           sl: `Poolish prestavite v hladilnik pri ${fridgeTemp} °C za ${prefermentFridgeHours} ur. Skupna fermentacija Poolisha traja ${poolishHours} ur.`,
@@ -1773,7 +1772,7 @@ function getDetailedDirectSteps(
           ],
     },
     {
-      title: isRomanTeglia ? 'Faza C: Masa za tepsiju' : isGlutenFree ? 'Faza C: Podjela i oblikovanje kugla' : hasPreferment ? 'Faza D: Podjela i kugle' : 'Faza C: Podjela i kugle',
+      title: isRomanTeglia ? 'Faza C: Masa za tepsiju' : isGlutenFree ? 'Faza C: Podjela i oblikovanje kugli' : hasPreferment ? 'Faza D: Podjela i kugle' : 'Faza C: Podjela i kugle',
       degassingInfo: 'Degaziranje znači izbacivanje plinova iz tijesta nastalih tijekom fermentacije.',
       steps: isRomanTeglia ? [
         `Pripremite jednu masu od ${totalDough} g za tepsiju prema unesenoj gramaži od ${ballWeight} g.`,
