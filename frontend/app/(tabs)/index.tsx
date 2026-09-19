@@ -680,7 +680,7 @@ export default function CalculatorHome() {
   const poolishMixSteps = method === 'poolish' ? ({
     hr: [
       'Operite i temeljito osušite ruke.',
-      'Nakon fermentacije Poolish prelijte u posudu za ručni zamjes.',
+      'Zreli Poolish prelijte u posudu za ručni zamjes.',
       `Dodajte preostalih ${dough.main.flour} g brašna i lagano povežite Poolish s brašnom.`,
       `Dodajte ${Math.round(dough.main.water * 0.9)} g preostale vode, zatim postupno dodajte još ${Math.max(0, dough.main.water - Math.round(dough.main.water * 0.9))} g vode.`,
       `Dodajte ${dough.total.salt} g soli kao zaseban korak i nastavite mijesiti.`,
@@ -1700,7 +1700,7 @@ function getDetailedDirectSteps(
         !isGlutenFree && hand ? `Pokrijte tijesto i ostavite ga ${mixRestMinutes} minuta da se gluten opusti.` : hand ? `Ostavite tijesto da odmori ${mixRestMinutes} minuta.` : `Ostavite tijesto da odmori ${mixRestMinutes} minuta u posudi miksera.`,
       ] : poolish ? [
         hand ? 'Operite i temeljito osušite ruke.' : 'Pripremite mikser i njegovu posudu.',
-        hand ? 'Nakon fermentacije Poolish prelijte u posudu za ručni zamjes.' : 'Nakon fermentacije Poolish prelijte u posudu miksera.',
+        hand ? 'Zreli Poolish prelijte u posudu za ručni zamjes.' : 'Zreli Poolish prelijte u posudu miksera.',
         poolish.remainingFlour > 0
           ? (hand ? `Dodajte preostalih ${poolish.remainingFlour} g brašna i lagano povežite Poolish s brašnom.` : `Dodajte preostalih ${poolish.remainingFlour} g brašna i pokrenite mikser na sporoj brzini.`)
           : 'Nema preostalog brašna; nastavite samo s Poolishom i vodom.',
