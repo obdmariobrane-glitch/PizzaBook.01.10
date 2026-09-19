@@ -6,6 +6,7 @@
     "preinstall": "./scripts/cmd-guard.js --preinstall",
     "start": "expo start",
     "reset-project": "node ./scripts/reset-project.js",
+    "check:roman-workflow": "node ./scripts/verify-roman-workflow.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",

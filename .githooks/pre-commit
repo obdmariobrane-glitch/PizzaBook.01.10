@@ -1,0 +1,21 @@
+#!/usr/bin/env sh
+set -eu
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+
+size_threshold=90M
+large_files=$(find . -not -path './.git/*' -size +"$size_threshold" | sed 's|^\./||')
+
+for file in $large_files; do
+  grep -q "^$file$" .gitignore 2>/dev/null || echo "$file" >> .gitignore
+  git rm --cached --ignore-unmatch "$file" 2>/dev/null || true
+done
+
+[ -z "$large_files" ] || git add .gitignore
+
+if git diff --cached --name-only | grep -Fxq 'frontend/app/(tabs)/index.tsx'; then
+  cd frontend
+  node scripts/verify-roman-workflow.js
+  npx tsc --noEmit
+fi
