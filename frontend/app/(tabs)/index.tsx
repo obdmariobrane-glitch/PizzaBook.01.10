@@ -1760,9 +1760,11 @@ function getDetailedDirectSteps(
         'Pokrijte posudu i ostavite smjesu 15 minuta na sobnoj temperaturi da psyllium poveže strukturu.',
       ] : isNapolitana && isGlutenFree ? [
         'Prebacite smjesu u fermentacijsku posudu i pokrijte je.',
+        `Ukupno vrijeme fermentacije na sobnoj temperaturi: ${croatianHours(roomHours)}.`,
         ...(napolitanaGlutenFreeRemainingMinutes > 0 ? [`Nakon početnog odmora nastavite fermentirati smjesu još ${napolitanaGlutenFreeRemainingMinutes} minuta na sobnoj temperaturi. Ne radite Stretch & Fold.`] : ['Početni odmor pokriva ukupno odabrano vrijeme fermentacije. Ne radite Stretch & Fold.']),
       ] : isRomanTeglia ? [
         'Lagano nauljite fermentacijsku posudu i prebacite tijesto u nju.',
+        `Ukupno vrijeme fermentacije na sobnoj temperaturi: ${croatianHours(roomHours)}.`,
         `Pokrijte posudu i ostavite tijesto ${bulkRestMinutes} minuta na sobnoj temperaturi.`,
         'Napravite prvi Stretch & Fold.',
         `Ostavite tijesto ponovno ${bulkRestMinutes} minuta.`,
@@ -1770,9 +1772,11 @@ function getDetailedDirectSteps(
         `Ostavite tijesto još ${bulkRestMinutes} minuta na sobnoj temperaturi.`,
       ] : isGlutenFree ? [
         'Lagano nauljite fermentacijsku posudu i prebacite smjesu u nju.',
+        `Ukupno vrijeme fermentacije na sobnoj temperaturi: ${croatianHours(roomHours)}.`,
         `Pokrijte posudu i ostavite smjesu 15 minuta na sobnoj temperaturi da se kratko opusti prije dijeljenja.`,
       ] : [
         'Lagano nauljite fermentacijsku posudu i prebacite tijesto u nju.',
+        `Ukupno vrijeme fermentacije na sobnoj temperaturi: ${croatianHours(roomHours)}.`,
         `Pokrijte posudu i ostavite tijesto ${bulkRestMinutes} minuta na sobnoj temperaturi.`,
         'Napravite prvi Stretch & Fold.',
         `Ostavite tijesto ponovno ${bulkRestMinutes} minuta.`,
