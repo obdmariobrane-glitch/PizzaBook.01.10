@@ -617,7 +617,7 @@ export default function CalculatorHome() {
         ({ hr: `Rukama kratko povežite sastojke; smjesa treba ostati mrvičasta. Ostavite Bigu ${prefermentRoomHours} sati na ${roomTemp} °C.`, en: `Briefly combine the ingredients; keep the mixture crumbly. Leave the Biga for ${prefermentRoomHours} hours at ${roomTemp} °C.`, de: `Vermengen Sie die Zutaten kurz; die Masse soll krümelig bleiben. Lassen Sie die Biga ${prefermentRoomHours} Stunden bei ${roomTemp} °C stehen.`, sl: `Sestavine na kratko povežite; zmes naj ostane drobtinasta. Bigo pustite ${prefermentRoomHours} ur pri ${roomTemp} °C.` }[lang]),
         ({ hr: `Pokrijte Bigu i prebacite je u hladnjak na ${prefermentFridgeHours} sati pri ${fridgeTemp} °C. Ukupno: ${bigaHours} sati.`, en: `Cover the Biga and refrigerate it for ${prefermentFridgeHours} hours at ${fridgeTemp} °C. Total: ${bigaHours} hours.`, de: `Decken Sie die Biga ab und stellen Sie sie ${prefermentFridgeHours} Stunden bei ${fridgeTemp} °C in den Kühlschrank. Gesamt: ${bigaHours} Stunden.`, sl: `Bigo pokrijte in jo prestavite v hladilnik za ${prefermentFridgeHours} ur pri ${fridgeTemp} °C. Skupaj: ${bigaHours} ur.` }[lang]),
       ],
-      timers: [{ id: `biga-fermentation-${mixing}`, seconds: bigaHours * 3600, kind: 'rt' as const }],
+      timers: [{ id: `biga-fermentation-${mixing}`, seconds: bigaHours * 3600, kind: 'preferment' as const }],
     }
     : null;
   const poolishPreparation = method === 'poolish'
@@ -665,7 +665,7 @@ export default function CalculatorHome() {
         }[lang]),
       ],
       timers: [
-        { id: 'poolish-fermentation', seconds: poolishHours * 3600, kind: 'rt' as const },
+        { id: 'poolish-fermentation', seconds: poolishHours * 3600, kind: 'preferment' as const },
       ],
     }
     : null;
@@ -1304,7 +1304,7 @@ export default function CalculatorHome() {
                   bigaInfo={(bigaPreparation || poolishPreparation)!.info}
                   phaseKey={`${method}-${mixing}-preparation`}
                   timers={bigaPreparation ? [
-                    { id: `biga-fermentation-${mixing}`, seconds: bigaHours * 3600, kind: 'rt' as const },
+                    { id: `biga-fermentation-${mixing}`, seconds: bigaHours * 3600, kind: 'preferment' as const },
                   ] : (poolishPreparation || { timers: [] }).timers}
                   completed={completedSteps}
                   onToggle={toggleStep}
