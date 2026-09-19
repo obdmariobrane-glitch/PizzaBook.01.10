@@ -1665,7 +1665,7 @@ function getDetailedDirectSteps(
   const pizzaWord = pizzas % 10 === 1 && pizzas % 100 !== 11 ? 'pizzu' : pizzas % 10 >= 2 && pizzas % 10 <= 4 && (pizzas % 100 < 10 || pizzas % 100 >= 20) ? 'pizze' : 'pizza';
 
   return [
-    ...(hasColdFermentation ? [{
+    {
       title: biga
         ? (hand ? 'Faza B: Dodavanje Bige i ručni zamjes' : 'Faza B: Dodavanje Bige i zamjes mikserom')
         : poolish
@@ -1805,7 +1805,7 @@ function getDetailedDirectSteps(
         'Svaki komad oblikujte u glatku i zategnutu kuglu.',
       ],
     },
-    {
+    ...(hasColdFermentation ? [{
       title: isRomanTeglia ? 'Faza D: Hladna fermentacija' : hasPreferment ? 'Faza E: Hladna fermentacija' : 'Faza D: Hladna fermentacija',
       temperingInfo: isRomanTeglia
         ? 'Teglia ostaje kao jedna masa u zatvorenoj posudi. Nakon hladne fermentacije pripremite je za utiskivanje u tepsiju, bez kuglanja.'
