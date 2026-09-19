@@ -149,7 +149,7 @@ const EN_POOLISH_P1: Phase = {
 const EN_POOLISH_HAND_P2: Phase = {
   title: 'Phase B: Adding the Poolish and hand mixing',
   steps: [
-    'Pour the cold Poolish into the mixing bowl.',
+    'Pour the mature Poolish into the mixing bowl.',
     'Add the remaining flour and most of the water.',
     'Combine the Poolish and flour with a spoon or your hands until you have a rough mixture.',
     'Slowly add the remaining water and knead until the dough comes together.',
@@ -160,7 +160,7 @@ const EN_POOLISH_HAND_P2: Phase = {
 const EN_POOLISH_MIXER_P2: Phase = {
   title: 'Phase B: Adding the Poolish and mixer mixing',
   steps: [
-    'Pour the cold Poolish directly into the mixer bowl.',
+    'Pour the mature Poolish directly into the mixer bowl.',
     'Add the remaining flour and most of the water, and start the mixer on speed 1.',
     'Add the salt and slowly, in a thin stream, pour in the remaining water while the mixer runs.',
     'Pour in the olive oil and knead until the dough fully absorbs the oil and becomes smooth.',
@@ -321,7 +321,7 @@ const SL_POOLISH_P1: Phase = {
 const SL_POOLISH_HAND_P2: Phase = {
   title: 'Faza B: Dodajanje Poolisha in ročno gnetenje',
   steps: [
-    'Hladni Poolish prelijte v posodo za gnetenje.',
+    'Zreli Poolish prelijte v posodo za gnetenje.',
     'Dodajte preostalo moko in večji del vode.',
     'Poolish in moko z zajemalko ali rokami povežite v grobo zmes.',
     'Počasi dodajajte preostalo vodo in gnetite, dokler se testo ne poveže.',
@@ -332,7 +332,7 @@ const SL_POOLISH_HAND_P2: Phase = {
 const SL_POOLISH_MIXER_P2: Phase = {
   title: 'Faza B: Dodajanje Poolisha in gnetenje z mešalnikom',
   steps: [
-    'Hladni Poolish prelijte neposredno v posodo mešalnika.',
+    'Zreli Poolish prelijte neposredno v posodo mešalnika.',
     'Dodajte preostalo moko in večji del vode ter zaženite mešalnik pri 1. hitrosti.',
     'Dodajte sol in počasi v tankem curku dolivajte preostalo vodo, medtem ko mešalnik dela.',
     'Vlijte oljčno olje in gnetite, dokler testo popolnoma ne vpije olja in ne postane gladko.',

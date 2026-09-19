@@ -688,7 +688,7 @@ export default function CalculatorHome() {
     ],
     en: [
       'Wash and thoroughly dry your hands.',
-      'Pour the cold Poolish into the hand-mixing bowl.',
+      'Pour the mature Poolish into the hand-mixing bowl.',
       `Add the remaining ${dough.main.flour} g of flour and gently combine it with the Poolish.`,
       `Add ${Math.round(dough.main.water * 0.9)} g of the remaining water, then gradually add the final ${Math.max(0, dough.main.water - Math.round(dough.main.water * 0.9))} g.`,
       `Add ${dough.total.salt} g of salt as a separate step and continue kneading.`,
@@ -696,7 +696,7 @@ export default function CalculatorHome() {
     ],
     de: [
       'Waschen und trocknen Sie Ihre Hände gründlich.',
-      'Gießen Sie den kalten Poolish in die Knetschüssel.',
+      'Gießen Sie den reifen Poolish in die Knetschüssel.',
       `Geben Sie ${dough.main.flour} g restliches Mehl dazu und verbinden Sie es vorsichtig mit dem Poolish.`,
       `Geben Sie ${Math.round(dough.main.water * 0.9)} g des restlichen Wassers hinzu und anschließend die letzten ${Math.max(0, dough.main.water - Math.round(dough.main.water * 0.9))} g nach und nach.`,
       `Geben Sie ${dough.total.salt} g Salz als separaten Schritt hinzu und kneten Sie weiter.`,
@@ -704,7 +704,7 @@ export default function CalculatorHome() {
     ],
     sl: [
       'Umijte in temeljito osušite roke.',
-      'Hladni Poolish prelijte v posodo za ročno gnetenje.',
+      'Zreli Poolish prelijte v posodo za ročno gnetenje.',
       `Dodajte preostalih ${dough.main.flour} g moke in jo nežno povežite s Poolishem.`,
       `Dodajte ${Math.round(dough.main.water * 0.9)} g preostale vode, nato postopoma še zadnjih ${Math.max(0, dough.main.water - Math.round(dough.main.water * 0.9))} g.`,
       `Dodajte ${dough.total.salt} g soli kot ločen korak in nadaljujte z gnetenjem.`,
