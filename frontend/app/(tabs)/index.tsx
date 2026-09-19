@@ -585,25 +585,25 @@ export default function CalculatorHome() {
   const bakingDuration = `${ovenTemp} °C · ${formatBakingMinutes(calculatedBakingTime.min, lang)}–${formatBakingMinutes(calculatedBakingTime.max, lang)}`;
   const ovenTempLabel = { hr: 'Temperatura pećnice', en: 'Oven temperature', de: 'Ofentemperatur', sl: 'Temperatura pečice' }[lang];
   const detailedDirectSteps = method === 'direct' && lang === 'hr'
-    ? getDetailedDirectSteps(mixing, dough.total, dough.totalDough, pizzas, effectiveBall, diameter, fridgeHours, oven, ovenTemp, roomTemp, dims.cheese, undefined, undefined, flour, pizzaStyle === 'romana' && romanFormat === 'tonda', isRomanTeglia, pizzaStyle === 'ny_style')
+    ? getDetailedDirectSteps(mixing, dough.total, dough.totalDough, pizzas, effectiveBall, diameter, fridgeHours, roomHours, oven, ovenTemp, roomTemp, dims.cheese, undefined, undefined, flour, pizzaStyle === 'romana' && romanFormat === 'tonda', isRomanTeglia, pizzaStyle === 'ny_style', pizzaStyle === 'neapolitan')
     : method === 'biga' && lang === 'hr'
-      ? getDetailedDirectSteps(mixing, dough.total, dough.totalDough, pizzas, effectiveBall, diameter, fridgeHours, oven, ovenTemp, roomTemp, dims.cheese, {
+      ? getDetailedDirectSteps(mixing, dough.total, dough.totalDough, pizzas, effectiveBall, diameter, fridgeHours, roomHours, oven, ovenTemp, roomTemp, dims.cheese, {
         flour: dough.preferment?.flour ?? 0,
         water: dough.preferment?.water ?? 0,
         yeast: dough.preferment?.yeast ?? 0,
         remainingFlour: dough.main.flour,
         remainingWater: dough.main.water,
         pct: bigaPct,
-      }, undefined, flour, pizzaStyle === 'romana' && romanFormat === 'tonda', isRomanTeglia, pizzaStyle === 'ny_style')
+      }, undefined, flour, pizzaStyle === 'romana' && romanFormat === 'tonda', isRomanTeglia, pizzaStyle === 'ny_style', pizzaStyle === 'neapolitan')
     : method === 'poolish' && lang === 'hr'
-      ? getDetailedDirectSteps(mixing, dough.total, dough.totalDough, pizzas, effectiveBall, diameter, fridgeHours, oven, ovenTemp, roomTemp, dims.cheese, undefined, {
+      ? getDetailedDirectSteps(mixing, dough.total, dough.totalDough, pizzas, effectiveBall, diameter, fridgeHours, roomHours, oven, ovenTemp, roomTemp, dims.cheese, undefined, {
         flour: dough.preferment?.flour ?? 0,
         water: dough.preferment?.water ?? 0,
         yeast: dough.preferment?.yeast ?? 0,
         remainingFlour: dough.main.flour,
         remainingWater: dough.main.water,
         pct: poolishPct,
-      }, flour, pizzaStyle === 'romana' && romanFormat === 'tonda', isRomanTeglia, pizzaStyle === 'ny_style')
+      }, flour, pizzaStyle === 'romana' && romanFormat === 'tonda', isRomanTeglia, pizzaStyle === 'ny_style', pizzaStyle === 'neapolitan')
     : method === 'direct' && (lang === 'de' || lang === 'en' || lang === 'sl') && (oven === 'homeStone' || oven === 'ooni' || oven === 'homePan')
       ? getDetailedDirectStepsLocalized(lang, dough.total, dough.totalDough, pizzas, effectiveBall, diameter, fridgeHours, roomTemp, dims.cheese, oven, ovenTemp, mixing)
     : null;
@@ -1604,6 +1604,7 @@ function getDetailedDirectSteps(
   ballWeight: number,
   diameter: number,
   fridgeHours: number,
+  roomHours: number,
   oven: OvenType,
   ovenTemp: number,
   roomTemp: number,
@@ -1614,6 +1615,7 @@ function getDetailedDirectSteps(
   romanTonda = false,
   romanTeglia = false,
   newYork = false,
+  napolitana = false,
 ) {
   const hand = mixing === 'hand';
   const instructionFlour = flourType === 'custom' ? 'caputo00' : flourType;
@@ -1623,6 +1625,7 @@ function getDetailedDirectSteps(
   const isRomanTonda = romanTonda;
   const isRomanTeglia = romanTeglia;
   const isNewYork = newYork;
+  const isNapolitana = napolitana;
   const cheeseAmount = Math.round(cheesePerPizza);
   const psylliumAmount = flourType === 'glutenFree' ? Math.round(ingredients.flour * 0.02) : 0;
   const initialWater = Math.round(ingredients.water * 0.9);
@@ -1642,6 +1645,14 @@ function getDetailedDirectSteps(
       ? [`Zagrijte kućnu pećnicu na ${ovenTemp} °C s ventilacijom.`, 'Pecite pizzu na dnu pećnice 5–7 minuta.', 'Prebacite je pod gornji grill još 2–3 minute.']
       : [`Zagrijte kamen ili čelik 45–60 minuta na ${ovenTemp} °C.`, 'Isključite grill i prebacite pećnicu na Pizza program, ako je dostupan. Ako Pizza program nije dostupan, odaberite gornji i donji grijač bez ventilatora te postavite maksimalnu temperaturu. Pecite pizzu približno 4–5 minuta.', 'Zatim uključite grill i pecite dok rub i vrh ne dobiju željenu boju.'];
   const bulkRestMinutes = Math.max(15, Math.round(30 * (22 / Math.max(10, roomTemp))));
+  const napolitanaRoomMinutes = Math.max(0, Math.round(roomHours * 60));
+  const napolitanaMixRestMinutes = isNapolitana && !isGlutenFree ? Math.min(hand ? 15 : 5, napolitanaRoomMinutes) : hand ? 15 : 5;
+  const napolitanaRemainingMinutes = Math.max(0, napolitanaRoomMinutes - napolitanaMixRestMinutes);
+  const napolitanaRequiredRest = Math.min(15, Math.floor(napolitanaRemainingMinutes / 3));
+  const napolitanaFinalRest = Math.max(0, napolitanaRemainingMinutes - (napolitanaRequiredRest * 2));
+  const firstBulkRestMinutes = isNapolitana && !isGlutenFree ? napolitanaRequiredRest : bulkRestMinutes;
+  const secondBulkRestMinutes = isNapolitana && !isGlutenFree ? napolitanaRequiredRest : bulkRestMinutes;
+  const finalBulkRestMinutes = isNapolitana && !isGlutenFree ? napolitanaFinalRest : bulkRestMinutes;
   const temperingMin = Math.min(120, Math.max(15, Math.round(30 + (22 - roomTemp) * 7.5)));
   const temperingMax = Math.min(120, temperingMin + 15);
   const ovenPreheatMin = oven === 'homeStone' ? 45 : 20;
@@ -1681,7 +1692,7 @@ function getDetailedDirectSteps(
         ...(isGlutenFree ? [`Obavezno dodajte ${psylliumAmount} g psylliuma (2% od ukupne količine brašna) kako bi smjesa zadržala strukturu.`] : []),
         ...(!isGlutenFree && hand ? [isSpelt ? 'Mijesite kratko i nježno, samo dok se tijesto ne poveže i postane ujednačeno; ne premijesite.' : isWholeWheat ? 'Mijesite umjereno i bez agresivnog rastezanja dok se tijesto ne poveže i razvije dovoljnu strukturu.' : 'Prebacite tijesto na radnu površinu i mijesite dlanovima 10–15 minuta dok površina ne postane glatka.'] : []),
         'Zamjes je gotov kada je tijesto glatko, elastično i homogeno.',
-        !isGlutenFree && hand ? 'Pokrijte tijesto i ostavite ga 15 minuta da se gluten opusti.' : hand ? 'Ostavite tijesto da odmori 5–6 minuta.' : 'Ostavite tijesto da odmori 5–6 minuta u posudi miksera.',
+        !isGlutenFree && hand ? `Pokrijte tijesto i ostavite ga ${napolitanaMixRestMinutes} minuta da se gluten opusti.` : hand ? `Ostavite tijesto da odmori ${napolitanaMixRestMinutes} minuta.` : `Ostavite tijesto da odmori ${napolitanaMixRestMinutes} minuta u posudi miksera.`,
       ] : poolish ? [
         hand ? 'Operite i temeljito osušite ruke.' : 'Pripremite mikser i njegovu posudu.',
         hand ? 'Nakon fermentacije Poolish prelijte u posudu za ručni zamjes.' : 'Nakon fermentacije Poolish prelijte u posudu miksera.',
@@ -1696,7 +1707,7 @@ function getDetailedDirectSteps(
         ...(isGlutenFree ? [`Obavezno dodajte ${psylliumAmount} g psylliuma (2% od ukupne količine brašna) kako bi smjesa zadržala strukturu.`] : []),
         ...(!isGlutenFree && hand ? [isSpelt ? 'Mijesite kratko i nježno, samo dok se tijesto ne poveže i postane ujednačeno; ne premijesite.' : isWholeWheat ? 'Mijesite umjereno i bez agresivnog rastezanja dok se tijesto ne poveže i razvije dovoljnu strukturu.' : 'Prebacite tijesto na radnu površinu i mijesite dlanovima 10–15 minuta dok površina ne postane glatka.'] : []),
         'Zamjes je gotov kada je tijesto glatko, elastično i homogeno.',
-        !isGlutenFree && hand ? 'Pokrijte tijesto i ostavite ga 15 minuta da se gluten opusti.' : hand ? 'Ostavite tijesto da odmori 5–6 minuta.' : 'Ostavite tijesto da odmori 5–6 minuta u posudi miksera.',
+        !isGlutenFree && hand ? `Pokrijte tijesto i ostavite ga ${napolitanaMixRestMinutes} minuta da se gluten opusti.` : hand ? `Ostavite tijesto da odmori ${napolitanaMixRestMinutes} minuta.` : `Ostavite tijesto da odmori ${napolitanaMixRestMinutes} minuta u posudi miksera.`,
       ] : isGlutenFree ? [
         hand ? 'Operite i temeljito osušite ruke.' : 'Pripremite mikser i njegovu posudu.',
         `Pripremite ${ingredients.flour} g bezglutenskog brašna, ${psylliumAmount} g psyllium ljuskica, ${ingredients.salt} g soli, ${ingredients.yeast} g svježeg kvasca, ${ingredients.oil} g maslinovog ulja i ukupno ${ingredients.water} g hladne vode (visoka hidratacija).`,
@@ -1720,9 +1731,9 @@ function getDetailedDirectSteps(
         ...(isGlutenFree ? [`Obavezno dodajte ${psylliumAmount} g psylliuma (2% od ukupne količine brašna) kako bi smjesa zadržala strukturu.`] : []),
         ...(!isGlutenFree && hand ? [isSpelt ? 'Mijesite kratko i nježno, samo dok se tijesto ne poveže i postane ujednačeno; ne premijesite.' : isWholeWheat ? 'Mijesite umjereno i bez agresivnog rastezanja dok se tijesto ne poveže i razvije dovoljnu strukturu.' : 'Prebacite tijesto na radnu površinu i mijesite dlanovima 10–15 minuta dok površina ne postane glatka.'] : []),
         'Zamjes je gotov kada je tijesto glatko, elastično i homogeno.',
-        !isGlutenFree && hand ? 'Pokrijte tijesto i ostavite ga 15 minuta da se gluten opusti.' : hand ? 'Ostavite tijesto da odmori 5–6 minuta.' : 'Ostavite tijesto da odmori 5–6 minuta u posudi miksera.',
+        !isGlutenFree && hand ? `Pokrijte tijesto i ostavite ga ${napolitanaMixRestMinutes} minuta da se gluten opusti.` : hand ? `Ostavite tijesto da odmori ${napolitanaMixRestMinutes} minuta.` : `Ostavite tijesto da odmori ${napolitanaMixRestMinutes} minuta u posudi miksera.`,
       ],
-      timers: [timer(hand && !isGlutenFree ? 'post-mix-rest15m' : 'post-mix-rest', (hand && !isGlutenFree ? 15 : 5) * 60, 'rest')],
+      timers: [timer(hand && !isGlutenFree ? 'post-mix-rest15m' : 'post-mix-rest', napolitanaMixRestMinutes * 60, 'rest')],
     },
     {
       title: isRomanTeglia && isGlutenFree ? 'Faza B: Kratki odmor' : isRomanTeglia ? 'Faza B: Fermentacija i preklapanje' : isGlutenFree ? 'Faza B: Kratki odmor' : hasPreferment ? 'Faza C: Bulk fermentacija i foldovi' : 'Faza B: Bulk fermentacija i foldovi',
@@ -1730,6 +1741,8 @@ function getDetailedDirectSteps(
         ? 'Bezglutenska Teglia ne radi Stretch & Fold. Ostavite smjesu 15 minuta da psyllium poveže strukturu prije utiskivanja u tepsiju.'
         : isRomanTeglia
         ? 'Teglia koristi vlažnije tijesto koje ostaje kao jedna masa. Napravite dva nježna Stretch & Fold preklapanja u posudi prije hladne fermentacije.'
+        : isNapolitana && !isGlutenFree
+        ? `Završna fermentacija počinje nakon završetka zamjesa i ukupno traje ${napolitanaRoomMinutes} minuta prema korisničkom odabiru: početni odmor ${firstBulkRestMinutes} minuta, odmor između preklapanja ${secondBulkRestMinutes} minuta i završni odmor ${finalBulkRestMinutes} minuta prije podjele na kugle. Biga ili Poolish fermentiraju se zasebno.`
         : isWholeWheat
         ? `Integralno tijesto ima slabiju elastičnost i lakše se lomi, pa budite vrlo nježni sa Stretch & Fold. Ponavljajte je ukupno 3 puta svakih približno ${bulkRestMinutes} minuta, bez agresivnih pokreta.`
         : isSpelt
@@ -1752,11 +1765,11 @@ function getDetailedDirectSteps(
         `Pokrijte posudu i ostavite smjesu 15 minuta na sobnoj temperaturi da se kratko opusti prije dijeljenja.`,
       ] : [
         'Lagano nauljite fermentacijsku posudu i prebacite tijesto u nju.',
-        `Pokrijte posudu i ostavite tijesto ${bulkRestMinutes} minuta na sobnoj temperaturi.`,
+        `Pokrijte posudu i ostavite tijesto ${firstBulkRestMinutes} minuta na sobnoj temperaturi.`,
         'Napravite prvi Stretch & Fold.',
-        `Ostavite tijesto ponovno ${bulkRestMinutes} minuta.`,
+        `Ostavite tijesto ponovno ${secondBulkRestMinutes} minuta.`,
         'Napravite drugi Stretch & Fold.',
-        `Ostavite završni bulk još ${bulkRestMinutes} minuta na sobnoj temperaturi.`,
+        `Ostavite završni bulk još ${finalBulkRestMinutes} minuta na sobnoj temperaturi.`,
         'Provjerite jesu li vidljivi prvi znakovi fermentacije.',
       ],
       timers: isRomanTeglia && isGlutenFree
@@ -1766,9 +1779,9 @@ function getDetailedDirectSteps(
         : isGlutenFree
         ? [timer('gluten-free-short-rest', 15 * 60, 'rt')]
         : [
-            timer('bulk-rest-1', bulkRestMinutes * 60, 'rt'),
-            timer('bulk-rest-2', bulkRestMinutes * 60, 'rt'),
-            timer('bulk-final', bulkRestMinutes * 60, 'rt'),
+          timer('bulk-rest-1', firstBulkRestMinutes * 60, 'rt'),
+          timer('bulk-rest-2', secondBulkRestMinutes * 60, 'rt'),
+          timer('bulk-final', finalBulkRestMinutes * 60, 'rt'),
           ],
     },
     {
