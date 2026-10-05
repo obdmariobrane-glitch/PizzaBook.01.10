@@ -86,17 +86,49 @@ export async function getPermissionState(): Promise<{ status: string; canAskAgai
   }
 }
 
-export async function scheduleLocal(title: string, body: string, seconds: number): Promise<string | null> {
+export async function requestNotificationPermissions(): Promise<boolean> {
+  if (!mod) return false;
+  try {
+    const { status } = await mod.requestPermissionsAsync();
+    return status === 'granted';
+  } catch {
+    return false;
+  }
+}
+
+export async function scheduleLocal(title: string, body: string, seconds: number, data?: Record<string, string>): Promise<string | null> {
   if (!mod) return null;
   try {
+    const delaySeconds = Math.max(1, Math.ceil(seconds));
     const id = await mod.scheduleNotificationAsync({
-      content: { title, body, sound: 'default' },
-      trigger: { seconds, channelId: 'default' } as any,
+      content: { title, body, sound: 'default', channelId: 'default', ...(data ? { data } : {}) },
+      trigger: {
+        type: mod.SchedulableTriggerInputTypes?.TIME_INTERVAL ?? 'timeInterval',
+        seconds: delaySeconds,
+        repeats: false,
+      },
     });
     return id ?? null;
   } catch {
     return null;
   }
+}
+
+export async function cancelPlannerNotificationsForMethods(methods: readonly string[]): Promise<void> {
+  if (!mod || methods.length === 0) return;
+  try {
+    const scheduled = await mod.getAllScheduledNotificationsAsync();
+    const cancellations = scheduled
+      .filter((request: any) => {
+        const content = request.content ?? {};
+        const data = content.data ?? {};
+        const taggedPlannerMethod = data.source === 'pizza-planner' && methods.includes(data.method);
+        const legacyPlannerAlarm = !data.source && typeof content.title === 'string' && content.title.startsWith('🍕 ');
+        return taggedPlannerMethod || legacyPlannerAlarm;
+      })
+      .map((request: any) => mod.cancelScheduledNotificationAsync(request.identifier));
+    await Promise.all(cancellations);
+  } catch {}
 }
 
 export async function cancelLocal(id: string) {

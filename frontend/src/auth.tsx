@@ -50,6 +50,7 @@ type Ctx = {
   user: User | null; loading: boolean;
   signInWithSessionId: (sid: string) => Promise<void>;
   logout: () => Promise<void>;
+  deleteAccount: () => Promise<void>;
   refresh: () => Promise<void>;
   updateProfile: (patch: Partial<User>) => Promise<void>;
 };
@@ -58,6 +59,7 @@ const AuthContext = createContext<Ctx>({} as any);
 export const useAuth = () => useContext(AuthContext);
 
 const processedIds = new Set<string>();
+const processingIds = new Set<string>();
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -73,16 +75,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signInWithSessionId = useCallback(async (sid: string) => {
-    if (processedIds.has(sid)) return;
-    processedIds.add(sid);
-    const r = await api('/api/auth/session', { method: 'POST', body: JSON.stringify({ session_id: sid }) });
-    inMemoryToken = r.session_token;
-    await storage.set('session_token', r.session_token);
-    setUser(r.user);
+    if (processedIds.has(sid) || processingIds.has(sid)) return;
+    processingIds.add(sid);
+    try {
+      const r = await api('/api/auth/session', { method: 'POST', body: JSON.stringify({ session_id: sid }) });
+      processedIds.add(sid);
+      inMemoryToken = r.session_token;
+      await storage.set('session_token', r.session_token);
+      setUser(r.user);
+    } finally {
+      processingIds.delete(sid);
+    }
   }, []);
 
   const logout = useCallback(async () => {
     try { await api('/api/logout', { method: 'POST' }); } catch {}
+    inMemoryToken = null;
+    await storage.del('session_token');
+    setUser(null);
+  }, []);
+
+  const deleteAccount = useCallback(async () => {
+    await api('/api/account', { method: 'DELETE' });
     inMemoryToken = null;
     await storage.del('session_token');
     setUser(null);
@@ -105,7 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refresh]);
 
   return (
-    <AuthContext.Provider value={{ user, loading, signInWithSessionId, logout, refresh, updateProfile }}>
+    <AuthContext.Provider value={{ user, loading, signInWithSessionId, logout, deleteAccount, refresh, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

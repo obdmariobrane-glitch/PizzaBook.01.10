@@ -91,7 +91,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Koristi osnovni postupak bez posebnog ogranicenja.
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
@@ -111,7 +111,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Koristi osnovni postupak bez posebnog ogranicenja.
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
@@ -211,7 +211,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte snaznije; koristite cvrsce Stretch & Fold preklape i vecu sposobnost drzanja hidratacije.
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
@@ -231,7 +231,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte snaznije; koristite cvrsce Stretch & Fold preklape i vecu sposobnost drzanja hidratacije.
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
@@ -253,7 +253,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 5. Dodajte sol kao zaseban korak.
 6. Postupno dodajte preostalu vodu.
 7. Dodajte izracunatu kolicinu ulja ili masti.
-8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
+8. Mijesite kratko i njezno, samo dok se tijesto ne poveze i postane ujednaceno; ne premijesite.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
 10. Oblikujte pojedinacne kugle prema odabranom promjeru.
 11. Otvorite kuglu pritiskanjem od sredine prema rubu.
@@ -293,7 +293,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 5. Prebacite Bigu u hladnjak na 16 sati. Ukupno: 24 sata.
 6. Bigu natrgajte i dodajte preostalu vodu, brasno, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte krace i njeznije; ne opterecujte strukturu i ne rastezite agresivno.
-8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
+8. Mijesite kratko i njezno, samo dok se tijesto ne poveze i postane ujednaceno; ne premijesite.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
 10. Oblikujte pojedinacne kugle prema odabranom promjeru.
 11. Otvorite kuglu pritiskanjem od sredine prema rubu.
@@ -331,9 +331,9 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte krace i njeznije; ne opterecujte strukturu i ne rastezite agresivno.
-8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
+8. Mijesite kratko i njezno, samo dok se tijesto ne poveze i postane ujednaceno; ne premijesite.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
 10. Oblikujte pojedinacne kugle prema odabranom promjeru.
 11. Otvorite kuglu pritiskanjem od sredine prema rubu.
@@ -351,7 +351,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte krace i njeznije; ne opterecujte strukturu i ne rastezite agresivno.
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
@@ -451,7 +451,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte krace i njeznije; mekinje brze upijaju vodu, a baza ostaje manje prozracna.
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
@@ -471,7 +471,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte krace i njeznije; mekinje brze upijaju vodu, a baza ostaje manje prozracna.
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
@@ -571,7 +571,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Koristi isti postupak kao Tipo 00; hidratacija se racuna prema odabranoj mjesavini.
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
@@ -591,7 +591,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Koristi isti postupak kao Tipo 00; hidratacija se racuna prema odabranoj mjesavini.
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
@@ -731,7 +731,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Koristi osnovni postupak bez posebnog ogranicenja.
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
@@ -751,7 +751,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Koristi osnovni postupak bez posebnog ogranicenja.
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
@@ -851,7 +851,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte snaznije; koristite cvrsce Stretch & Fold preklape i vecu sposobnost drzanja hidratacije.
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
@@ -871,7 +871,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte snaznije; koristite cvrsce Stretch & Fold preklape i vecu sposobnost drzanja hidratacije.
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
@@ -893,7 +893,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 5. Dodajte sol kao zaseban korak.
 6. Postupno dodajte preostalu vodu.
 7. Dodajte izracunatu kolicinu ulja ili masti.
-8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
+8. Mijesite kratko i njezno, samo dok se tijesto ne poveze i postane ujednaceno; ne premijesite.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
 10. Oblikujte pojedinacne cvrste kugle, priblizno 200-220 g.
 11. Nakon fermentacije otvorite kuglu u tanku i ravnu Romanu Tonda.
@@ -933,7 +933,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 5. Prebacite Bigu u hladnjak na 16 sati. Ukupno: 24 sata.
 6. Bigu natrgajte i dodajte preostalu vodu, brasno, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte krace i njeznije; ne opterecujte strukturu i ne rastezite agresivno.
-8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
+8. Mijesite kratko i njezno, samo dok se tijesto ne poveze i postane ujednaceno; ne premijesite.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
 10. Oblikujte pojedinacne cvrste kugle, priblizno 200-220 g.
 11. Nakon fermentacije otvorite kuglu u tanku i ravnu Romanu Tonda.
@@ -971,9 +971,9 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte krace i njeznije; ne opterecujte strukturu i ne rastezite agresivno.
-8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
+8. Mijesite kratko i njezno, samo dok se tijesto ne poveze i postane ujednaceno; ne premijesite.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
 10. Oblikujte pojedinacne cvrste kugle, priblizno 200-220 g.
 11. Nakon fermentacije otvorite kuglu u tanku i ravnu Romanu Tonda.
@@ -991,7 +991,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte krace i njeznije; ne opterecujte strukturu i ne rastezite agresivno.
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
@@ -1091,7 +1091,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte krace i njeznije; mekinje brze upijaju vodu, a baza ostaje manje prozracna.
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
@@ -1111,7 +1111,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte krace i njeznije; mekinje brze upijaju vodu, a baza ostaje manje prozracna.
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
@@ -1211,7 +1211,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Koristi isti postupak kao Tipo 00; hidratacija se racuna prema odabranoj mjesavini.
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
@@ -1231,7 +1231,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Koristi isti postupak kao Tipo 00; hidratacija se racuna prema odabranoj mjesavini.
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
@@ -1295,7 +1295,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 7. Dodajte izracunatu kolicinu ulja ili masti.
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1316,7 +1316,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 7. Dodajte izracunatu kolicinu ulja ili masti.
 8. Mijesajte u posudi dok se tijesto ne poveze i postane glatko.
 9. Ostavite tijesto 5 minuta u posudi miksera.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1337,7 +1337,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Koristi osnovni postupak bez posebnog ogranicenja.
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1358,7 +1358,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Koristi osnovni postupak bez posebnog ogranicenja.
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1375,11 +1375,11 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Koristi osnovni postupak bez posebnog ogranicenja.
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1396,11 +1396,11 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Koristi osnovni postupak bez posebnog ogranicenja.
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1421,7 +1421,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 7. Dodajte izracunatu kolicinu ulja ili masti.
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1442,7 +1442,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 7. Dodajte izracunatu kolicinu ulja ili masti.
 8. Mijesajte u posudi dok se tijesto ne poveze i postane glatko.
 9. Ostavite tijesto 5 minuta u posudi miksera.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1463,7 +1463,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte snaznije; koristite cvrsce Stretch & Fold preklape i vecu sposobnost drzanja hidratacije.
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1484,7 +1484,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte snaznije; koristite cvrsce Stretch & Fold preklape i vecu sposobnost drzanja hidratacije.
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1501,11 +1501,11 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte snaznije; koristite cvrsce Stretch & Fold preklape i vecu sposobnost drzanja hidratacije.
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1522,11 +1522,11 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte snaznije; koristite cvrsce Stretch & Fold preklape i vecu sposobnost drzanja hidratacije.
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1545,9 +1545,9 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 5. Dodajte sol kao zaseban korak.
 6. Postupno dodajte preostalu vodu.
 7. Dodajte izracunatu kolicinu ulja ili masti.
-8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
+8. Mijesite kratko i njezno, samo dok se tijesto ne poveze i postane ujednaceno; ne premijesite.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1568,7 +1568,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 7. Dodajte izracunatu kolicinu ulja ili masti.
 8. Mijesajte u posudi dok se tijesto ne poveze i postane glatko.
 9. Ostavite tijesto 5 minuta u posudi miksera.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1587,9 +1587,9 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 5. Prebacite Bigu u hladnjak na 16 sati. Ukupno: 24 sata.
 6. Bigu natrgajte i dodajte preostalu vodu, brasno, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte krace i njeznije; ne opterecujte strukturu i ne rastezite agresivno.
-8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
+8. Mijesite kratko i njezno, samo dok se tijesto ne poveze i postane ujednaceno; ne premijesite.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1610,7 +1610,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte krace i njeznije; ne opterecujte strukturu i ne rastezite agresivno.
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1627,11 +1627,11 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte krace i njeznije; ne opterecujte strukturu i ne rastezite agresivno.
-8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
+8. Mijesite kratko i njezno, samo dok se tijesto ne poveze i postane ujednaceno; ne premijesite.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1648,11 +1648,11 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte krace i njeznije; ne opterecujte strukturu i ne rastezite agresivno.
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1673,7 +1673,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 7. Dodajte izracunatu kolicinu ulja ili masti.
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1694,7 +1694,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 7. Dodajte izracunatu kolicinu ulja ili masti.
 8. Mijesajte u posudi dok se tijesto ne poveze i postane glatko.
 9. Ostavite tijesto 5 minuta u posudi miksera.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1715,7 +1715,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte krace i njeznije; mekinje brze upijaju vodu, a baza ostaje manje prozracna.
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1736,7 +1736,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte krace i njeznije; mekinje brze upijaju vodu, a baza ostaje manje prozracna.
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1753,11 +1753,11 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte krace i njeznije; mekinje brze upijaju vodu, a baza ostaje manje prozracna.
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1774,11 +1774,11 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte krace i njeznije; mekinje brze upijaju vodu, a baza ostaje manje prozracna.
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1799,7 +1799,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 7. Dodajte izracunatu kolicinu ulja ili masti.
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1820,7 +1820,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 7. Dodajte izracunatu kolicinu ulja ili masti.
 8. Mijesajte u posudi dok se tijesto ne poveze i postane glatko.
 9. Ostavite tijesto 5 minuta u posudi miksera.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1841,7 +1841,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Koristi isti postupak kao Tipo 00; hidratacija se racuna prema odabranoj mjesavini.
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1862,7 +1862,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Koristi isti postupak kao Tipo 00; hidratacija se racuna prema odabranoj mjesavini.
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1879,11 +1879,11 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Koristi isti postupak kao Tipo 00; hidratacija se racuna prema odabranoj mjesavini.
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1900,11 +1900,11 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Koristi isti postupak kao Tipo 00; hidratacija se racuna prema odabranoj mjesavini.
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
 11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
@@ -1925,8 +1925,8 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 7. Obavezno dodajte psyllium u kolicini od 2% brasna.
 8. Mijesajte samo dok se smjesa ne poveze; ne razvijajte gluten.
 9. Ostavite smjesu 15 minuta da psyllium povuce vlagu.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
-11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
+11. Ne radite Stretch & Fold; ostavite smjesu 15 minuta da psyllium poveze strukturu.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
 14. Dodajte nadjev bez pretjerivanja s vlaznim sastojcima.
@@ -1946,8 +1946,8 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 7. Obavezno dodajte psyllium u kolicini od 2% brasna.
 8. Mijesajte samo dok se smjesa ne poveze; ne razvijajte gluten.
 9. Ostavite smjesu 15 minuta da psyllium povuce vlagu.
-10. Ne oblikujte kugle za Tondu; tijesto ostaje kao jedna masa.
-11. Napravite njezne Stretch & Fold preklape u posudi tijekom fermentacije.
+10. Ne oblikujte kugle; tijesto ostaje kao jedna masa.
+11. Ne radite Stretch & Fold; ostavite smjesu 15 minuta da psyllium poveze strukturu.
 12. Nakon hladne fermentacije zagrijte pecnicu na korisnicki unesenu temperaturu.
 13. Nauljite tepsiju prema unesenim dimenzijama i utisnite cijelu masu do rubova.
 14. Dodajte nadjev bez pretjerivanja s vlaznim sastojcima.
@@ -1968,7 +1968,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -1987,7 +1987,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 8. Mijesajte u posudi dok se tijesto ne poveze i postane glatko.
 9. Ostavite tijesto 5 minuta u posudi miksera.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2006,7 +2006,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2025,7 +2025,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2039,12 +2039,12 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Koristi osnovni postupak bez posebnog ogranicenja.
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2058,12 +2058,12 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Koristi osnovni postupak bez posebnog ogranicenja.
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2082,7 +2082,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2101,7 +2101,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 8. Mijesajte u posudi dok se tijesto ne poveze i postane glatko.
 9. Ostavite tijesto 5 minuta u posudi miksera.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2120,7 +2120,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2139,7 +2139,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2153,12 +2153,12 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte snaznije; koristite cvrsce Stretch & Fold preklape i vecu sposobnost drzanja hidratacije.
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2172,12 +2172,12 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte snaznije; koristite cvrsce Stretch & Fold preklape i vecu sposobnost drzanja hidratacije.
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2193,10 +2193,10 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 5. Dodajte sol kao zaseban korak.
 6. Postupno dodajte preostalu vodu.
 7. Dodajte izracunatu kolicinu ulja ili masti.
-8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
+8. Mijesite kratko i njezno, samo dok se tijesto ne poveze i postane ujednaceno; ne premijesite.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2215,7 +2215,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 8. Mijesajte u posudi dok se tijesto ne poveze i postane glatko.
 9. Ostavite tijesto 5 minuta u posudi miksera.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2231,10 +2231,10 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 5. Prebacite Bigu u hladnjak na 16 sati. Ukupno: 24 sata.
 6. Bigu natrgajte i dodajte preostalu vodu, brasno, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte krace i njeznije; ne opterecujte strukturu i ne rastezite agresivno.
-8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
+8. Mijesite kratko i njezno, samo dok se tijesto ne poveze i postane ujednaceno; ne premijesite.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2253,7 +2253,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2267,12 +2267,12 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte krace i njeznije; ne opterecujte strukturu i ne rastezite agresivno.
-8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
+8. Mijesite kratko i njezno, samo dok se tijesto ne poveze i postane ujednaceno; ne premijesite.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2286,12 +2286,12 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte krace i njeznije; ne opterecujte strukturu i ne rastezite agresivno.
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2310,7 +2310,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2329,7 +2329,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 8. Mijesajte u posudi dok se tijesto ne poveze i postane glatko.
 9. Ostavite tijesto 5 minuta u posudi miksera.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2348,7 +2348,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2367,7 +2367,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2381,12 +2381,12 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte krace i njeznije; mekinje brze upijaju vodu, a baza ostaje manje prozracna.
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2400,12 +2400,12 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Mijesajte krace i njeznije; mekinje brze upijaju vodu, a baza ostaje manje prozracna.
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2424,7 +2424,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2443,7 +2443,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 8. Mijesajte u posudi dok se tijesto ne poveze i postane glatko.
 9. Ostavite tijesto 5 minuta u posudi miksera.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2462,7 +2462,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2481,7 +2481,7 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2495,12 +2495,12 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Koristi isti postupak kao Tipo 00; hidratacija se racuna prema odabranoj mjesavini.
 8. Prebacite tijesto na radnu povrsinu i mijesite dlanovima 10-15 minuta.
 9. Pokrijte tijesto i ostavite ga 15 minuta.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 
@@ -2514,12 +2514,12 @@ Ovaj dokument je generiran za rucnu provjeru. Svaka kombinacija ima zasebno pogl
 3. Otopite kvasac u vodi i dodajte brasno.
 4. Promijesajte do glatke tekuce smjese.
 5. Ostavite Poolish prema odabranom vremenu fermentacije.
-6. Hladni Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
+6. Nakon fermentacije Poolish prebacite u posudu i dodajte preostalo brasno, vodu, sol i ulje.
 7. Izracunate kolicine: brasno [g], voda [g], sol [g], kvasac [g], ulje ili mast [g]. Koristi isti postupak kao Tipo 00; hidratacija se racuna prema odabranoj mjesavini.
 8. Mijesajte u mikseru dok se tijesto ne poveze.
 9. Ostavite tijesto 5 minuta u posudi miksera.
 10. Oblikujte vece kugle, priblizno 350-400 g.
-11. Otvorite kuglu tako da centar ostane tanak, a rub mekan i izrazen.
+11. Otvorite kuglu tako da centar ostane tanak, a rub ostane mekan i blago izrazen.
 12. Ravnomjerno dodajte suhu mozzarellu, umak i dodatke.
 13. Pecite prema odabranoj pecnici dok rub ne bude zlatan i sredina savitljiva.
 

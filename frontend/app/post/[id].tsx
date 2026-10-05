@@ -1,25 +1,37 @@
-import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, Platform, KeyboardAvoidingView } from 'react-native';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { Alert, View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, Platform, KeyboardAvoidingView, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Image } from 'expo-image';
 import Icon from '@react-native-vector-icons/ionicons';
 
 import { api, fileUrl, useAuth } from '../../src/auth';
 import { useT } from '../../src/i18n/LanguageProvider';
 import { COLORS, SPACING, RADIUS } from '../../src/theme';
+import { getCachedTemperatureUnit, subscribeTemperatureUnit, getCachedMeasurementSystem, subscribeMeasurementSystem } from '../../src/preferences';
+import { formatTemperature, formatWeight } from '../../src/units';
+import PizzaRatingSlider from '../../src/components/PizzaRatingSlider';
+import PostMedia from '../../src/components/PostMedia';
+import type { PostMediaSource } from '../../src/components/PostMedia';
 
 export default function PostDetail() {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { t } = useT();
+  const temperatureUnit = useSyncExternalStore(subscribeTemperatureUnit, getCachedTemperatureUnit, getCachedTemperatureUnit) ?? 'celsius';
+  const measurementSystem = useSyncExternalStore(subscribeMeasurementSystem, getCachedMeasurementSystem, getCachedMeasurementSystem) ?? 'metric';
   const { user } = useAuth();
 
   const [post, setPost] = useState<any>(null);
   const [comments, setComments] = useState<any[]>([]);
   const [text, setText] = useState('');
   const [posting, setPosting] = useState(false);
+  const [savingRecipe, setSavingRecipe] = useState(false);
+  const [recipeSaved, setRecipeSaved] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [activeMediaIndex, setActiveMediaIndex] = useState(0);
+  const mediaScrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -39,6 +51,75 @@ export default function PostDetail() {
     } catch {} finally { setPosting(false); }
   };
 
+  const saveRecipe = async () => {
+    if (!post?.recipe) return;
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    setSavingRecipe(true);
+    try {
+      await api('/api/recipes', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: post.recipe.name || `${post.author_name} · ${post.recipe.method || 'recept'}`,
+          recipe: {
+            ...post.recipe,
+            settings: post.recipe.settings || null,
+          },
+        }),
+      });
+      setRecipeSaved(true);
+    } catch {} finally {
+      setSavingRecipe(false);
+    }
+  };
+
+  const confirmDelete = () => {
+    if (!user || user.user_id !== post?.user_id || deleting) return;
+    Alert.alert(t.feed.deletePostTitle, t.feed.deletePostWarning, [
+      { text: t.common.cancel, style: 'cancel' },
+      {
+        text: t.feed.deletePost,
+        style: 'destructive',
+        onPress: async () => {
+          setDeleting(true);
+          try {
+            await api(`/api/posts/${id}`, { method: 'DELETE' });
+            router.back();
+          } catch {
+            setDeleting(false);
+            Alert.alert(t.feed.deletePostError);
+          }
+        },
+      },
+    ]);
+  };
+
+  const report = (targetType: 'post' | 'comment', targetId: string) => {
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    Alert.alert(t.profile.report, '', [
+      { text: t.common.cancel, style: 'cancel' },
+      {
+        text: t.profile.report,
+        onPress: async () => {
+          try {
+            await api('/api/reports', {
+              method: 'POST',
+              body: JSON.stringify({ target_type: targetType, target_id: targetId, reason: t.legal.report.violationReason }),
+            });
+            Alert.alert(t.profile.reportSent);
+          } catch {
+            Alert.alert(t.legal.errorTitle, t.legal.report.error);
+          }
+        },
+      },
+    ]);
+  };
+
   const onLike = async () => {
     if (!post) return;
     try {
@@ -52,17 +133,76 @@ export default function PostDetail() {
   }
 
   const liked = user && post.likes?.includes(user.user_id);
+  const media: PostMediaSource[] = post.media_urls?.length
+    ? post.media_urls.map((item: { type: 'image' | 'video'; url: string }) => ({ type: item.type, uri: fileUrl(item.url) }))
+    : post.image_url ? [{ type: 'image', uri: fileUrl(post.image_url) }] : [];
+  const gallerySize = Math.min(windowWidth, 720);
+  const goToMedia = (index: number) => {
+    const nextIndex = Math.max(0, Math.min(media.length - 1, index));
+    setActiveMediaIndex(nextIndex);
+    mediaScrollRef.current?.scrollTo({ x: nextIndex * gallerySize, animated: true });
+  };
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.root}>
-      <View style={[styles.header, { paddingTop: insets.top + SPACING.sm }]}>
+        <View style={[styles.header, { paddingTop: insets.top + SPACING.sm }]}>
         <Pressable onPress={() => router.back()}><Icon name="chevron-back" size={26} color={COLORS.onSurface} /></Pressable>
         <Text style={styles.headerTitle}>{post.author_name}</Text>
-        <View style={{ width: 26 }} />
+          {user?.user_id === post.user_id ? (
+            <Pressable testID="delete-post" onPress={confirmDelete} hitSlop={8} disabled={deleting}>
+              <Icon name="trash-outline" size={22} color={COLORS.error} />
+            </Pressable>
+          ) : (
+            <Pressable onPress={() => report('post', post.post_id)} hitSlop={8}>
+              <Icon name="flag-outline" size={22} color={COLORS.error} />
+            </Pressable>
+          )}
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: SPACING.xxxl }} keyboardShouldPersistTaps="handled">
-        {post.image_url ? (
-          <Image source={{ uri: fileUrl(post.image_url) }} style={styles.image} contentFit="cover" />
+        {media.length ? (
+          <View style={[styles.galleryFrame, { width: gallerySize, height: gallerySize }]}>
+          <ScrollView
+            ref={mediaScrollRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            style={[styles.mediaGallery, { width: gallerySize, height: gallerySize }]}
+            onMomentumScrollEnd={(event) => {
+              setActiveMediaIndex(Math.round(event.nativeEvent.contentOffset.x / gallerySize));
+            }}
+          >
+            {media.map((item, index) => (
+              <View key={`${item.uri}-${index}`} style={[styles.mediaSlide, { width: gallerySize, height: gallerySize }]}>
+                <PostMedia source={item} style={styles.image} />
+              </View>
+            ))}
+          </ScrollView>
+          {media.length > 1 ? (
+            <>
+              <Pressable
+                accessibilityLabel="Prethodna slika"
+                onPress={() => goToMedia(activeMediaIndex - 1)}
+                disabled={activeMediaIndex === 0}
+                style={[styles.galleryArrow, styles.galleryArrowLeft, activeMediaIndex === 0 && styles.galleryArrowDisabled]}
+              >
+                <Icon name="chevron-back" size={24} color="#fff" />
+              </Pressable>
+              <Pressable
+                accessibilityLabel="Sljedeća slika"
+                onPress={() => goToMedia(activeMediaIndex + 1)}
+                disabled={activeMediaIndex === media.length - 1}
+                style={[styles.galleryArrow, styles.galleryArrowRight, activeMediaIndex === media.length - 1 && styles.galleryArrowDisabled]}
+              >
+                <Icon name="chevron-forward" size={24} color="#fff" />
+              </Pressable>
+              <View style={styles.galleryDots}>
+                {media.map((item, index) => (
+                  <View key={`${item.uri}-dot-${index}`} style={[styles.galleryDot, index === activeMediaIndex && styles.galleryDotActive]} />
+                ))}
+              </View>
+            </>
+          ) : null}
+          </View>
         ) : null}
         <View style={styles.body}>
           <Text style={styles.caption}>{post.caption}</Text>
@@ -83,9 +223,13 @@ export default function PostDetail() {
               {post.recipe.style_id && t.calc.pizzaStyles[post.recipe.style_id as keyof typeof t.calc.pizzaStyles] ? <RecipeLine label={t.calc.pizzaStyle} value={t.calc.pizzaStyles[post.recipe.style_id as keyof typeof t.calc.pizzaStyles].name} /> : null}
               {post.recipe.hydration ? <RecipeLine label={t.feed.hydration} value={`${post.recipe.hydration}%`} /> : null}
               {post.recipe.method ? <RecipeLine label={t.feed.method} value={post.recipe.method} /> : null}
-              {post.recipe.dough_weight ? <RecipeLine label={t.calc.doughBall} value={`${post.recipe.dough_weight} g`} /> : null}
+              {post.recipe.dough_weight ? <RecipeLine label={t.calc.doughBall} value={formatWeight(post.recipe.dough_weight, measurementSystem)} /> : null}
               {post.recipe.flour_type ? <RecipeLine label={t.feed.flourType} value={post.recipe.flour_type} /> : null}
-              {post.recipe.bake_temp ? <RecipeLine label={t.feed.bakeTemp} value={`${post.recipe.bake_temp}°C`} /> : null}
+              {post.recipe.bake_temp ? <RecipeLine label={t.feed.bakeTemp} value={formatTemperature(post.recipe.bake_temp, temperatureUnit)} /> : null}
+              <Pressable testID="save-shared-recipe" onPress={() => { void saveRecipe(); }} disabled={savingRecipe || recipeSaved} style={[styles.saveRecipeBtn, (savingRecipe || recipeSaved) && { opacity: 0.65 }]}>
+                <Icon name={recipeSaved ? 'checkmark' : 'bookmark-outline'} size={17} color={COLORS.brand} />
+                <Text style={styles.saveRecipeText}>{recipeSaved ? t.calc.savedRecipes : t.calc.saveRecipe}</Text>
+              </Pressable>
             </View>
           ) : null}
 
@@ -99,6 +243,9 @@ export default function PostDetail() {
                 <Text style={styles.commentName}>{c.author_name}</Text>
                 <Text style={styles.commentText}>{c.text}</Text>
               </View>
+              <Pressable onPress={() => report('comment', c.comment_id)} hitSlop={8}>
+                <Icon name="flag-outline" size={18} color={COLORS.muted} />
+              </Pressable>
             </View>
           ))}
         </View>
@@ -134,30 +281,28 @@ function RatingSection({ post, onUpdate }: { post: any; onUpdate: (p: any) => vo
   const { user } = useAuth();
   const { t } = useT();
   const isAuthor = user?.user_id === post.user_id;
-  const rating = post.rating || 0;
+  const canRate = !!user && !isAuthor;
+  const communityRating = post.rating || 0;
+  const [draftRating, setDraftRating] = useState(() => post.viewer_rating || 0);
 
-  const setRating = async (n: number) => {
-    if (!isAuthor) return;
-    const newVal = rating === n ? 0 : n;
-    if (newVal < 1) return; // can't unset to 0 via API; keep min 1
+  const saveRating = async (n: number) => {
+    if (!canRate) return;
     try {
-      await api(`/api/posts/${post.post_id}/rating`, { method: 'POST', body: JSON.stringify({ rating: n }) });
-      onUpdate({ ...post, rating: n });
+      const result = await api(`/api/posts/${post.post_id}/rating`, { method: 'POST', body: JSON.stringify({ rating: n }) });
+      onUpdate({ ...post, rating: result.rating, ratings_count: result.ratings_count, viewer_rating: result.viewer_rating });
     } catch {}
   };
 
-  if (!isAuthor && !rating) return null;
+  if (!communityRating && !canRate) return null;
 
   return (
     <View style={styles.ratingCard}>
-      <Text style={styles.ratingTitle}>{isAuthor ? t.feed.rateYourPizza : t.feed.rating}</Text>
-      <View style={styles.starsRow}>
-        {[1,2,3,4,5].map(n => (
-          <Pressable key={n} testID={`detail-star-${n}`} onPress={() => setRating(n)} disabled={!isAuthor} style={styles.starBtn}>
-            <Icon name={n <= rating ? 'star' : 'star-outline'} size={28} color={COLORS.brand} />
-          </Pressable>
-        ))}
-      </View>
+      <Text style={styles.ratingTitle}>{t.feed.rating}</Text>
+      {canRate ? (
+        <PizzaRatingSlider value={draftRating} onChange={setDraftRating} onChangeEnd={saveRating} testID="pizza-rating-slider" />
+      ) : (
+        <Text style={styles.ratingSummary}>{communityRating}/5 · {post.ratings_count || 0}</Text>
+      )}
     </View>
   );
 }
@@ -166,7 +311,17 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.surface },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.lg, paddingBottom: SPACING.md, backgroundColor: COLORS.surfaceSecondary, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   headerTitle: { fontSize: 17, fontWeight: '700', color: COLORS.onSurface },
-  image: { width: '100%', aspectRatio: 1 },
+  galleryFrame: { alignSelf: 'center', position: 'relative', backgroundColor: COLORS.surfaceTertiary },
+  image: { width: '100%', height: '100%' },
+  mediaGallery: { alignSelf: 'center' },
+  mediaSlide: { flexGrow: 0, backgroundColor: COLORS.surfaceTertiary },
+  galleryArrow: { position: 'absolute', top: '50%', marginTop: -22, width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(28,25,23,0.72)', alignItems: 'center', justifyContent: 'center' },
+  galleryArrowLeft: { left: SPACING.md },
+  galleryArrowRight: { right: SPACING.md },
+  galleryArrowDisabled: { opacity: 0.25 },
+  galleryDots: { position: 'absolute', bottom: SPACING.md, left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', gap: 6 },
+  galleryDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.55)' },
+  galleryDotActive: { width: 18, backgroundColor: '#fff' },
   body: { padding: SPACING.lg },
   caption: { fontSize: 16, color: COLORS.onSurface, lineHeight: 22 },
   actions: { flexDirection: 'row', gap: SPACING.xl, marginTop: SPACING.md, paddingBottom: SPACING.md, borderBottomWidth: 1, borderBottomColor: COLORS.divider },
@@ -177,10 +332,11 @@ const styles = StyleSheet.create({
   recipeLine: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
   recipeLabel: { color: COLORS.onBrandTertiary, fontSize: 13 },
   recipeValue: { color: COLORS.onSurface, fontSize: 14, fontWeight: '700' },
+  saveRecipeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.sm, marginTop: SPACING.md, paddingVertical: 11, borderRadius: RADIUS.md, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.brand },
+  saveRecipeText: { color: COLORS.brand, fontSize: 13, fontWeight: '700' },
   ratingCard: { marginTop: SPACING.md, backgroundColor: COLORS.surfaceSecondary, borderRadius: RADIUS.lg, padding: SPACING.lg, borderWidth: 1, borderColor: COLORS.border, alignItems: 'flex-start', gap: SPACING.sm },
   ratingTitle: { fontSize: 13, color: COLORS.muted, fontWeight: '700', textTransform: 'uppercase' },
-  starsRow: { flexDirection: 'row', gap: 6 },
-  starBtn: { padding: 2 },
+  ratingSummary: { color: COLORS.brand, fontSize: 17, fontWeight: '800' },
   section: { fontSize: 13, color: COLORS.muted, fontWeight: '700', textTransform: 'uppercase' },
   comment: { flexDirection: 'row', gap: SPACING.md, paddingVertical: SPACING.md, borderBottomWidth: 1, borderBottomColor: COLORS.divider },
   commentAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.brandTertiary, alignItems: 'center', justifyContent: 'center' },

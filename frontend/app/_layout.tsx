@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Platform, View, Text, Pressable, ScrollView, Modal, ActivityIndicator, StyleSheet, LogBox, Alert } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import Constants from 'expo-constants';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -11,6 +12,9 @@ import { AuthProvider, useAuth, api } from '../src/auth';
 import { LanguageProvider, useT } from '../src/i18n/LanguageProvider';
 import { LANGS, Lang } from '../src/i18n/translations';
 import { COLORS } from '../src/theme';
+import AnimatedSplash from '../src/components/AnimatedSplash';
+import { getCachedExperienceLevel, loadExperienceLevel, subscribeExperienceLevel } from '../src/experienceLevel';
+import { loadTemperatureUnit, loadMeasurementSystem, loadPreferredYeastType } from '../src/preferences';
 import {
   setupHandlerAndChannel,
   addTapListener,
@@ -25,10 +29,42 @@ LogBox.ignoreAllLogs(true);
 // Module-scope setup (safe no-op if unsupported)
 setupHandlerAndChannel();
 
+const PUSH_INSTALLATION_ID_KEY = 'pushInstallationId';
+const UPDATE_ALERT_SHOWN_KEY = 'updateAlertShownVersion';
+
+async function getPushInstallationId() {
+  const stored = await AsyncStorage.getItem(PUSH_INSTALLATION_ID_KEY);
+  if (stored) return stored;
+  const generated = `install_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  await AsyncStorage.setItem(PUSH_INSTALLATION_ID_KEY, generated);
+  return generated;
+}
+
 function AuthGate() {
   const { user, loading, signInWithSessionId } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const [animationDone, setAnimationDone] = useState(Platform.OS === 'web');
+  const experienceLevel = useSyncExternalStore(subscribeExperienceLevel, getCachedExperienceLevel, getCachedExperienceLevel);
+
+  useEffect(() => {
+    loadExperienceLevel();
+    loadTemperatureUnit();
+    loadMeasurementSystem();
+    loadPreferredYeastType();
+  }, []);
+
+  const openUpdate = async (url: string) => {
+    try {
+      await WebBrowser.openBrowserAsync(url);
+    } catch {
+      try {
+        await Linking.openURL(url);
+      } catch {
+        Alert.alert('Preuzimanje nije uspjelo', 'Otvori update link ručno u browseru.');
+      }
+    }
+  };
 
   useEffect(() => {
     if (Platform.OS === 'web') return;
@@ -36,20 +72,28 @@ function AuthGate() {
     (async () => {
       try {
         const manifestUrl = Constants.expoConfig?.extra?.updateManifestUrl;
-        const update = manifestUrl
-          ? await fetch(manifestUrl).then((response) => response.ok ? response.json() : null)
-          : await api('/api/app-update');
+        const backendUpdate = await api('/api/app-update').catch(() => null);
+        let update = backendUpdate;
+        if (manifestUrl) {
+          const manifestUpdate = await fetch(manifestUrl)
+            .then((response) => response.ok ? response.json() : null)
+            .catch(() => null);
+          update = manifestUpdate || backendUpdate;
+        }
         const currentVersion = Constants.expoConfig?.version || '0.0.0';
         const currentVersionCode = Constants.expoConfig?.android?.versionCode || 0;
         const newerVersion = compareVersions(update?.version || '0.0.0', currentVersion) > 0;
         const newerBuild = Number(update?.version_code || 0) > currentVersionCode;
         if (cancelled || !update?.apk_url || (!newerVersion && !newerBuild)) return;
+        const updateKey = `${update.version || '0.0.0'}:${update.version_code || 0}`;
+        if (await AsyncStorage.getItem(UPDATE_ALERT_SHOWN_KEY) === updateKey) return;
+        await AsyncStorage.setItem(UPDATE_ALERT_SHOWN_KEY, updateKey);
         Alert.alert(
           'Pizzabook update',
           update.message || 'Dostupna je nova verzija Pizzabooka.',
           [
             { text: 'Kasnije', style: 'cancel' },
-            { text: 'Preuzmi update', onPress: () => { void Linking.openURL(update.apk_url); } },
+            { text: 'Preuzmi update', onPress: () => { void openUpdate(update.apk_url); } },
           ],
         );
       } catch {}
@@ -63,7 +107,7 @@ function AuthGate() {
       const url = typeof window !== 'undefined' ? window.location.href : '';
       const m = url.match(/[?#&]session_id=([^&#]+)/);
       if (m) {
-        signInWithSessionId(m[1]).finally(() => {
+        signInWithSessionId(decodeURIComponent(m[1])).finally(() => {
           try {
             const clean = window.location.origin + window.location.pathname;
             window.history.replaceState(window.history.state, '', clean);
@@ -77,13 +121,13 @@ function AuthGate() {
     const sub = Linking.addEventListener('url', (e) => {
       if (e?.url) stashed = e.url;
       const m = e?.url?.match(/[?#&]session_id=([^&#]+)/);
-      if (m) signInWithSessionId(m[1]);
+      if (m) signInWithSessionId(decodeURIComponent(m[1]));
     });
 
     Linking.getInitialURL().then((url) => {
       const src = url || stashed;
       const m = src?.match(/[?#&]session_id=([^&#]+)/);
-      if (m) signInWithSessionId(m[1]);
+      if (m) signInWithSessionId(decodeURIComponent(m[1]));
     });
 
     return () => sub.remove();
@@ -121,17 +165,20 @@ function AuthGate() {
     return () => { try { tapSub.remove(); } catch {} };
   }, [router]);
 
-  // Register push after login
+  // Register push for every installed device, then associate it with the user after login.
   useEffect(() => {
-    if (!user || Platform.OS === 'web' || !isPushSupported()) return;
+    if (Platform.OS === 'web' || !isPushSupported()) return;
     (async () => {
       const token = await requestAndGetDeviceToken();
       if (!token) return;
       try {
+        const installationId = await getPushInstallationId();
         await api('/api/register-push', {
           method: 'POST',
           body: JSON.stringify({
-            user_id: user.user_id,
+            user_id: user?.user_id ?? installationId,
+            installation_id: installationId,
+            anonymous: !user,
             platform: Platform.OS,
             device_token: token,
           }),
@@ -147,12 +194,23 @@ function AuthGate() {
     if (user && inAuth) router.replace('/(tabs)');
   }, [user, loading, segments, router]);
 
-  if (loading) {
-    return (
-      <View style={styles.splash}>
-        <ActivityIndicator size="large" color={COLORS.brand} />
-      </View>
-    );
+  // Onboarding gate: first launch (no saved experience level) must see it before the rest of the app.
+  useEffect(() => {
+    if (experienceLevel === undefined) return;
+    const inOnboarding = segments[0] === 'onboarding';
+    if (experienceLevel === null && !inOnboarding) router.replace('/onboarding');
+    else if (experienceLevel !== null && inOnboarding) router.replace('/(tabs)');
+  }, [experienceLevel, segments, router]);
+
+  if (loading || !animationDone || experienceLevel === undefined) {
+    if (Platform.OS === 'web') {
+      return (
+        <View style={styles.splash}>
+          <ActivityIndicator size="large" color={COLORS.brand} />
+        </View>
+      );
+    }
+    return <AnimatedSplash onFinish={() => setAnimationDone(true)} />;
   }
 
   return (

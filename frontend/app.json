@@ -2,7 +2,7 @@
   "expo": {
     "name": "Pizzabook",
     "slug": "pizzabook",
-    "version": "1.0.1",
+    "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "frontend",
@@ -12,10 +12,10 @@
       "bundleIdentifier": "com.emergent.doughtimer.ia80uq"
     },
     "android": {
-      "versionCode": 2,
+      "versionCode": 5,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#000000"
+        "backgroundColor": "#D15900"
       },
       "package": "com.emergent.doughtimer.ia80uq"
     },
@@ -42,7 +42,8 @@
       "expo-web-browser",
       "expo-status-bar",
       "@react-native-vector-icons/ionicons",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true

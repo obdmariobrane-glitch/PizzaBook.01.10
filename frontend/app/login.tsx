@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Platform, ActivityIndicator, ImageBackground } from 'react-native';
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
@@ -18,13 +17,15 @@ export default function Login() {
   const { signInWithSessionId } = useAuth();
   const insets = useSafeAreaInsets();
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const onLogin = async () => {
     setBusy(true);
+    setError(null);
     try {
       const redirectUrl = Platform.OS === 'web'
         ? window.location.origin + '/'
-        : Linking.createURL('');
+        : Linking.createURL('/', { scheme: 'frontend' });
       const authUrl = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
 
       if (Platform.OS === 'web') {
@@ -35,9 +36,13 @@ export default function Login() {
       const result: any = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
       const rawUrl: string = result?.url || (await Linking.getInitialURL()) || '';
       const m = rawUrl.match(/[?#&]session_id=([^&#]+)/);
-      if (m) await signInWithSessionId(m[1]);
+      if (!m) {
+        if (result?.type !== 'cancel') setError('Prijava nije dovršena. Pokušajte ponovno.');
+        return;
+      }
+      await signInWithSessionId(decodeURIComponent(m[1]));
     } catch (e) {
-      // silent
+      setError(e instanceof Error ? e.message : 'Prijava nije uspjela. Pokušajte ponovno.');
     } finally {
       setBusy(false);
     }
@@ -64,6 +69,7 @@ export default function Login() {
           <View style={styles.bottom}>
             <Text style={styles.title}>{t.login.title}</Text>
             <Text style={styles.subtitle}>{t.login.subtitle}</Text>
+            {error ? <Text style={styles.error}>{error}</Text> : null}
 
             <Pressable
               testID="google-login-button"
@@ -98,6 +104,7 @@ const styles = StyleSheet.create({
   bottom: {},
   title: { fontSize: 30, color: '#fff', fontWeight: '800', marginBottom: SPACING.md, letterSpacing: -0.5 },
   subtitle: { fontSize: 16, color: 'rgba(255,255,255,0.85)', lineHeight: 22, marginBottom: SPACING.xl },
+  error: { color: '#ffd7cc', fontSize: 14, lineHeight: 20, marginBottom: SPACING.md },
   btn: { flexDirection: 'row', gap: SPACING.md, backgroundColor: '#fff', paddingVertical: 16, borderRadius: RADIUS.lg, alignItems: 'center', justifyContent: 'center' },
   btnText: { color: COLORS.onSurface, fontSize: 16, fontWeight: '700' },
 });

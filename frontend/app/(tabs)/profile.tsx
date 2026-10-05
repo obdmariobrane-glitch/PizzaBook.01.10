@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ImageBackground } from 'react-native';
+import { Alert, View, Text, StyleSheet, ScrollView, Pressable, TextInput, ImageBackground } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -14,7 +14,7 @@ import { COLORS, SPACING, RADIUS } from '../../src/theme';
 export default function Profile() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, logout, updateProfile } = useAuth();
+  const { user, logout, deleteAccount, updateProfile } = useAuth();
   const { t, lang, setLang } = useT();
 
   const [edit, setEdit] = useState(false);
@@ -30,6 +30,44 @@ export default function Profile() {
       setEdit(false);
     } finally { setSaving(false); }
   };
+
+  const removeAccount = () => {
+    Alert.alert(t.profile.deleteAccountTitle, t.profile.deleteAccountWarning, [
+      { text: t.common.cancel, style: 'cancel' },
+      {
+        text: t.profile.deleteAccount,
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteAccount();
+          } catch {
+            Alert.alert(t.legal.errorTitle, t.legal.accountDeletion.error);
+          }
+        },
+      },
+    ]);
+  };
+
+  const legalLinks = (
+    <View style={styles.card}>
+      <Text style={styles.section}>{t.profile.settings}</Text>
+      <Pressable style={styles.linkRow} onPress={() => router.push('/privacy')}>
+        <Icon name="shield-checkmark-outline" size={20} color={COLORS.brand} />
+        <Text style={styles.linkText}>{t.profile.privacyPolicy}</Text>
+        <Icon name="chevron-forward" size={18} color={COLORS.muted} />
+      </Pressable>
+      <Pressable style={styles.linkRow} onPress={() => router.push('/terms')}>
+        <Icon name="document-text-outline" size={20} color={COLORS.brand} />
+        <Text style={styles.linkText}>{t.profile.terms}</Text>
+        <Icon name="chevron-forward" size={18} color={COLORS.muted} />
+      </Pressable>
+      <Pressable style={styles.linkRow} onPress={() => router.push('/community-guidelines')}>
+        <Icon name="people-outline" size={20} color={COLORS.brand} />
+        <Text style={styles.linkText}>{t.profile.communityGuidelines}</Text>
+        <Icon name="chevron-forward" size={18} color={COLORS.muted} />
+      </Pressable>
+    </View>
+  );
 
   // Anonymous user view - login CTA + language picker
   if (!user) {
@@ -62,6 +100,7 @@ export default function Profile() {
               <Text style={styles.saveBtnText}>{t.login.google}</Text>
             </Pressable>
           </View>
+          {legalLinks}
           <View style={styles.card}>
             <Text style={styles.section}>{t.profile.language}</Text>
             <View style={{ gap: SPACING.sm }}>
@@ -176,6 +215,11 @@ export default function Profile() {
           <Icon name="log-out-outline" size={20} color={COLORS.error} />
           <Text style={styles.logoutText}>{t.profile.logout}</Text>
         </Pressable>
+        {legalLinks}
+        <Pressable testID="delete-account-btn" onPress={removeAccount} style={styles.deleteBtn}>
+          <Icon name="trash-outline" size={20} color={COLORS.error} />
+          <Text style={styles.deleteText}>{t.profile.deleteAccount}</Text>
+        </Pressable>
       </ScrollView>
     </View>
   );
@@ -210,4 +254,8 @@ const styles = StyleSheet.create({
   langLabel: { flex: 1, fontSize: 15, color: COLORS.onSurface, fontWeight: '600' },
   logoutBtn: { flexDirection: 'row', gap: SPACING.sm, alignItems: 'center', justifyContent: 'center', paddingVertical: SPACING.md, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surfaceSecondary },
   logoutText: { color: COLORS.error, fontSize: 15, fontWeight: '700' },
+  deleteBtn: { flexDirection: 'row', gap: SPACING.sm, alignItems: 'center', justifyContent: 'center', paddingVertical: SPACING.md },
+  deleteText: { color: COLORS.error, fontSize: 14, fontWeight: '700' },
+  linkRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md, paddingVertical: SPACING.sm },
+  linkText: { flex: 1, color: COLORS.onSurface, fontSize: 14, fontWeight: '600' },
 });

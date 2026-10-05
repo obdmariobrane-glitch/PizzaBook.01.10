@@ -1,13 +1,22 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Platform, TextInput } from 'react-native';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { Alert, View, Text, StyleSheet, ScrollView, Pressable, Platform, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@react-native-vector-icons/ionicons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
 import { useT } from '../../src/i18n/LanguageProvider';
+import { getCachedExperienceLevel, subscribeExperienceLevel } from '../../src/experienceLevel';
 import { COLORS, SPACING, RADIUS } from '../../src/theme';
-import { reversePlan, Method, PizzaStyle } from '../../src/calculator';
-import { scheduleLocal, isPushSupported } from '../../src/notifications';
+import { getCachedTemperatureUnit, subscribeTemperatureUnit, getCachedMeasurementSystem, subscribeMeasurementSystem } from '../../src/preferences';
+import { formatTemperature, formatUnitText } from '../../src/units';
+import {
+  reversePlan, Method, PizzaStyle,
+  getSharedHomeBakeAt, setSharedHomeBakeAt, subscribeSharedHomeBakeAt,
+  getSharedHomeDirectSchedule, subscribeSharedHomeDirectSchedule,
+  getSharedHomeBigaSchedule, subscribeSharedHomeBigaSchedule,
+  getSharedHomePoolishSchedule, subscribeSharedHomePoolishSchedule,
+} from '../../src/calculator';
+import { scheduleLocal, cancelPlannerNotificationsForMethods, isPushSupported, requestNotificationPermissions } from '../../src/notifications';
 
 function fmt(d: Date) {
   const day = d.toLocaleDateString(undefined, { weekday: 'short', day: '2-digit', month: 'short' });
@@ -19,11 +28,37 @@ function pad(n: number) { return String(n).padStart(2, '0'); }
 
 export default function Planner() {
   const insets = useSafeAreaInsets();
-  const { t } = useT();
+  const { t, lang } = useT();
+  const experienceLevel = useSyncExternalStore(subscribeExperienceLevel, getCachedExperienceLevel, getCachedExperienceLevel);
+  const experienceLoaded = experienceLevel !== undefined;
+  const isBeginner = experienceLevel !== 'pro';
+  const temperatureUnit = useSyncExternalStore(subscribeTemperatureUnit, getCachedTemperatureUnit, getCachedTemperatureUnit) ?? 'celsius';
+  const measurementSystem = useSyncExternalStore(subscribeMeasurementSystem, getCachedMeasurementSystem, getCachedMeasurementSystem) ?? 'metric';
   const [style, setStyle] = useState<PizzaStyle>('neapolitan');
-  const [method, setMethod] = useState<Method>('direct');
-  const [bakeAt, setBakeAt] = useState<Date | null>(null);
-  const [steps, setSteps] = useState<any[]>([]);
+  const [selectedMethod, setSelectedMethod] = useState<Method>('direct');
+  const method: Method = isBeginner ? 'direct' : selectedMethod;
+  const bakeAt = useSyncExternalStore(subscribeSharedHomeBakeAt, getSharedHomeBakeAt, getSharedHomeBakeAt);
+  const directHomeSchedule = useSyncExternalStore(subscribeSharedHomeDirectSchedule, getSharedHomeDirectSchedule, getSharedHomeDirectSchedule);
+  const bigaHomeSchedule = useSyncExternalStore(subscribeSharedHomeBigaSchedule, getSharedHomeBigaSchedule, getSharedHomeBigaSchedule);
+  const poolishHomeSchedule = useSyncExternalStore(subscribeSharedHomePoolishSchedule, getSharedHomePoolishSchedule, getSharedHomePoolishSchedule);
+  const [scheduledPlanKey, setScheduledPlanKey] = useState<string | null>(null);
+  const effectiveStyle = isBeginner && directHomeSchedule?.style ? directHomeSchedule.style : style;
+  const effectiveStyleName = isBeginner && effectiveStyle === 'romana'
+    ? directHomeSchedule?.romanFormat === 'teglia' ? 'Romana Teglia' : 'Romana Tonda'
+    : t.calc.pizzaStyles[effectiveStyle].name;
+  const plannerStepCopy = isBeginner
+    ? t.planner.stepCopy
+    : { ...t.planner.stepCopy, directHomeCopy: undefined };
+  useEffect(() => {
+    if (experienceLoaded && isBeginner) void cancelPlannerNotificationsForMethods(['biga', 'poolish']);
+  }, [experienceLoaded, isBeginner]);
+  const hasCurrentBeginnerDirectSchedule = !isBeginner || (!!directHomeSchedule && !!bakeAt
+    && directHomeSchedule.bakeAt.getTime() === bakeAt.getTime());
+  const steps = bakeAt && hasCurrentBeginnerDirectSchedule ? reversePlan(bakeAt, method, effectiveStyle, plannerStepCopy, directHomeSchedule, bigaHomeSchedule, poolishHomeSchedule, lang, formatTemperature(directHomeSchedule?.ovenTemp ?? 250, temperatureUnit)).map((step) => ({
+    ...step,
+    desc: formatUnitText(step.desc, temperatureUnit, measurementSystem),
+  })) : [];
+  const planKey = bakeAt ? `${bakeAt.getTime()}-${method}-${effectiveStyle}-${directHomeSchedule?.romanFormat ?? ''}-${directHomeSchedule?.ovenTemp ?? ''}-${directHomeSchedule?.strategy ?? ''}-${directHomeSchedule?.startAt.getTime() ?? ''}-${directHomeSchedule?.roomBeforeFridgeHours ?? ''}-${directHomeSchedule?.fridgeHours ?? ''}-${directHomeSchedule?.roomAfterFridgeHours ?? ''}-${directHomeSchedule?.ballingAt?.getTime() ?? ''}-${directHomeSchedule?.preheatAt?.getTime() ?? ''}-${bigaHomeSchedule?.finalMixAt.getTime() ?? ''}-${poolishHomeSchedule?.finalMixAt.getTime() ?? ''}` : '';
 
   // Native picker state (iOS/Android)
   const [pickerMode, setPickerMode] = useState<null | 'date' | 'time'>(null);
@@ -59,17 +94,50 @@ export default function Planner() {
   ];
 
   const generate = (d: Date) => {
-    setBakeAt(d);
-    setSteps(reversePlan(d, method, style));
+    if (Number.isNaN(d.getTime())) {
+      Alert.alert(t.planner.invalidDate);
+      return false;
+    }
+    if (d.getTime() <= Date.now()) {
+      Alert.alert(t.planner.pastDate);
+      return false;
+    }
+    setSharedHomeBakeAt(d);
+    setScheduledPlanKey(null);
+    return true;
   };
 
   const scheduleAll = async () => {
-    if (Platform.OS === 'web' || !steps.length || !isPushSupported()) return;
-    for (const s of steps) {
-      const trigger = s.at.getTime() - Date.now();
-      if (trigger <= 0) continue;
-      await scheduleLocal(`🍕 ${s.title}`, s.desc, Math.round(trigger / 1000));
+    if (Platform.OS === 'web' || !isPushSupported()) {
+      Alert.alert(t.planner.alarmUnavailable);
+      return;
     }
+    if (scheduledPlanKey === planKey) {
+      Alert.alert(t.planner.alarmsAlreadySet);
+      return;
+    }
+    if (!await requestNotificationPermissions()) {
+      Alert.alert(t.planner.permissionRequired);
+      return;
+    }
+    const futureSteps = steps.filter((s) => s.at.getTime() > Date.now());
+    if (!futureSteps.length) {
+      Alert.alert(t.planner.pastDate);
+      return;
+    }
+    await cancelPlannerNotificationsForMethods(['direct', 'biga', 'poolish']);
+    let scheduled = 0;
+    for (const s of futureSteps) {
+      const trigger = s.at.getTime() - Date.now();
+      const id = await scheduleLocal(`🍕 ${s.title}`, s.desc, Math.round(trigger / 1000), { source: 'pizza-planner', method });
+      if (id) scheduled += 1;
+    }
+    if (!scheduled) {
+      Alert.alert(t.planner.alarmFailed);
+      return;
+    }
+    setScheduledPlanKey(planKey);
+    Alert.alert(t.planner.alarmsSet.replace('{N}', String(scheduled)));
   };
 
   const openDatePicker = () => {
@@ -106,11 +174,24 @@ export default function Planner() {
   // Web: build Date from inputs and generate
   const applyWebDateTime = () => {
     // Parse YYYY-MM-DD and HH:MM
-    const [y, m, d] = webDate.split('-').map((x) => parseInt(x, 10));
-    const [hh, mm] = webTime.split(':').map((x) => parseInt(x, 10));
-    if (!y || !m || !d || isNaN(hh) || isNaN(mm)) return;
+    const [y, m, d] = webDate.split('-').map((x) => Number(x));
+    const [hh, mm] = webTime.split(':').map((x) => Number(x));
+    if (!Number.isInteger(y) || !Number.isInteger(m) || !Number.isInteger(d) || !Number.isInteger(hh) || !Number.isInteger(mm)) {
+      Alert.alert(t.planner.invalidDate);
+      return;
+    }
     const dt = new Date(y, m - 1, d, hh, mm, 0, 0);
-    if (isNaN(dt.getTime())) return;
+    if (
+      Number.isNaN(dt.getTime())
+      || dt.getFullYear() !== y
+      || dt.getMonth() !== m - 1
+      || dt.getDate() !== d
+      || dt.getHours() !== hh
+      || dt.getMinutes() !== mm
+    ) {
+      Alert.alert(t.planner.invalidDate);
+      return;
+    }
     generate(dt);
   };
 
@@ -120,18 +201,22 @@ export default function Planner() {
       <ScrollView contentContainerStyle={{ padding: SPACING.lg, paddingBottom: SPACING.xxxl, gap: SPACING.lg }}>
         <View style={styles.card}>
           <Text style={styles.label}>{t.planner.style}</Text>
-          <View style={styles.chipRow}>
-            {(['neapolitan', 'romana', 'ny_style'] as PizzaStyle[]).map((key) => (
-              <Pressable
-                key={key}
-                testID={`planner-style-${key}`}
-                onPress={() => { setStyle(key); if (bakeAt) setSteps(reversePlan(bakeAt, method, key)); }}
-                style={[styles.chip, style === key && styles.chipActive]}
-              >
-                <Text style={[styles.chipText, style === key && { color: '#fff' }]}>{t.calc.pizzaStyles[key].name}</Text>
-              </Pressable>
-            ))}
-          </View>
+          {isBeginner ? (
+            <Text style={styles.stepTitle}>{effectiveStyleName}</Text>
+          ) : (
+            <View style={styles.chipRow}>
+              {(['neapolitan', 'romana', 'ny_style'] as PizzaStyle[]).map((key) => (
+                <Pressable
+                  key={key}
+                  testID={`planner-style-${key}`}
+                  onPress={() => setStyle(key)}
+                  style={[styles.chip, style === key && styles.chipActive]}
+                >
+                  <Text style={[styles.chipText, style === key && { color: '#fff' }]}>{t.calc.pizzaStyles[key].name}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
         </View>
 
         <View style={styles.card}>
@@ -141,11 +226,11 @@ export default function Planner() {
               { key: 'direct' as const, l: t.calc.direct },
               { key: 'biga' as const, l: t.calc.biga },
               { key: 'poolish' as const, l: t.calc.poolish },
-            ].map((m) => (
+            ].filter((m) => isBeginner ? m.key === 'direct' : true).map((m) => (
               <Pressable
                 key={m.key}
                 testID={`planner-method-${m.key}`}
-                onPress={() => { setMethod(m.key); if (bakeAt) setSteps(reversePlan(bakeAt, m.key, style)); }}
+                onPress={() => setSelectedMethod(m.key)}
                 style={[styles.chip, method === m.key && styles.chipActive]}
               >
                 <Text style={[styles.chipText, method === m.key && { color: '#fff' }]}>{m.l}</Text>

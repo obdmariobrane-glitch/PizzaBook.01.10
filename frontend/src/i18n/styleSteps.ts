@@ -33,6 +33,7 @@ const direct = (mixing: 'hand' | 'mixer', style: 'romana' | 'ny_style', roomHour
           isGlutenFree ? 'Bezglutensku smjesu miješajte rukom ili špatulom bez razvoja glutena; obavezno dodajte psyllium u količini od 2% brašna.' : isSpelt ? 'Mijesite vrlo nježno i kratko; pirovi proteini su krhki.' : isWholeWheat ? 'Mijesite kratko i nježno jer mekinje mogu oslabiti glutensku strukturu.' : isManitoba ? 'Mijesite snažno i dovoljno dugo da se razvije čvrsta glutenska opna.' : 'Miješajte dok se tijesto ne poveže.',
           ...(!isGlutenFree ? ['Prebacite tijesto na radnu površinu i mijesite dlanovima 10–15 minuta dok površina ne postane glatka.', 'Pokrijte tijesto i ostavite ga 15 minuta da se gluten opusti.'] : ['Ostavite smjesu 15 minuta da psyllium povuče vlagu.']),
         ] : [
+          'Operite i temeljito osušite ruke.',
           'Pripremite mikser i njegovu posudu.',
           ...(amounts ? [`Pripremite ${amounts.flour} g brašna, ${amounts.salt} g soli, ${amounts.yeast} g svježeg kvasca, ${amounts.oil} g maslinovog ulja i ukupno ${amounts.water} g vode.`] : []),
           isGlutenFree ? 'U posudu miksera stavite brašno i obaveznih 2% psylliuma, dodajte 90% hladne vode i kvasac.' : isRoman ? 'U posudu miksera stavite 85% vode i brašno.' : 'U posudu miksera stavite 85% vode, kvasac i šećer.',
@@ -97,7 +98,6 @@ const direct = (mixing: 'hand' | 'mixer', style: 'romana' | 'ny_style', roomHour
 
 const preferment = (method: 'biga' | 'poolish', mixing: 'hand' | 'mixer', style: 'romana' | 'ny_style', roomHours: number, fridgeHours: number, flour: FlourType, romanTray: RomanTray): StylePhase[] => {
   const isRoman = style === 'romana';
-  const isNewYork = style === 'ny_style';
   const isBiga = method === 'biga';
   const hand = mixing === 'hand';
   const isManitoba = flour === 'manitoba';
@@ -118,12 +118,14 @@ const preferment = (method: 'biga' | 'poolish', mixing: 'hand' | 'mixer', style:
         title: isBiga ? 'Faza A: Izrada Bige' : 'Faza A: Izrada Poolisha',
         steps: isBiga
           ? [
-              hand ? 'Operite i temeljito osušite ruke.' : 'Pripremite mikser i njegovu posudu.',
+              'Operite i temeljito osušite ruke.',
+              ...(hand ? [] : ['Pripremite mikser i njegovu posudu.']),
               ...(amounts?.preferment ? [`Pripremite ${amounts.preferment.flour} g brašna, ${amounts.preferment.water} g vode i ${amounts.preferment.yeast} g kvasca za Bigu.`] : []),
               ...(isTray && amounts?.preferment ? [`Rukama kratko povežite sastojke; smjesa treba ostati mrvičasta. Ostavite Bigu 8 sati na ${amounts.preferment.roomTemp} °C.`, `Pokrijte Bigu i prebacite je u hladnjak na 16 sati pri ${amounts.preferment.fridgeTemp} °C. Ukupno: ${amounts.preferment.totalHours} sati.`] : ['U posudu stavite brašno i ravnomjerno izmrvite kvasac.', 'Ulijte izračunatu hladnu vodu i rukama kratko pomiješajte sastojke.', 'Ne mijesite glatko tijesto; smjesa treba ostati gruba i mrvičasta.', 'Pokrijte posudu i ostavite bigu 8 sati na sobnoj temperaturi.', 'Prebacite bigu u hladnjak na još 16 sati pri 4°C.']),
             ]
           : [
-              hand ? 'Operite i temeljito osušite ruke.' : 'Pripremite mikser i njegovu posudu.',
+              'Operite i temeljito osušite ruke.',
+              ...(hand ? [] : ['Pripremite mikser i njegovu posudu.']),
               ...(amounts?.preferment ? [`Pripremite ${amounts.preferment.flour} g brašna, ${amounts.preferment.water} g vode i ${amounts.preferment.yeast} g kvasca za Poolish.`] : []),
               'U posudi otopite kvasac u izračunatoj vodi za Poolish.',
               'Dodajte brašno za Poolish i promiješajte pjenjačom ili vilicom do glatke tekuće smjese.',
@@ -155,7 +157,7 @@ const preferment = (method: 'biga' | 'poolish', mixing: 'hand' | 'mixer', style:
         : 'Kod Tonde nakon završnog zamjesa tijesto odmorite i oblikujte u čvrste, glatke pojedinačne kugle kroz staglio.',
     },
     {
-      title: isTray ? 'Faza C: Fermentacija i preklapanje' : 'Faza C: Podjela i oblikovanje loptica (Bulice)',
+      title: isTray ? 'Faza C: Fermentacija i preklapanje' : 'Faza C: Prva fermentacija (Bulking)',
       steps: isTray ? [
         'Prebacite tijesto u lagano nauljenu fermentacijsku posudu.',
         'Ostavite tijesto 30 minuta na sobnoj temperaturi.',
@@ -166,15 +168,12 @@ const preferment = (method: 'biga' | 'poolish', mixing: 'hand' | 'mixer', style:
       ] : [
         fridgeHours > 0 ? 'Ostavite tijesto 30–45 minuta na sobnoj temperaturi.' : `Ostavite tijesto ${roomHours} sati na sobnoj temperaturi prije oblikovanja kugli.`,
         isGlutenFree ? 'Ne radite Stretch & Fold; ostavite smjesu samo 15 minuta da se veže.' : isManitoba ? 'Napravite čvrste Stretch & Fold preklopa kako bi tijesto držalo visoku hidrataciju.' : isSpelt || isWholeWheat ? 'Napravite jedno nježno preklapanje; ne trgajte strukturu.' : hand ? 'Napravite jedno preklapanje na polovici bulka.' : 'Preklapanje nije potrebno, osim ako tijesto traži dodatnu strukturu.',
-        'Nakon bulka oblikujte kugle.',
-        isRoman ? 'Kugle neka budu 200–220 g.' : isGlutenFree ? 'Oblikujte manje kugle nježno; NY format od 40 cm nije prikladan.' : isManitoba ? 'Kugle neka budu 350–450 g.' : isSpelt || isWholeWheat ? 'Kugle neka budu približno 350–400 g; ne planirajte rastezanje u zraku.' : 'Kugle neka budu 350–400 g.',
-        ...(fridgeHours > 0 ? [`Ostavite kugle 30–60 minuta na sobnoj temperaturi, zatim ih stavite u hladnjak na ${fridgeHours} sati.`] : [`Ostavite kugle ${roomHours} sati na sobnoj temperaturi prije pečenja.`]),
       ].filter(Boolean) as string[],
       fermentationInfo: isTray ? 'Teglia koristi vlažnije tijesto koje ostaje kao jedna masa. Tijekom fermentacije radite nježne Stretch & Fold preklape u posudi; ne oblikujte kugle za tondu.' : undefined,
       proofingInfo: undefined,
       timers: isTray
         ? [timer('style-preferment-tray-rest-1', 30 * 60, 'rt'), timer('style-preferment-tray-rest-2', 30 * 60, 'rt'), ...(fridgeHours > 0 ? [timer('style-preferment-tray-fridge', fridgeHours * 3600, 'fridge')] : [])]
-        : [timer('style-preferment-bulk', 30 * 60, 'rt'), ...(fridgeHours > 0 ? [timer('style-preferment-fridge', fridgeHours * 3600, 'ballsFridge')] : [timer('style-preferment-room', roomHours * 3600, 'ballsRt')])],
+        : [timer('style-preferment-bulk', 30 * 60, 'rt')],
     },
     ...(isTray ? [{
       title: 'Faza D: Masa za tepsiju',
@@ -183,7 +182,17 @@ const preferment = (method: 'biga' | 'poolish', mixing: 'hand' | 'mixer', style:
         'Ne oblikujte kuglu za tondu; tijesto ostaje kao jedna masa do utiskivanja u tepsiju.',
       ],
       proofingInfo: `Za ovu tepsiju koristi se jedna masa od ${tray.doughWeight} g, bez kuglanja. Tijesto se nakon fermentacije nježno utiskuje u nauljenu tepsiju ${tray.width}×${tray.length} cm.`,
-    }] : []),
+    }] : [{
+      title: 'Faza D: Podjela i oblikovanje loptica (Bulice)',
+      steps: [
+        'Nakon prve fermentacije podijelite i oblikujte kugle.',
+        isRoman ? 'Kugle neka budu 200–220 g.' : isGlutenFree ? 'Oblikujte manje kugle nježno; NY format od 40 cm nije prikladan.' : isManitoba ? 'Kugle neka budu 350–450 g.' : isSpelt || isWholeWheat ? 'Kugle neka budu približno 350–400 g; ne planirajte rastezanje u zraku.' : 'Kugle neka budu 350–400 g.',
+        ...(fridgeHours > 0 ? [`Ostavite kugle 30–60 minuta na sobnoj temperaturi, zatim ih stavite u hladnjak na ${fridgeHours} sati.`] : [`Ostavite kugle ${roomHours} sati na sobnoj temperaturi prije pečenja.`]),
+      ],
+      timers: fridgeHours > 0
+        ? [timer('style-preferment-fridge', fridgeHours * 3600, 'fridge')]
+        : [timer('style-preferment-room', roomHours * 3600, 'ballsRt')],
+    }]),
     {
       title: isTray ? 'Faza E: Utiskivanje u tepsiju i pečenje' : 'Faza D: Priprema, razvlačenje i nadijevanje',
       steps: isTray
@@ -214,8 +223,8 @@ const baking = (style: 'romana' | 'ny_style', oven: OvenType): string[] => {
   }
   if (oven === 'homeStone') {
     return isRoman
-      ? ['Postavite kamen ili čelik dvije rešetke ispod gornjeg grijača i zagrijte ga 45 minuta na 270–300°C.', 'Isključite grill i prebacite pećnicu na Pizza program, ako je dostupan. Ako Pizza program nije dostupan, odaberite gornji i donji grijač bez ventilatora te postavite maksimalnu temperaturu. Pecite pizzu približno 4–5 minuta.', 'Zatim uključite grill i pecite dok rub i vrh ne dobiju željenu boju. Pizza treba biti tanka, čvrsta i hrskava cijelom površinom.']
-      : ['Postavite kamen ili čelik dvije rešetke ispod gornjeg grijača. Zagrijte ga 50 minuta na 250–280°C.', 'Pecite 5–7 minuta i uključite grill zadnje 2 minute.', 'Rub treba biti zlatan i mekan, a centar tanak i čvrst.'];
+      ? ['Postavite kamen ili čelik dvije rešetke ispod gornjeg grijača i zagrijte ga 45 minuta na 270–300°C uz uključen grill.', 'Isključite grill i prebacite pećnicu na Pizza program, ako je dostupan. Ako Pizza program nije dostupan, odaberite gornji i donji grijač bez ventilatora te postavite maksimalnu temperaturu. Pecite pizzu približno 4–5 minuta.', 'Zatim uključite grill i pecite dok rub i vrh ne dobiju željenu boju. Pizza treba biti tanka, čvrsta i hrskava cijelom površinom.']
+      : ['Postavite kamen ili čelik dvije rešetke ispod gornjeg grijača. Zagrijte ga 50 minuta na 250–280°C uz uključen grill.', 'Pecite 5–7 minuta i uključite grill zadnje 2 minute.', 'Rub treba biti zlatan i mekan, a centar tanak i čvrst.'];
   }
   return isRoman
     ? ['Zagrijte obrnuti lim 30 minuta na 250°C.', 'Pecite 6–8 minuta i uključite grill zadnje 2 minute.', 'Pizza treba biti ravna, suha i krekerski hrskava.']
