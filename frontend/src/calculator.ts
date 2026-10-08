@@ -6,6 +6,135 @@ export type Fermentation = 'sameDay' | 'coldLong';
 export type OvenType = 'ooni' | 'homeStone' | 'homePan';
 export type PizzaStyle = 'neapolitan' | 'romana' | 'ny_style';
 export type BakingLanguage = 'hr' | 'en' | 'de' | 'sl';
+export type BeginnerDirectDoughStyle = 'neapolitan' | 'newYork' | 'romanaTonda' | 'romanaTeglia';
+export type BeginnerDirectMixing = 'hand' | 'home' | 'spiral';
+export type BeginnerPhaseBFlourBehavior = 'standard' | 'gentle' | 'glutenFree';
+export type BeginnerPhaseBWorkflow = 'round' | 'teglia';
+
+export interface BeginnerPhaseBFold {
+  index: 1 | 2;
+  offsetMinutes: number;
+}
+
+export interface BeginnerPhaseBPlan {
+  durationMinutes: number;
+  foldCount: number;
+  folds: BeginnerPhaseBFold[];
+  finalRestMinutes: number;
+  behavior: BeginnerPhaseBFlourBehavior;
+  workflow: BeginnerPhaseBWorkflow;
+}
+
+export const BEGINNER_PHASE_B_MIN_FOLD_WINDOW_MINUTES = 45;
+export const BEGINNER_PHASE_B_FIRST_FOLD_OFFSET_MINUTES = 20;
+export const BEGINNER_PHASE_B_SECOND_FOLD_OFFSET_MINUTES = 50;
+export const BEGINNER_PHASE_B_TWO_FOLD_WINDOW_MINUTES = 90;
+
+export function calculateBeginnerPhaseBPlan(input: {
+  durationMinutes: number;
+  flourBehavior: BeginnerPhaseBFlourBehavior;
+  workflow: BeginnerPhaseBWorkflow;
+}): BeginnerPhaseBPlan {
+  if (!Number.isFinite(input.durationMinutes) || input.durationMinutes < 0) {
+    throw new RangeError('Beginner Phase-B duration must be a non-negative finite number.');
+  }
+  const durationMinutes = Math.max(0, Math.floor(input.durationMinutes));
+  if (input.flourBehavior === 'glutenFree' || durationMinutes < BEGINNER_PHASE_B_MIN_FOLD_WINDOW_MINUTES) {
+    return {
+      durationMinutes,
+      foldCount: 0,
+      folds: [],
+      finalRestMinutes: durationMinutes,
+      behavior: input.flourBehavior,
+      workflow: input.workflow,
+    };
+  }
+
+  const folds: BeginnerPhaseBFold[] = durationMinutes >= BEGINNER_PHASE_B_TWO_FOLD_WINDOW_MINUTES
+    ? [
+      { index: 1, offsetMinutes: BEGINNER_PHASE_B_FIRST_FOLD_OFFSET_MINUTES },
+      { index: 2, offsetMinutes: BEGINNER_PHASE_B_SECOND_FOLD_OFFSET_MINUTES },
+    ]
+    : [{ index: 1, offsetMinutes: BEGINNER_PHASE_B_FIRST_FOLD_OFFSET_MINUTES }];
+  const finalRestMinutes = durationMinutes - folds[folds.length - 1].offsetMinutes;
+  return {
+    durationMinutes,
+    foldCount: folds.length,
+    folds,
+    finalRestMinutes,
+    behavior: input.flourBehavior,
+    workflow: input.workflow,
+  };
+}
+
+// Use current target ranges' midpoints; New York's 24°C target was explicitly selected for this model.
+export const BEGINNER_DIRECT_TARGET_DOUGH_TEMP_C: Record<BeginnerDirectDoughStyle, number> = {
+  neapolitan: 24,
+  newYork: 24,
+  romanaTonda: 22,
+  romanaTeglia: 22,
+};
+
+// Conservative starting assumptions for home mixing; calibrate with measured dough temperatures.
+export const BEGINNER_DIRECT_MIXING_FRICTION_C: Record<BeginnerDirectMixing, number> = {
+  hand: 2,
+  home: 10,
+  spiral: 7,
+};
+
+// Beginner recommendations stay within practical water temperatures; ice remains disabled.
+export const BEGINNER_DIRECT_WATER_TEMP_LIMITS_C = { min: 2, max: 35 } as const;
+
+export interface BeginnerDirectWaterTemperature {
+  targetFinalDoughTemp: number;
+  roomTemp: number;
+  flourTemp: number;
+  mixing: BeginnerDirectMixing;
+  frictionFactor: number;
+  calculatedWaterTemp: number;
+  recommendedWaterTemp: number;
+  minimumWaterTemp: number;
+  maximumWaterTemp: number;
+  wasClamped: boolean;
+  appliedLimit: 'minimum' | 'maximum' | null;
+}
+
+export function calculateBeginnerDirectWaterTemperature(input: {
+  style: BeginnerDirectDoughStyle;
+  roomTemp: number;
+  mixing: BeginnerDirectMixing;
+  flourTemp?: number;
+}): BeginnerDirectWaterTemperature {
+  const flourTemp = input.flourTemp ?? input.roomTemp;
+  if (!Number.isFinite(input.roomTemp) || !Number.isFinite(flourTemp)) {
+    throw new RangeError('Room and flour temperatures must be finite numbers.');
+  }
+
+  const targetFinalDoughTemp = BEGINNER_DIRECT_TARGET_DOUGH_TEMP_C[input.style];
+  const frictionFactor = BEGINNER_DIRECT_MIXING_FRICTION_C[input.mixing];
+  const calculatedWaterTemp = (targetFinalDoughTemp * 3) - input.roomTemp - flourTemp - frictionFactor;
+  const { min, max } = BEGINNER_DIRECT_WATER_TEMP_LIMITS_C;
+  const limitedWaterTemp = Math.max(min, Math.min(max, calculatedWaterTemp));
+  const appliedLimit = calculatedWaterTemp < min
+    ? 'minimum'
+    : calculatedWaterTemp > max
+      ? 'maximum'
+      : null;
+
+  return {
+    targetFinalDoughTemp,
+    roomTemp: input.roomTemp,
+    flourTemp,
+    mixing: input.mixing,
+    frictionFactor,
+    calculatedWaterTemp,
+    recommendedWaterTemp: Math.round(limitedWaterTemp),
+    minimumWaterTemp: min,
+    maximumWaterTemp: max,
+    wasClamped: appliedLimit !== null,
+    appliedLimit,
+  };
+}
 
 export interface BakingTimeRange {
   min: number;
@@ -56,7 +185,12 @@ export interface HomePizzaPlanInput {
   fridgeTemp: number;
   ovenType: OvenType;
   ovenTemp?: number;
+  flourType?: FlourType;
+  mixing?: BeginnerDirectMixing;
+  beginnerScheduleMode?: BeginnerDirectScheduleMode;
 }
+
+export type BeginnerDirectScheduleMode = 'roomOnly' | 'fridgeRoom';
 
 export interface HomePizzaPlanSchedule {
   startAt: Date;
@@ -76,12 +210,20 @@ export interface HomePizzaPlanSchedule {
   fridgeHours: number;
   roomAfterFridgeHours: number;
   prefermentHours: number;
+  doughReadyAt?: Date;
+  fridgeAt?: Date;
+  phaseAMinutes?: number;
+  phaseBMinutes?: number;
+  phaseCMinutes?: number;
+  thermalUncertainty?: string;
+  limitations?: string[];
 }
 
 export interface HomePizzaPlan {
   input: HomePizzaPlanInput;
   schedule: HomePizzaPlanSchedule;
   selectedEvaluation: DirectHomeCandidateEvaluation;
+  candidateEvaluations?: DirectHomeCandidateEvaluation[];
 }
 
 let sharedHomeBakeAt: Date | null = null;
@@ -201,6 +343,110 @@ export function getHomeFermentationWindow(availableHours: number): HomeFermentat
 
 export type BeginnerDirectHomeStrategy = 'roomOnly' | 'hybrid' | 'coldDominant';
 
+export const BEGINNER_DIRECT_PHASE_A_MINUTES = 20;
+export const BEGINNER_DIRECT_PHASE_C_MINUTES = 5;
+export const BEGINNER_DIRECT_MIN_FRIDGE_HOURS = 3;
+
+export function getBeginnerDirectFinalRoomTargetHours(roomTemp: number): number | null {
+  if (!Number.isFinite(roomTemp) || roomTemp < 18 || roomTemp > 26) return null;
+  if (roomTemp <= 22) return 3 - (roomTemp - 18) * 0.25;
+  return 2 - (roomTemp - 22) * 0.125;
+}
+
+export interface BeginnerDirectScheduleCandidate extends DirectHomeFermentationCandidate {
+  mode: BeginnerDirectScheduleMode;
+  phaseAMinutes: number;
+  phaseBMinutes: 0 | 60 | 90;
+  phaseCMinutes: number;
+  doughReadyAt?: Date;
+  fridgeAt?: Date;
+  thermalUncertainty?: string;
+  limitations: string[];
+  startAt: Date;
+  ballingAt: Date;
+}
+
+function createBeginnerDirectScheduleCandidate(
+  mode: BeginnerDirectScheduleMode,
+  availableHours: number,
+  roomTemp: number,
+  bakeAt: Date,
+): BeginnerDirectScheduleCandidate {
+  const fixedHours = (BEGINNER_DIRECT_PHASE_A_MINUTES + BEGINNER_DIRECT_PHASE_C_MINUTES) / 60;
+  const finalRoomTarget = getBeginnerDirectFinalRoomTargetHours(roomTemp);
+  const limitations: string[] = [];
+  let phaseBMinutes: 0 | 60 | 90 = availableHours >= 3 ? 90 : availableHours >= 2 ? 60 : 0;
+  let fridgeHours = 0;
+  let roomAfterFridgeHours = 0;
+
+  if (mode === 'fridgeRoom') {
+    if (finalRoomTarget === null) {
+      limitations.push('Final room target is only defined provisionally for 18–26°C.');
+    } else {
+      const remaining = availableHours - fixedHours - phaseBMinutes / 60 - finalRoomTarget;
+      if (remaining >= BEGINNER_DIRECT_MIN_FRIDGE_HOURS) {
+        fridgeHours = remaining;
+        roomAfterFridgeHours = finalRoomTarget;
+      } else {
+        phaseBMinutes = 0;
+        const adjustedRemaining = availableHours - fixedHours - finalRoomTarget;
+        if (adjustedRemaining >= BEGINNER_DIRECT_MIN_FRIDGE_HOURS) {
+          fridgeHours = adjustedRemaining;
+          roomAfterFridgeHours = finalRoomTarget;
+        } else {
+          limitations.push('Fridge + room requires at least 3 hours in the fridge plus the provisional final room target.');
+        }
+      }
+    }
+  }
+
+  const roomBeforeFridgeHours = (BEGINNER_DIRECT_PHASE_A_MINUTES + phaseBMinutes + BEGINNER_DIRECT_PHASE_C_MINUTES) / 60;
+  if (mode === 'roomOnly') roomAfterFridgeHours = Math.max(0, availableHours - roomBeforeFridgeHours);
+  const thermalUncertainty = mode === 'fridgeRoom'
+    ? 'Thermal uncertainty: dough cools and warms gradually; this schedule does not model core temperature.'
+    : undefined;
+  const totalHours = roomBeforeFridgeHours + fridgeHours + roomAfterFridgeHours;
+  const startAt = new Date(bakeAt.getTime() - totalHours * 3600000);
+  const ballingAt = new Date(startAt.getTime() + (BEGINNER_DIRECT_PHASE_A_MINUTES + phaseBMinutes) * 60000);
+  const fridgeAt = new Date(ballingAt.getTime() + BEGINNER_DIRECT_PHASE_C_MINUTES * 60000);
+  const doughReadyAt = new Date(bakeAt.getTime());
+
+  if (availableHours < 2) limitations.push('Very short schedule: full fermentation is not promised.');
+  if (phaseBMinutes === 0) limitations.push('Stretch & Fold skipped because the available window is too short.');
+  if (mode === 'fridgeRoom' && finalRoomTarget === null) limitations.push('Room temperature is outside the provisional 18–26°C target range.');
+
+  return {
+    strategy: mode === 'roomOnly' ? 'roomOnly' : 'hybrid',
+    mode,
+    roomBeforeFridgeHours,
+    fridgeHours,
+    roomAfterFridgeHours,
+    phaseAMinutes: BEGINNER_DIRECT_PHASE_A_MINUTES,
+    phaseBMinutes,
+    phaseCMinutes: BEGINNER_DIRECT_PHASE_C_MINUTES,
+    status: limitations.length > 0 && (mode === 'fridgeRoom' && fridgeHours < BEGINNER_DIRECT_MIN_FRIDGE_HOURS) ? 'unsupported' : 'acceptable',
+    warnings: limitations,
+    limitations,
+    startAt,
+    ballingAt,
+    fridgeAt,
+    doughReadyAt,
+    thermalUncertainty,
+  } as BeginnerDirectScheduleCandidate;
+}
+
+export function generateBeginnerDirectScheduleCandidates(
+  availableHours: number,
+  roomTemp: number,
+  bakeAt: Date,
+): BeginnerDirectScheduleCandidate[] {
+  if (!Number.isFinite(availableHours) || availableHours <= 0) return [];
+  return [
+    createBeginnerDirectScheduleCandidate('roomOnly', availableHours, roomTemp, bakeAt),
+    createBeginnerDirectScheduleCandidate('fridgeRoom', availableHours, roomTemp, bakeAt),
+  ];
+}
+
 export function selectBeginnerDirectHomeStrategy(
   availableHours: number,
   roomTemp: number,
@@ -249,6 +495,8 @@ export interface DirectHomeCandidateEvaluation {
   domain: HomeDoughDomainValidationResult;
   selectable: boolean;
   rejectionReasons: string[];
+  recommended?: boolean;
+  recommendationReason?: string;
 }
 
 export interface DirectHomeFermentationExposure {
@@ -860,6 +1108,19 @@ export const PIZZA_STYLE_PROFILES: Record<PizzaStyle, PizzaStyleProfile> = {
   },
 };
 
+// Beginner round-size relationship: each style keeps its own profile reference
+// and scales dough by pizza area. Teglia uses its separate tray calculation.
+export function beginnerBallWeightForDiameter(style: PizzaStyle, diameter: number): number {
+  const profile = PIZZA_STYLE_PROFILES[style];
+  const ratio = diameter / profile.defaultDiameter;
+  return Math.round(profile.ballWeight * ratio * ratio);
+}
+
+export function beginnerDiameterForBallWeight(style: PizzaStyle, ballWeight: number): number {
+  const profile = PIZZA_STYLE_PROFILES[style];
+  return Math.round(profile.defaultDiameter * Math.sqrt(ballWeight / profile.ballWeight));
+}
+
 export function createDirectHomePizzaPlan(
   input: HomePizzaPlanInput,
   flour: HomeFlourStrengthInput,
@@ -873,6 +1134,80 @@ export function createDirectHomePizzaPlan(
   const availableHours = getAvailableFermentationHours(input.bakeAt, now);
   if (availableHours <= 0) return null;
 
+  const isBeginnerTipo00Target = conservativeUnknownFlour
+    && input.style === 'neapolitan'
+    && input.flourType === 'caputo00'
+    && (input.mixing === 'hand' || input.mixing === 'home');
+  if (isBeginnerTipo00Target) {
+    const scheduleCandidates = generateBeginnerDirectScheduleCandidates(availableHours, input.roomTemp, input.bakeAt);
+    const evaluationInput: HomeDoughToleranceInput = {
+      flour,
+      hydrationPct,
+      roomTemp: input.roomTemp,
+      fridgeTemp: input.fridgeTemp,
+      roomBeforeFridgeHours: 0,
+      fridgeHours: 0,
+      roomAfterFridgeHours: 0,
+    };
+    const candidateEvaluations = scheduleCandidates.map((candidate) => {
+      const evaluation = evaluateDirectHomeCandidate(candidate, evaluationInput, yeastType, true);
+      return {
+        ...evaluation,
+        selectable: evaluation.selectable && candidate.status !== 'unsupported',
+        rejectionReasons: candidate.status === 'unsupported'
+          ? [...evaluation.rejectionReasons, ...candidate.limitations]
+          : evaluation.rejectionReasons,
+      };
+    });
+    const fridgeCandidate = candidateEvaluations.find((evaluation) => evaluation.selectable && (evaluation.candidate as BeginnerDirectScheduleCandidate).mode === 'fridgeRoom');
+    const roomCandidate = candidateEvaluations.find((evaluation) => evaluation.selectable && (evaluation.candidate as BeginnerDirectScheduleCandidate).mode === 'roomOnly');
+    // This is a transparent scheduling preference, not a readiness or safety score:
+    // shorter windows stay room-only; longer windows use refrigeration when feasible.
+    const preferred = availableHours >= 3 && fridgeCandidate ? fridgeCandidate : roomCandidate ?? fridgeCandidate;
+    const recommendationReason = preferred && (preferred.candidate as BeginnerDirectScheduleCandidate).mode === 'fridgeRoom'
+      ? 'The available time allows the minimum refrigeration window and a final room rest.'
+      : 'The available time is shorter, so room-temperature fermentation keeps the schedule practical.';
+    const annotatedCandidateEvaluations = candidateEvaluations.map((evaluation) => ({
+      ...evaluation,
+      recommended: evaluation === preferred,
+      recommendationReason: evaluation === preferred ? recommendationReason : undefined,
+    }));
+    const requested = input.beginnerScheduleMode
+      ? annotatedCandidateEvaluations.find((evaluation) => (evaluation.candidate as BeginnerDirectScheduleCandidate).mode === input.beginnerScheduleMode)
+      : undefined;
+    const recommended = annotatedCandidateEvaluations.find((evaluation) => evaluation.recommended)
+      ?? annotatedCandidateEvaluations.find((evaluation) => evaluation.selectable)
+      ?? null;
+    const selectedEvaluation = requested?.selectable ? requested : recommended;
+    if (!selectedEvaluation) return null;
+    const selectedCandidate = selectedEvaluation.candidate as BeginnerDirectScheduleCandidate;
+    const schedule: HomePizzaPlanSchedule = {
+      startAt: selectedCandidate.startAt,
+      bakeAt: input.bakeAt,
+      ballingAt: selectedCandidate.ballingAt,
+      fridgeAt: selectedCandidate.fridgeAt,
+      doughReadyAt: selectedCandidate.doughReadyAt,
+      preheatAt: new Date(input.bakeAt.getTime() - (input.ovenType === 'homeStone' ? 60 : 20) * 60000),
+      strategy: selectedCandidate.strategy,
+      style: input.style,
+      ovenType: input.ovenType,
+      ovenTemp: input.ovenTemp,
+      roomTemp: input.roomTemp,
+      fridgeTemp: input.fridgeTemp,
+      ballWeight: input.ballWeight,
+      prefermentHours: 0,
+      roomBeforeFridgeHours: selectedCandidate.roomBeforeFridgeHours,
+      fridgeHours: selectedCandidate.fridgeHours,
+      roomAfterFridgeHours: selectedCandidate.roomAfterFridgeHours,
+      phaseAMinutes: selectedCandidate.phaseAMinutes,
+      phaseBMinutes: selectedCandidate.phaseBMinutes,
+      phaseCMinutes: selectedCandidate.phaseCMinutes,
+      thermalUncertainty: selectedCandidate.thermalUncertainty,
+      limitations: selectedCandidate.limitations,
+    };
+    return { input, schedule, selectedEvaluation, candidateEvaluations: annotatedCandidateEvaluations };
+  }
+
   const candidates = conservativeUnknownFlour
     ? (() => {
       const strategy = selectBeginnerDirectHomeStrategy(availableHours, input.roomTemp);
@@ -884,10 +1219,16 @@ export function createDirectHomePizzaPlan(
       const roomBeforeFridgeHours = strategy === 'roomOnly'
         ? remainingHours
         : Math.min(strategy === 'hybrid' ? 2 : 1, remainingHours);
+      const fridgeHours = strategy === 'roomOnly'
+        ? 0
+        : Math.min(
+          MAX_BEGINNER_DIRECT_COLD_HOURS,
+          Math.max(0, remainingHours - roomBeforeFridgeHours),
+        );
       return [{
         strategy,
         roomBeforeFridgeHours,
-        fridgeHours: strategy === 'roomOnly' ? 0 : remainingHours - roomBeforeFridgeHours,
+        fridgeHours,
         roomAfterFridgeHours,
         status: 'acceptable' as const,
         warnings: [],
@@ -911,10 +1252,16 @@ export function createDirectHomePizzaPlan(
   const selectedEvaluation = selectDirectHomeCandidate(evaluations);
   if (!selectedEvaluation) return null;
 
+  const workflowHours = selectedEvaluation.candidate.roomBeforeFridgeHours
+    + selectedEvaluation.candidate.fridgeHours
+    + selectedEvaluation.candidate.roomAfterFridgeHours;
+  const startAt = conservativeUnknownFlour
+    ? new Date(Math.max(now.getTime(), input.bakeAt.getTime() - workflowHours * 3600000))
+    : now;
   const schedule: HomePizzaPlanSchedule = {
-    startAt: now,
+    startAt,
     bakeAt: input.bakeAt,
-    ballingAt: new Date(now.getTime() + selectedEvaluation.candidate.roomBeforeFridgeHours * 3600000),
+    ballingAt: new Date(startAt.getTime() + selectedEvaluation.candidate.roomBeforeFridgeHours * 3600000),
     preheatAt: conservativeUnknownFlour
       ? new Date(input.bakeAt.getTime() - (input.ovenType === 'homeStone' ? 60 : 20) * 60000)
       : undefined,
@@ -989,6 +1336,8 @@ export const BIGA_MATURATION_REFERENCE = {
   minRoomHours: 6,
   maxRoomHours: 18,
 } as const;
+
+export const MAX_BEGINNER_DIRECT_COLD_HOURS = 24;
 
 // Provisional: ~12%/°C fermentation-activity scaling (roughly "doubles every ~6°C"), a commonly
 // used rule-of-thumb heuristic, NOT an empirically validated coefficient for Biga specifically.
@@ -1273,7 +1622,6 @@ export const FLOUR_PROFILES: Record<FlourType, { label: string; ideal: number; m
   custom: { label: 'Mješavina brašna', ideal: 68, min: 55, max: 90 },
 };
 
-// Beginner hydration is owned by the pizza style; gluten-free flour keeps its own required hydration.
 export function beginnerHydrationFor(style: PizzaStyle, flour: FlourType): number {
   return flour === 'glutenFree' ? FLOUR_PROFILES.glutenFree.ideal : PIZZA_STYLE_PROFILES[style].hydration;
 }
@@ -1521,6 +1869,18 @@ export function dimensionsCalc(diameter: number, pizzas: number) {
   };
 }
 
+interface DoughCalculationResult {
+  method: Method;
+  preferment: { flour: number; water: number; yeast: number } | null;
+  main: { flour: number; water: number; salt: number; oil: number; yeast: number; psyllium: number };
+  total: { flour: number; water: number; salt: number; oil: number; yeast: number; psyllium: number };
+  totalDough: number;
+  waterTemp: number;
+  waterTemperature?: BeginnerDirectWaterTemperature;
+  yeastPct: number;
+  eTotal: number;
+}
+
 export function doughCalc(opts: {
   pizzas: number; ballWeight: number; hydration: number; saltPct: number; oilPct: number;
   method: Method;
@@ -1534,10 +1894,12 @@ export function doughCalc(opts: {
   yeastType?: YeastType;
   mixing?: Mixing;
   flourType?: FlourType;
+  beginnerDirectStyle?: BeginnerDirectDoughStyle;
+  beginnerDirectMixing?: BeginnerDirectMixing;
   // When provided, the method's Home schedule replaces legacy timing inputs for yeast calculation.
   bigaHomeSchedule?: BigaHomePizzaSchedule;
   poolishHomeSchedule?: PoolishHomePizzaSchedule;
-}) {
+}): DoughCalculationResult {
   // === Fermentation math (dynamic yeast) ===
   const fermentation = opts.method === 'biga' && opts.bigaHomeSchedule
     ? getBigaHomeFermentationSchedule(opts.bigaHomeSchedule, opts.roomTemp, opts.fridgeTemp)
@@ -1569,16 +1931,31 @@ export function doughCalc(opts: {
   const oil = flour * (opts.oilPct / 100);
   const psyllium = flour * (psylliumPct / 100);
 
-  // Water temp — rule 55/60 (spiral 55, hand/home 60), clamped by cold ferment
-  const rule = opts.mixing === 'spiral' ? 55 : 60;
-  let waterTemp = rule - opts.roomTemp;
-  const coldFermentHours = opts.method === 'biga' && opts.bigaHomeSchedule
-    ? opts.bigaHomeSchedule.bigaFridgeHours + opts.bigaHomeSchedule.finalDoughFridgeHours
-    : opts.method === 'poolish' && opts.poolishHomeSchedule
-      ? opts.poolishHomeSchedule.poolishFridgeHours + opts.poolishHomeSchedule.finalDoughFridgeHours
-      : opts.fridgeHours;
-  if (coldFermentHours >= 12) waterTemp = Math.min(waterTemp, 10);
-  waterTemp = Math.max(2, Math.min(30, waterTemp));
+  const beginnerDirectWaterTemperature = opts.method === 'direct'
+    && opts.beginnerDirectStyle
+    && opts.flourType !== 'glutenFree'
+    ? calculateBeginnerDirectWaterTemperature({
+      style: opts.beginnerDirectStyle,
+      roomTemp: opts.roomTemp,
+      mixing: opts.beginnerDirectMixing ?? opts.mixing ?? 'hand',
+    })
+    : null;
+
+  let waterTemp: number;
+  if (beginnerDirectWaterTemperature) {
+    waterTemp = beginnerDirectWaterTemperature.recommendedWaterTemp;
+  } else {
+    // Keep the legacy rule for Pro, gluten-free, Biga, and Poolish calculations.
+    const rule = opts.mixing === 'spiral' ? 55 : 60;
+    waterTemp = rule - opts.roomTemp;
+    const coldFermentHours = opts.method === 'biga' && opts.bigaHomeSchedule
+      ? opts.bigaHomeSchedule.bigaFridgeHours + opts.bigaHomeSchedule.finalDoughFridgeHours
+      : opts.method === 'poolish' && opts.poolishHomeSchedule
+        ? opts.poolishHomeSchedule.poolishFridgeHours + opts.poolishHomeSchedule.finalDoughFridgeHours
+        : opts.fridgeHours;
+    if (coldFermentHours >= 12) waterTemp = Math.min(waterTemp, 10);
+    waterTemp = Math.max(2, Math.min(30, waterTemp));
+  }
 
   // Rounding helpers per spec
   const R0 = (n: number) => Math.round(n);
@@ -1643,6 +2020,7 @@ export function doughCalc(opts: {
     total: buildBlock(),
     totalDough: R0(totalDough),
     waterTemp: R0(waterTemp),
+    ...(beginnerDirectWaterTemperature ? { waterTemperature: beginnerDirectWaterTemperature } : {}),
     yeastPct: R2(yeastPct),
     eTotal: R1(eTotal),
   };
@@ -1698,6 +2076,8 @@ export function iceCalc(totalWater: number, tapTemp: number, targetTemp: number)
 }
 
 export type PlannerStepCopy = {
+  fold1Title?: string;
+  fold2Title?: string;
   ovenTitle: string;
   ovenDesc: string;
   bakeTitle?: string;
@@ -1871,6 +2251,24 @@ export function reversePlan(
     const ballingAt = homeSchedule!.ballingAt
       ?? new Date(homeSchedule!.startAt.getTime() + roomBeforeFridgeHours * 3600000);
     const finalRoomAt = new Date(ballingAt.getTime() + fridgeHours * 3600000);
+    if (homeCopy && style === 'neapolitan' && homeSchedule!.phaseAMinutes !== undefined && homeSchedule!.phaseBMinutes !== undefined) {
+      const phaseBStart = new Date(homeSchedule!.startAt.getTime() + homeSchedule!.phaseAMinutes * 60000);
+      const phaseBFolds = calculateBeginnerPhaseBPlan({
+        durationMinutes: homeSchedule!.phaseBMinutes,
+        flourBehavior: 'standard',
+        workflow: 'round',
+      }).folds;
+      phaseBFolds.forEach((fold) => {
+        const title = fold.index === 1 ? copy.fold1Title : copy.fold2Title;
+        if (title) {
+          steps.push({
+            at: new Date(phaseBStart.getTime() + fold.offsetMinutes * 60000),
+            title,
+            desc: title,
+          });
+        }
+      });
+    }
     const values = {
       STYLE: styleName,
       HOURS: formatHoursLabel(fridgeHours),
@@ -1896,7 +2294,7 @@ export function reversePlan(
       steps.push({ at: ballingAt, title: homeCopy?.roomOnlyTitle ?? copy.ballsTitle, desc: fillPlannerCopy(homeCopy?.roomOnlyBalling ?? copy.ballsDesc, values) });
     }
     steps.push({ at: homeSchedule!.startAt, title: directTitle, desc: fillPlannerCopy(homeCopy?.start ?? directDesc, values) });
-    if (homeCopy) {
+    if (homeCopy && homeSchedule!.phaseAMinutes === undefined) {
       steps.push({
         at: new Date(homeSchedule!.bakeAt.getTime() - 15 * 60000),
         title: homeCopy.shapingTitle,

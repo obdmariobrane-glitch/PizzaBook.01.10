@@ -1,6 +1,6 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
-import { Platform, View, Text, Pressable, ScrollView, Modal, ActivityIndicator, StyleSheet, LogBox, Alert } from 'react-native';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { Platform, View, Text, Pressable, ScrollView, Modal, StyleSheet, LogBox, Alert } from 'react-native';
+import { Stack, useRouter, useSegments, type Href } from 'expo-router';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import Constants from 'expo-constants';
@@ -44,8 +44,9 @@ function AuthGate() {
   const { user, loading, signInWithSessionId } = useAuth();
   const segments = useSegments();
   const router = useRouter();
-  const [animationDone, setAnimationDone] = useState(Platform.OS === 'web');
+  const [animationDone, setAnimationDone] = useState(false);
   const experienceLevel = useSyncExternalStore(subscribeExperienceLevel, getCachedExperienceLevel, getCachedExperienceLevel);
+  const finishSplashAnimation = useCallback(() => setAnimationDone(true), []);
 
   useEffect(() => {
     loadExperienceLevel();
@@ -137,18 +138,21 @@ function AuthGate() {
   useEffect(() => {
     if (Platform.OS === 'web' || !isPushSupported()) return;
 
-    const tapSub = addTapListener((data) => {
+    const openNotification = (data: Record<string, unknown>) => {
+      if (data.source === 'pizza-guided-recipe' && typeof data.stepId === 'string') {
+        router.push(`/(tabs)?focus=guided&stepId=${encodeURIComponent(data.stepId)}`);
+        return;
+      }
       const url = data?.deeplink || data?.action_url;
-      if (!url) return;
-      if (typeof url === 'string' && url.startsWith('http')) Linking.openURL(url);
-      else router.push(url);
-    });
+      if (typeof url !== 'string') return;
+      if (url.startsWith('http')) Linking.openURL(url);
+      else router.push(url as Href);
+    };
+
+    const tapSub = addTapListener(openNotification);
 
     getColdStartData().then((data) => {
-      const url = data?.deeplink || data?.action_url;
-      if (!url) return;
-      if (typeof url === 'string' && url.startsWith('http')) Linking.openURL(url);
-      else router.push(url);
+      if (data) openNotification(data);
     });
 
     (async () => {
@@ -203,14 +207,7 @@ function AuthGate() {
   }, [experienceLevel, segments, router]);
 
   if (loading || !animationDone || experienceLevel === undefined) {
-    if (Platform.OS === 'web') {
-      return (
-        <View style={styles.splash}>
-          <ActivityIndicator size="large" color={COLORS.brand} />
-        </View>
-      );
-    }
-    return <AnimatedSplash onFinish={() => setAnimationDone(true)} />;
+    return <AnimatedSplash onFinish={finishSplashAnimation} />;
   }
 
   return (
@@ -324,7 +321,7 @@ function compareVersions(left: string, right: string) {
 
 export default function RootLayout() {
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#F7C894' }}>
       <SafeAreaProvider>
         <LanguageProvider>
           <AuthProvider>
@@ -337,7 +334,6 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-  splash: { flex: 1, backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center' },
   welcomeOverlay: { flex: 1, backgroundColor: 'rgba(28,25,23,0.72)', justifyContent: 'center', padding: 20 },
   welcomeCard: { maxHeight: '88%', backgroundColor: COLORS.surfaceSecondary, borderRadius: 18, borderWidth: 1, borderColor: COLORS.border, overflow: 'hidden' },
   welcomeContent: { padding: 24, gap: 18 },

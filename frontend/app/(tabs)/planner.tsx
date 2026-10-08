@@ -1,6 +1,8 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Alert, View, Text, StyleSheet, ScrollView, Pressable, Platform, TextInput } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import Icon from '@react-native-vector-icons/ionicons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
@@ -24,10 +26,22 @@ function fmt(d: Date) {
   return `${day} · ${time}`;
 }
 
+function fmtPlanDate(d: Date, lang: string) {
+  return new Intl.DateTimeFormat(lang === 'hr' ? 'hr-HR' : lang === 'de' ? 'de-DE' : lang === 'sl' ? 'sl-SI' : 'en-GB', { dateStyle: 'medium' }).format(d);
+}
+
+function fmtPlanTime(d: Date, lang: string) {
+  return new Intl.DateTimeFormat(lang === 'hr' ? 'hr-HR' : lang === 'de' ? 'de-DE' : lang === 'sl' ? 'sl-SI' : 'en-GB', { timeStyle: 'short' }).format(d);
+}
+
 function pad(n: number) { return String(n).padStart(2, '0'); }
 
 export default function Planner() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const { returnTo, returnToken, returnSection } = useLocalSearchParams<{ returnTo?: string; returnToken?: string; returnSection?: string }>();
+  const returnToBeginner = useRef(returnTo === 'beginner');
+  const beginnerReturnSection = useRef(returnSection === 'style' ? 'style' : 'plan');
   const { t, lang } = useT();
   const experienceLevel = useSyncExternalStore(subscribeExperienceLevel, getCachedExperienceLevel, getCachedExperienceLevel);
   const experienceLoaded = experienceLevel !== undefined;
@@ -42,6 +56,7 @@ export default function Planner() {
   const bigaHomeSchedule = useSyncExternalStore(subscribeSharedHomeBigaSchedule, getSharedHomeBigaSchedule, getSharedHomeBigaSchedule);
   const poolishHomeSchedule = useSyncExternalStore(subscribeSharedHomePoolishSchedule, getSharedHomePoolishSchedule, getSharedHomePoolishSchedule);
   const [scheduledPlanKey, setScheduledPlanKey] = useState<string | null>(null);
+  const pendingBeginnerReturnBakeAt = useRef<number | null>(null);
   const effectiveStyle = isBeginner && directHomeSchedule?.style ? directHomeSchedule.style : style;
   const effectiveStyleName = isBeginner && effectiveStyle === 'romana'
     ? directHomeSchedule?.romanFormat === 'teglia' ? 'Romana Teglia' : 'Romana Tonda'
@@ -49,6 +64,10 @@ export default function Planner() {
   const plannerStepCopy = isBeginner
     ? t.planner.stepCopy
     : { ...t.planner.stepCopy, directHomeCopy: undefined };
+  useEffect(() => {
+    returnToBeginner.current = returnTo === 'beginner';
+    if (returnSection === 'style' || returnSection === 'plan') beginnerReturnSection.current = returnSection;
+  }, [returnTo, returnSection, returnToken]);
   useEffect(() => {
     if (experienceLoaded && isBeginner) void cancelPlannerNotificationsForMethods(['biga', 'poolish']);
   }, [experienceLoaded, isBeginner]);
@@ -59,6 +78,13 @@ export default function Planner() {
     desc: formatUnitText(step.desc, temperatureUnit, measurementSystem),
   })) : [];
   const planKey = bakeAt ? `${bakeAt.getTime()}-${method}-${effectiveStyle}-${directHomeSchedule?.romanFormat ?? ''}-${directHomeSchedule?.ovenTemp ?? ''}-${directHomeSchedule?.strategy ?? ''}-${directHomeSchedule?.startAt.getTime() ?? ''}-${directHomeSchedule?.roomBeforeFridgeHours ?? ''}-${directHomeSchedule?.fridgeHours ?? ''}-${directHomeSchedule?.roomAfterFridgeHours ?? ''}-${directHomeSchedule?.ballingAt?.getTime() ?? ''}-${directHomeSchedule?.preheatAt?.getTime() ?? ''}-${bigaHomeSchedule?.finalMixAt.getTime() ?? ''}-${poolishHomeSchedule?.finalMixAt.getTime() ?? ''}` : '';
+
+  useEffect(() => {
+    if (!isBeginner || pendingBeginnerReturnBakeAt.current === null || !bakeAt || !directHomeSchedule) return;
+    if (bakeAt.getTime() !== pendingBeginnerReturnBakeAt.current || directHomeSchedule.bakeAt.getTime() !== bakeAt.getTime()) return;
+    pendingBeginnerReturnBakeAt.current = null;
+    router.replace('/(tabs)?focus=plan');
+  }, [isBeginner, bakeAt, directHomeSchedule, router]);
 
   // Native picker state (iOS/Android)
   const [pickerMode, setPickerMode] = useState<null | 'date' | 'time'>(null);
@@ -102,9 +128,30 @@ export default function Planner() {
       Alert.alert(t.planner.pastDate);
       return false;
     }
+    if (d.getTime() - Date.now() < 60 * 60 * 1000) {
+      Alert.alert(t.planner.shortTimeTitle, t.planner.shortTimeMessage, [{ text: t.planner.understand }]);
+      return false;
+    }
     setSharedHomeBakeAt(d);
+    if (isBeginner) {
+      AsyncStorage.setItem('beginnerBakeAt', d.toISOString()).catch((error) => {
+        console.error('Unable to persist the scheduled bake time:', error);
+      });
+    }
     setScheduledPlanKey(null);
+    if (returnToBeginner.current) {
+      returnToBeginner.current = false;
+      router.replace(`/(tabs)?focus=${beginnerReturnSection.current}`);
+    }
     return true;
+  };
+
+  const handlePlannerBack = () => {
+    if (returnToBeginner.current) {
+      router.replace(`/(tabs)?focus=${beginnerReturnSection.current}`);
+    } else {
+      router.back();
+    }
   };
 
   const scheduleAll = async () => {
@@ -197,7 +244,13 @@ export default function Planner() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      <View style={styles.header}><Text style={styles.title}>{t.planner.title}</Text></View>
+      <View style={styles.header}>
+        <Pressable testID="planner-back" accessibilityRole="button" accessibilityLabel="Back" onPress={handlePlannerBack} style={styles.backButton}>
+          <Icon name="arrow-back" size={20} color={COLORS.brand} />
+          <Text style={styles.backButtonText}>Back</Text>
+        </Pressable>
+        <Text style={styles.title}>{t.planner.title}</Text>
+      </View>
       <ScrollView contentContainerStyle={{ padding: SPACING.lg, paddingBottom: SPACING.xxxl, gap: SPACING.lg }}>
         <View style={styles.card}>
           <Text style={styles.label}>{t.planner.style}</Text>
@@ -346,7 +399,8 @@ export default function Planner() {
               <View key={i} style={styles.stepItem}>
                 <View style={styles.stepDot} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.stepTime}>{fmt(s.at)}</Text>
+                  <Text style={styles.stepDate}>{fmtPlanDate(s.at, lang)}</Text>
+                  <Text style={styles.stepTime}>{fmtPlanTime(s.at, lang)}</Text>
                   <Text style={styles.stepTitle}>{s.title}</Text>
                   <Text style={styles.stepDesc}>{s.desc}</Text>
                 </View>
@@ -366,7 +420,9 @@ export default function Planner() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.surface },
-  header: { paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md },
+  header: { paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md, gap: SPACING.sm },
+  backButton: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 4 },
+  backButtonText: { color: COLORS.brand, fontSize: 14, fontWeight: '700' },
   title: { fontSize: 28, fontWeight: '800', color: COLORS.onSurface, letterSpacing: -0.5 },
   card: { backgroundColor: COLORS.surfaceSecondary, padding: SPACING.lg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.border, gap: SPACING.md },
   label: { fontSize: 13, color: COLORS.muted, fontWeight: '700', textTransform: 'uppercase' },
@@ -394,6 +450,7 @@ const styles = StyleSheet.create({
   stepItem: { flexDirection: 'row', gap: SPACING.md, alignItems: 'flex-start' },
   stepDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: COLORS.brand, marginTop: 6 },
   stepTime: { fontSize: 12, color: COLORS.brand, fontWeight: '700' },
+  stepDate: { fontSize: 12, color: COLORS.muted, fontWeight: '700' },
   stepTitle: { fontSize: 15, fontWeight: '700', color: COLORS.onSurface, marginTop: 2 },
   stepDesc: { fontSize: 13, color: COLORS.muted, marginTop: 2, lineHeight: 18 },
   empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: SPACING.xxxl, gap: SPACING.md },

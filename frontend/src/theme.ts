@@ -8,6 +8,7 @@ export const COLORS = {
   surfaceInverse: '#292524',
   onSurfaceInverse: '#FAF5F0',
   brand: '#D15900',
+  brandDark: '#472212',
   brandSecondary: '#E87121',
   brandTertiary: '#FADBC8',
   onBrandTertiary: '#8C3A00',

@@ -114,6 +114,44 @@ export async function scheduleLocal(title: string, body: string, seconds: number
   }
 }
 
+export async function scheduleLocalAt(
+  title: string,
+  body: string,
+  scheduledAt: Date,
+  data: Record<string, string>,
+): Promise<string | null> {
+  if (!mod) return null;
+  if (!Number.isFinite(scheduledAt.getTime()) || scheduledAt.getTime() <= Date.now()) return null;
+  return mod.scheduleNotificationAsync({
+    content: { title, body, sound: 'default', channelId: 'default', data },
+    trigger: {
+      type: mod.SchedulableTriggerInputTypes?.DATE ?? 'date',
+      date: scheduledAt,
+      channelId: 'default',
+    },
+  });
+}
+
+export async function cancelGuidedNotificationsForPlan(planId: string): Promise<void> {
+  if (!mod || !planId) return;
+  const scheduled = await mod.getAllScheduledNotificationsAsync();
+  const matching = scheduled.filter((request: any) => {
+    const data = request.content?.data ?? {};
+    return data.source === 'pizza-guided-recipe' && data.planId === planId;
+  });
+  await Promise.all(matching.map((request: any) => mod.cancelScheduledNotificationAsync(request.identifier)));
+}
+
+export async function cancelGuidedNotificationForStep(planId: string, stepId: string): Promise<void> {
+  if (!mod || !planId || !stepId) return;
+  const scheduled = await mod.getAllScheduledNotificationsAsync();
+  const matching = scheduled.filter((request: any) => {
+    const data = request.content?.data ?? {};
+    return data.source === 'pizza-guided-recipe' && data.planId === planId && data.stepId === stepId;
+  });
+  await Promise.all(matching.map((request: any) => mod.cancelScheduledNotificationAsync(request.identifier)));
+}
+
 export async function cancelPlannerNotificationsForMethods(methods: readonly string[]): Promise<void> {
   if (!mod || methods.length === 0) return;
   try {

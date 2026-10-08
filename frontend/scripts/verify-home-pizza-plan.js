@@ -52,6 +52,7 @@ const {
   selectDirectHomeCandidate,
   createDirectHomePizzaPlan,
   selectBeginnerDirectHomeStrategy,
+  MAX_BEGINNER_DIRECT_COLD_HOURS,
   createBigaHomePizzaPlan,
   createPoolishHomePizzaPlan,
   PIZZA_STYLE_PROFILES,
@@ -67,13 +68,13 @@ assert.match(bigaUiSource, /const beginnerDirectHome = isBeginner && method === 
 assert.match(bigaUiSource, /!isPremiumUnlocked && !isBeginner && nextStyle !== FREE_PIZZA_STYLE/);
 assert.match(bigaUiSource, /const locked = !isPremiumUnlocked && !isBeginner && key !== FREE_PIZZA_STYLE/);
 assert.match(bigaUiSource, /!isBeginner \? \(/);
-assert.match(bigaUiSource, /beginnerDirectHome && index === 0 \? beginnerHomeWaterInfo/);
+assert.match(bigaUiSource, /isBeginner && index === 0 \? beginnerWaterInfo/);
 assert.match(bigaUiSource, /if \(index === 3 && schedule\.fridgeHours > 0\)/);
 assert.match(bigaUiSource, /const activePhases = schedule\.fridgeHours > 0\s*\?\s*phases\s*:\s*phases\.filter/);
 assert.match(bigaUiSource, /labels\.roomOnlyRestStart/);
-assert.match(bigaUiSource, /labels\.takeOut\(duration\(Math\.max\(0, schedule\.roomAfterFridgeHours\)\)\)/);
-assert.match(bigaUiSource, /labels\.roomOnlyRestStart\(duration\(Math\.max\(0, schedule\.roomAfterFridgeHours\)\)\)/);
-assert.match(bigaUiSource, /if \(fridgeHours > 0\)\s*\{\s*steps\.push\(\{\s*label: isRomanTeglia \? t\.beginnerCalc\.timelineRefrigerateDough : t\.beginnerCalc\.timelineShapeBallsRefrigerate/);
+assert.match(bigaUiSource, /finalRestHours > 0\s*\?\s*labels\.takeOut\(duration\(finalRestHours\)\)\s*:\s*labels\.takeOutNow/);
+assert.match(bigaUiSource, /finalRestHours > 0\s*\?\s*labels\.roomOnlyRestStart\(duration\(finalRestHours\)\)\s*:\s*labels\.roomOnlyNow/);
+assert.match(bigaUiSource, /if \(fridgeHours > 0\)\s*\{\s*steps\.push\(\{\s*id: isGlutenFree \? 'portioning' : 'fridgeIn',\s*label: isRomanTeglia/);
 assert.match(bigaUiSource, /isBeginner && \/\^\(biga\|poolish\)\[-_\]\//);
 assert.match(bigaUiSource, /formatTemperature\(dough\.waterTemp, temperatureUnit\)/);
 assert.match(bigaUiSource, /mix by hand until no dry flour remains/);
@@ -952,14 +953,22 @@ for (const availableHours of [24, 48, 72]) {
   assert.deepEqual(freshPlan.schedule, dryPlan.schedule);
   assert.equal(freshPlan.schedule.strategy, 'coldDominant');
   assert.equal(freshPlan.schedule.roomBeforeFridgeHours, 1);
-  assert.equal(freshPlan.schedule.fridgeHours, availableHours - 4);
+  assert.equal(freshPlan.schedule.fridgeHours, Math.min(availableHours - 4, 24));
   assert.equal(freshPlan.schedule.roomAfterFridgeHours, 3);
+  const workflowHours = freshPlan.schedule.roomBeforeFridgeHours
+    + freshPlan.schedule.fridgeHours
+    + freshPlan.schedule.roomAfterFridgeHours;
+  assert.equal(workflowHours, Math.min(availableHours, 28));
+  assert.equal(
+    freshPlan.schedule.startAt.getTime(),
+    bakeAt.getTime() - workflowHours * 3600000,
+  );
   assert.equal(
     freshPlan.schedule.ballingAt.getTime(),
     bakeAt.getTime() - (freshPlan.schedule.fridgeHours + freshPlan.schedule.roomAfterFridgeHours) * 3600000,
   );
   assert.equal(freshPlan.schedule.preheatAt.getTime(), bakeAt.getTime() - 60 * 60000);
-  assert.equal(getHomeScheduleDurationHours(freshPlan.schedule), availableHours);
+  assert.equal(getHomeScheduleDurationHours(freshPlan.schedule), workflowHours);
 }
 
 for (const availableHours of [24, 48, 24.5]) {
@@ -1116,7 +1125,10 @@ for (const hours of [24, 48, 72]) {
       );
       assert.ok(plan, `${hours}h ${style} Direct Home plan should support ${flour.source} flour strength`);
       assert.equal(plan.schedule.bakeAt.getTime(), bakeAt.getTime());
-      assert.equal(getHomeScheduleDurationHours(plan.schedule), hours);
+      assert.equal(
+        getHomeScheduleDurationHours(plan.schedule),
+        flour.source === 'unknown' ? Math.min(hours, 28) : hours,
+      );
       assert.equal(JSON.stringify(getHomePlanLegacyFermentationHours(plan, 2, 24)), JSON.stringify({
         roomHours: plan.schedule.roomBeforeFridgeHours + plan.schedule.roomAfterFridgeHours,
         fridgeHours: plan.schedule.fridgeHours,
@@ -1140,7 +1152,7 @@ for (const style of styles) {
         assert.ok(plan, `${style} ${mixing} ${hours}h ${yeastType} Beginner plan should be valid`);
         assert.equal(plan.input.method, 'direct');
         assert.equal(plan.schedule.bakeAt.getTime(), bakeAt.getTime());
-        assert.equal(getHomeScheduleDurationHours(plan.schedule), hours);
+        assert.equal(getHomeScheduleDurationHours(plan.schedule), Math.min(hours, 28));
         assert.equal(plan.schedule.ballingAt.getTime(), plan.schedule.startAt.getTime() + plan.schedule.roomBeforeFridgeHours * 3600000);
         assert.equal(plan.schedule.preheatAt.getTime(), bakeAt.getTime() - 3600000);
         schedules.push(plan.schedule);

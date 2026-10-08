@@ -1,1 +1,1 @@
-export { default } from './AnimatedSplash.native';
+export { default } from './SplashAnimation';

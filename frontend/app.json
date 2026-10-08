@@ -30,10 +30,17 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/pizza-splash.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#000000"
+          "backgroundColor": "#F7C894",
+          "android": {
+            "backgroundColor": "#F7C894"
+          },
+          "ios": {
+            "image": "./assets/images/pizza-splash-background.png",
+            "imageWidth": 414,
+            "resizeMode": "cover",
+            "enableFullScreenImage_legacy": true,
+            "backgroundColor": "#F7C894"
+          }
         }
       ],
       "expo-font",

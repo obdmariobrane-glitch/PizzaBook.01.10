@@ -40,6 +40,57 @@ assert.match(uiSource, /setTrayWidthInput\('30'\)/);
 assert.match(uiSource, /buildBeginnerUnscheduledDirectSteps/);
 assert.match(uiSource, /beginnerDirectHomeSteps \?\? beginnerUnscheduledDirectSteps/);
 
+// Exact Neapolitan Tipo 00 Beginner Hand Phase A is isolated from Mixer and other flours.
+assert.match(uiSource, /isNeapolitanBeginner && hand && flourType === 'caputo00'/);
+assert.match(uiSource, /isNeapolitanBeginner && !hand && flourType === 'caputo00'/);
+assert.match(uiSource, /const isTargetNeapolitanHandPhaseA = isBeginner/);
+assert.match(uiSource, /const isTargetNeapolitanMixerPhaseA = isBeginner/);
+assert.match(uiSource, /const isTargetNeapolitanManitobaHandPhaseA = isBeginner/);
+assert.match(uiSource, /const isTargetNeapolitanManitobaMixerPhaseA = isBeginner/);
+assert.match(uiSource, /pizzaStyle === 'neapolitan'/);
+assert.match(uiSource, /const isTargetNeapolitanSpeltMixerPhaseA = isBeginner/);
+assert.match(uiSource, /Recommended water temperature: \$\{formatTemperature\(waterTemperatureCalculation\.recommendedWaterTemp/);
+assert.match(uiSource, /Preporučena temperatura vode: \$\{formatTemperature\(waterTemperatureCalculation\.recommendedWaterTemp/);
+assert.match(uiSource, /Empfohlene Wassertemperatur: \$\{formatTemperature\(waterTemperatureCalculation\.recommendedWaterTemp/);
+assert.match(uiSource, /Priporočena temperatura vode: \$\{formatTemperature\(waterTemperatureCalculation\.recommendedWaterTemp/);
+assert.doesNotMatch(uiSource, /Koristite hladnu do mlaku vodu/);
+assert.match(
+  uiSource,
+  /waterInfoStepIndex=\{\([^}]*isTargetNeapolitanHandPhaseA[^}]*\) && index === 0 \? 2 : undefined\}/,
+);
+assert.match(
+  uiSource,
+  /doughHandlingInfoStepIndex=\{[^}]*isTargetNeapolitanMixerPhaseA[^}]*index === 0 \? 7 : undefined\)?\}/,
+);
+assert.match(uiSource, /existingTimer\) => !\['preheat', 'bake', 'bake-finish', 'rotate'\]\.includes\(existingTimer\.id\)/);
+assert.match(uiSource, /const hasWaterInfo = !!waterInfo && \(waterInfoStepIndex !== undefined \? i === waterInfoStepIndex : \/ukupno \.\*vode\|total water\|Sieben und wiegen Sie\.\*Wasser\|skupno \.\*vode\/i\.test\(s\)\)/);
+assert.match(uiSource, /Mixer mixing usually takes about 8–10 minutes/);
+assert.match(uiSource, /Mixer mixing spelt dough usually takes about 5–7 minutes/);
+assert.match(uiSource, /The gluten in spelt dough is more sensitive/);
+assert.match(uiSource, /stop the mixer, cover the dough, and let it rest for about 10 minutes/);
+assert.match(uiSource, /Pour the yeast water into the mixer bowl, add the flour/);
+assert.match(uiSource, /Miješanje obično traje oko 8–10 minuta/);
+assert.match(uiSource, /let it rest for about 10 minutes/);
+assert.match(uiSource, /Stretch & Fold: take one edge of the dough/);
+assert.match(uiSource, /Then continue with the recipe/);
+assert.doesNotMatch(uiSource, /Mixer mixing usually takes about 6 minutes|Miješanje obično traje oko 6 minuta/);
+assert.match(uiSource, /Hand kneading Manitoba flour usually takes about 10–15 minutes/);
+assert.match(uiSource, /Ručno miješenje Manitoba brašna obično traje oko 10–15 minuta/);
+assert.match(uiSource, /Miješanje Manitoba brašna obično traje oko 10–12 minuta/);
+assert.match(uiSource, /Mixer mixing Manitoba flour usually takes about 10–12 minutes/);
+assert.match(uiSource, /approximately 90% of the water, or \$\{initialWater\} g/);
+assert.match(uiSource, /remaining 10% of the water, or \$\{remainingWater\} g/);
+assert.match(uiSource, /isNeapolitanWholeWheatBeginnerMixer/);
+assert.match(uiSource, /Miješanje integralnog tijesta mikserom obično traje oko 7–10 minuta/);
+assert.match(uiSource, /Mixer mixing whole-wheat dough usually takes about 7–10 minutes/);
+assert.match(uiSource, /Hand kneading usually takes about 10 minutes/);
+assert.match(uiSource, /If the dough becomes too sticky and difficult to work with/);
+assert.match(uiSource, /let it rest for 5 minutes/);
+assert.doesNotMatch(uiSource, /timer\('hand-knead'/);
+assert.doesNotMatch(uiSource, /timer\('mixer-low'/);
+assert.doesNotMatch(uiSource, /timer\('mixer-develop'/);
+assert.equal((uiSource.match(/isNeapolitanTipo00BeginnerMixer \? \[/g) ?? []).length, 2);
+
 // Style-info modal localisation
 assert.equal((translations.match(/styleInfo: \{/g) ?? []).length, 4);
 assert.doesNotMatch(uiSource, /Promjer:|Hidratacija:|Oblikovanje:/);
@@ -70,8 +121,8 @@ const expected = {
   '12-18': ['roomOnly', 9, 0], '12-22': ['hybrid', 2, 7], '12-28': ['coldDominant', 1, 8],
   '18-18': ['hybrid', 2, 13], '18-22': ['hybrid', 2, 13], '18-28': ['coldDominant', 1, 14],
   '24-18': ['coldDominant', 1, 20], '24-22': ['coldDominant', 1, 20], '24-28': ['coldDominant', 1, 20],
-  '48-18': ['coldDominant', 1, 44], '48-22': ['coldDominant', 1, 44], '48-28': ['coldDominant', 1, 44],
-  '72-18': ['coldDominant', 1, 68], '72-22': ['coldDominant', 1, 68], '72-28': ['coldDominant', 1, 68],
+  '48-18': ['coldDominant', 1, 24], '48-22': ['coldDominant', 1, 24], '48-28': ['coldDominant', 1, 24],
+  '72-18': ['coldDominant', 1, 24], '72-22': ['coldDominant', 1, 24], '72-28': ['coldDominant', 1, 24],
 };
 const now = new Date('2026-03-02T08:00:00Z');
 for (const hours of [6, 8, 12, 18, 24, 48, 72]) {
@@ -88,7 +139,14 @@ for (const hours of [6, 8, 12, 18, 24, 48, 72]) {
     assert.equal(fresh.roomBeforeFridgeHours, before, key);
     assert.equal(fresh.fridgeHours, fridge, key);
     assert.equal(fresh.roomAfterFridgeHours, 3, key);
-    assert.equal(before + fridge + 3, hours, `${key} total must equal window`);
+    const workflowHours = before + fridge + 3;
+    assert.equal(workflowHours, Math.min(hours, 28), `${key} workflow duration`);
+    assert.equal(
+      fresh.startAt.getTime(),
+      new Date(input.bakeAt.getTime() - workflowHours * 3600000).getTime(),
+      `${key} delayed start`,
+    );
+    assert.equal(fresh.startAt.getTime() <= now.getTime(), hours <= 28, `${key} start anchor`);
     if (strategy === 'roomOnly') assert.equal(fresh.fridgeHours, 0, key);
     assert.deepEqual(
       [dry.strategy, dry.roomBeforeFridgeHours, dry.fridgeHours, dry.roomAfterFridgeHours],
@@ -152,8 +210,8 @@ const { normalizeBeginnerSavedState, reversePlan } = calculator;
 assert.match(uiSource, /const ice = useMemo\(\(\) => \(?!isBeginner && useIce/);
 assert.match(uiSource, /normalizeBeginnerSavedState\(/);
 
-// Flour/hydration: Beginner hydration is owned by the style
-assert.match(uiSource, /Beginner hydration is owned by the pizza style/);
+// Flour/hydration: Beginner Neapolitan hydration follows the selected flour.
+assert.match(uiSource, /beginnerHydrationFor\(pizzaStyle, flour\)/);
 
 // Flour names localized (no Croatian in EN/DE/SL)
 {
@@ -175,12 +233,12 @@ assert.match(uiSource, /Beginner hydration is owned by the pizza style/);
 
 // Teglia ROOM_ONLY recipe: no refrigerator, authoritative final window, 15 min shaping explained
 assert.match(uiSource, /function buildBeginnerTegliaHomeSteps/);
-assert.match(uiSource, /buildBeginnerTegliaHomeSteps\(beginnerDirectRecipeSteps, directHomeSchedule, roomTemp, lang, ovenTemp, bakingTimeRange, \{ width: trayWidth, length: trayLength \}\)/);
+assert.match(uiSource, /buildBeginnerTegliaHomeSteps\(beginnerDirectRecipeSteps, directHomeSchedule, beginnerPhaseBPlan!, roomTemp, lang, ovenTemp, bakingTimeRange, \{ width: trayWidth, length: trayLength \}, flour\)/);
 assert.match(uiSource, /phases\.filter\(\(phase\) => !coldTitle\.test\(phase\.title\)\)/);
 
 // 15-minute semantics: Recipe states the full final window, not total minus 15
-assert.match(uiSource, /labels\.takeOut\(duration\(Math\.max\(0, schedule\.roomAfterFridgeHours\)\)\)/);
-assert.match(uiSource, /for \$\{hours\} in total; the last 15 minutes of that period are for shaping and topping/);
+assert.match(uiSource, /finalRestHours > 0\s*\?\s*labels\.takeOut\(duration\(finalRestHours\)\)\s*:\s*labels\.takeOutNow/);
+assert.match(uiSource, /take the dough balls out of the refrigerator \$\{hours\} before baking/i);
 
 // Small salt/yeast stay in grams in US mode; large quantities convert
 for (const small of ['0.13 g fresh yeast', '1.5 g dry yeast', '8 g salt']) {
@@ -240,11 +298,13 @@ assert.match(units.formatUnitText('Mix 1000 g flour and 620 g water', 'fahrenhei
   assert.deepEqual([badBlend.flour, badBlend.blendA, badBlend.blendB, badBlend.blendPctA], ['caputo00', 'caputo00', 'wholeWheat', 70]);
   assert.ok(BASE_FLOURS.includes(badBlend.blendA) && BASE_FLOURS.includes(badBlend.blendB));
 
-  // Hydration: style owns it, gluten-free keeps its own required hydration
-  assert.equal(beginnerHydrationFor('neapolitan', 'manitoba'), 62);
+  // Beginner hydration follows the selected style, except for the gluten-free flour profile.
+  const approvedNeapolitanHydration = { caputo00: 62, manitoba: 62, spelt: 62, wholeWheat: 62, glutenFree: 80, custom: 62 };
+  for (const [flour, hydration] of Object.entries(approvedNeapolitanHydration)) {
+    assert.equal(beginnerHydrationFor('neapolitan', flour), hydration);
+  }
   assert.equal(beginnerHydrationFor('ny_style', 'spelt'), 64);
   assert.equal(beginnerHydrationFor('romana', 'wholeWheat'), 59);
-  assert.equal(beginnerHydrationFor('neapolitan', 'glutenFree'), 80);
   assert.equal(normalizeBeginnerSavedState({ pizzaStyle: 'neapolitan', flour: 'glutenFree', hydration: 62 }).hydration, 80);
   assert.equal(normalizeBeginnerSavedState({ pizzaStyle: 'neapolitan', flour: 'glutenFree', hydration: 78, oven: 'ooni', ovenTemp: 450 }).hydration, 78);
   assert.match(uiSource, /beginnerHydrationFor\(pizzaStyle, flour\)/);
@@ -277,7 +337,7 @@ assert.match(units.formatUnitText('Mix 1000 g flour and 620 g water', 'fahrenhei
     assert.ok(localized.includes(needle), needle);
   }
   assert.doesNotMatch(localized, /If oil is used|Če uporabljate olje/);
-  assert.match(uiSource, /isGlutenFree\s*\? \[untimed\[0\]/);
+  assert.match(uiSource, /if \(plan\.behavior === 'glutenFree'\) \{\s*return \[/);
   for (const lng of ['hr', 'en', 'de', 'sl']) {
     const dh = trs[lng].planner.stepCopy.directHomeCopy;
     assert.ok(dh.shapingGlutenFree && !/semol|zdrob|Semola/i.test(dh.shapingGlutenFree), lng);
@@ -313,12 +373,12 @@ assert.doesNotMatch(uiSource, /Alert\.alert\('Romana T[a-z]+', '/);
   const tegliaStart = uiSource.indexOf('function buildBeginnerTegliaHomeSteps(');
   const tegliaEnd = uiSource.indexOf('function buildBeginnerDirectHomeSteps(');
   const teglia = uiSource.slice(tegliaStart, tegliaEnd);
-  // press/top steps use the shape window; only the bake step is stamped with bakeAt
-  assert.match(teglia, /pressSteps\.press\} \(\$\{formatAt\(shapeAt\)\}\)/);
-  assert.match(teglia, /pressSteps\.top\} \(\$\{formatAt\(shapeAt\)\}\)/);
-  assert.match(teglia, /pressSteps\.bake\} \(\$\{formatAt\(schedule\.bakeAt\)\}\)/);
-  assert.doesNotMatch(teglia, /pressSteps\.(oil|press|top)\} \(\$\{formatAt\(schedule\.bakeAt\)\}\)/);
-  // live bake range + oven temperature, and the baking-check trigger phrase is preserved per language
+  // Scheduled Teglia remains one mass, with tray pressing and bake steps.
+  assert.match(teglia, /pressSteps\.press/);
+  assert.match(teglia, /pressSteps\.top/);
+  assert.match(teglia, /pressSteps\.bake/);
+  assert.doesNotMatch(teglia, /ballingStep|divide the dough into balls|shape dough balls/i);
+  // Bake range + oven temperature stay localized for all supported languages.
   assert.equal((teglia.match(/\$\{bakingTimeRange\} (na|at|bei|pri) \$\{ovenTemp\} °C/g) || []).length >= 4 || (teglia.match(/\$\{bakingTimeRange\}/g) || []).length === 4, true);
   for (const phrase of ['pecite bez grilla', 'bake without the grill', 'backen Sie ohne Grill', 'pecite brez žara']) assert.ok(teglia.toLowerCase().includes(phrase.toLowerCase()), phrase);
   // Teglia sentences never trigger the Neapolitan-centric toppings info
