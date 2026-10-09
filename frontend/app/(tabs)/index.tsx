@@ -24,7 +24,7 @@ import { displayTemperature, formatLength, formatTemperature, formatUnitText, fo
 import {
   dimensionsCalc, doughCalc, getFermentationSchedule, iceCalc, getBakingTimeRange, formatBakingTimeRange,
   Method, OvenType, FlourType, PizzaStyle, HomeFlourStrengthSource, PIZZA_STYLE_PROFILES, FLOUR_PROFILES, BASE_FLOURS, normalizeBeginnerSavedState, beginnerHydrationFor, beginnerBallWeightForDiameter, beginnerDiameterForBallWeight, blendIdealHydration,
-  calculateBeginnerPhaseBPlan, createDirectHomePizzaPlan, createBigaHomePizzaPlan, createPoolishHomePizzaPlan, getBeginnerPreheatMinutes, getHomeFlourStrengthInput, getHomePlanLegacyFermentationHours,
+  calculateBeginnerPhaseBPlan, createDirectHomePizzaPlan, createBigaHomePizzaPlan, createPoolishHomePizzaPlan, getBeginnerFlourGuidanceKind, getBeginnerPreheatMinutes, getHomeFlourStrengthInput, getHomePlanLegacyFermentationHours, isBeginnerDirectWindowWithinLimits,
   BeginnerPhaseBPlan, BeginnerDirectScheduleMode,
   HomePizzaPlanSchedule, BigaHomePizzaSchedule, PoolishHomePizzaSchedule, getBigaHomeScheduleMilestones, getPoolishHomeScheduleMilestones, getSharedHomeBakeAt, subscribeSharedHomeBakeAt,
   setSharedHomeBakeAt, setSharedHomeDirectSchedule, setSharedHomeBigaSchedule, setSharedHomePoolishSchedule,
@@ -94,6 +94,42 @@ function croatianMinutes(minutes: number): string {
 function formatBeginnerClockTime(at: Date, lang: Lang): string {
   const locale = { hr: 'hr-HR', en: 'en-GB', de: 'de-DE', sl: 'sl-SI' }[lang];
   return new Intl.DateTimeFormat(locale, { timeStyle: 'short' }).format(at);
+}
+
+function localizeBeginnerScheduleNotice(notice: string, lang: Lang): string | null {
+  if (notice.includes('Very short schedule')) {
+    return {
+      hr: 'Vrlo kratak raspored: puna fermentacija nije zajamčena.',
+      en: 'Very short schedule: full fermentation is not guaranteed.',
+      de: 'Sehr kurzer Zeitplan: Eine vollständige Fermentation ist nicht garantiert.',
+      sl: 'Zelo kratek načrt: popolna fermentacija ni zagotovljena.',
+    }[lang];
+  }
+  if (notice.includes('Stretch & Fold skipped')) {
+    return {
+      hr: 'Stretch & Fold je preskočen jer je raspored prekratak.',
+      en: 'Stretch & Fold is skipped because the schedule is too short.',
+      de: 'Stretch & Fold wird übersprungen, weil der Zeitplan zu kurz ist.',
+      sl: 'Stretch & Fold je izpuščen, ker je načrt prekratek.',
+    }[lang];
+  }
+  if (notice.includes('Fridge + room requires')) {
+    return {
+      hr: 'Fermentacija u hladnjaku zahtijeva najmanje 3 sata u hladnjaku i završni odmor na sobnoj temperaturi.',
+      en: 'Refrigerated fermentation requires at least 3 hours in the refrigerator and a final room-temperature rest.',
+      de: 'Kühlschrankgärung benötigt mindestens 3 Stunden im Kühlschrank und eine abschließende Ruhezeit bei Raumtemperatur.',
+      sl: 'Fermentacija v hladilniku zahteva vsaj 3 ure v hladilniku in končni počitek pri sobni temperaturi.',
+    }[lang];
+  }
+  if (notice.includes('Room temperature is outside')) {
+    return {
+      hr: 'Temperatura prostorije je izvan procijenjenog raspona od 18–26 °C za završni odmor.',
+      en: 'Room temperature is outside the provisional 18–26°C range for the final rest.',
+      de: 'Die Raumtemperatur liegt außerhalb des vorläufigen Bereichs von 18–26 °C für die abschließende Ruhezeit.',
+      sl: 'Sobna temperatura je zunaj predvidenega razpona 18–26 °C za končni počitek.',
+    }[lang];
+  }
+  return null;
 }
 
 function labelSelectedYeast(text: string, lang: Lang, yeastType: 'fresh' | 'dry'): string {
@@ -381,11 +417,15 @@ export default function CalculatorHome() {
     AsyncStorage.getItem(BEGINNER_BAKE_AT_KEY).then((value) => {
       if (!value) return;
       const parsed = new Date(value);
-      if (Number.isFinite(parsed.getTime()) && parsed.getTime() > Date.now()) setSharedHomeBakeAt(parsed);
+      const availableHours = (parsed.getTime() - Date.now()) / 3600000;
+      if (Number.isFinite(parsed.getTime()) && parsed.getTime() > Date.now()
+        && (!isBeginner || isBeginnerDirectWindowWithinLimits(availableHours))) {
+        setSharedHomeBakeAt(parsed);
+      }
     }).catch((error) => {
       console.error('Unable to restore the scheduled bake time:', error);
     });
-  }, []);
+  }, [isBeginner]);
 
   useEffect(() => {
     AsyncStorage.getItem(GUIDED_NOTIFICATIONS_ENABLED_KEY).then((value) => {
@@ -855,6 +895,38 @@ export default function CalculatorHome() {
     ? (homePlan?.candidateEvaluations ?? [])
     : [];
   const beginnerSelectableModes = beginnerCandidateEvaluations.filter((evaluation) => evaluation.selectable);
+  const selectedBeginnerEvaluation = beginnerCandidateEvaluations.find((evaluation) =>
+    (evaluation.candidate as unknown as { mode?: BeginnerDirectScheduleMode }).mode === beginnerScheduleMode,
+  ) ?? homePlan?.selectedEvaluation;
+  const beginnerFlourGuidanceKind = isBeginner && method === 'direct'
+    ? getBeginnerFlourGuidanceKind(selectedBeginnerEvaluation, flour === 'glutenFree')
+    : 'none';
+  const beginnerFlourGuidance = ({
+    hr: {
+      glutenFree: 'Bezglutensko brašno ne procjenjuje se W-faktorom. Za njega vrijedi poseban postupak bez razvoja glutena.',
+      unknown: 'Snaga odabranog brašna nije poznata. Procjena ne može potvrditi da je prikladno za odabrano trajanje; pratite razvoj tijesta, a hladnjak usporava fermentaciju.',
+      strongerFlourMayHelp: 'Za odabrano trajanje i uvjete fermentacije jače brašno može pružiti veću sigurnost. Viša sobna temperatura ubrzava fermentaciju, a hladnjak je usporava.',
+      none: 'Odabrano trajanje i način fermentacije u skladu su s dostupnom procjenom brašna. Viša sobna temperatura ubrzava fermentaciju, a hladnjak je usporava.',
+    },
+    en: {
+      glutenFree: 'Gluten-free flour is not assessed by W strength. It follows a separate gluten-free process.',
+      unknown: 'The selected flour strength is unknown. The evaluation cannot confirm that it suits the selected duration; watch the dough, while refrigeration slows fermentation.',
+      strongerFlourMayHelp: 'For the selected duration and fermentation conditions, stronger flour may provide more margin. Higher room temperature speeds fermentation, while refrigeration slows it.',
+      none: 'The selected duration and fermentation mode fit the available flour evaluation. Higher room temperature speeds fermentation, while refrigeration slows it.',
+    },
+    de: {
+      glutenFree: 'Glutenfreies Mehl wird nicht nach dem W-Faktor beurteilt. Dafür gilt ein eigenes Verfahren ohne Glutenentwicklung.',
+      unknown: 'Die Mehlstärke des ausgewählten Mehls ist unbekannt. Die Bewertung kann nicht bestätigen, dass es für die gewählte Dauer geeignet ist; beobachten Sie den Teig, während Kühlung die Gärung verlangsamt.',
+      strongerFlourMayHelp: 'Für die gewählte Dauer und die Gärbedingungen kann stärkeres Mehl mehr Reserve bieten. Eine höhere Raumtemperatur beschleunigt die Gärung, Kühlung verlangsamt sie.',
+      none: 'Die gewählte Dauer und Gärart passen zur verfügbaren Mehlbewertung. Eine höhere Raumtemperatur beschleunigt die Gärung, Kühlung verlangsamt sie.',
+    },
+    sl: {
+      glutenFree: 'Brezglutenske moke ne ocenjujemo z W-faktorjem. Zanjo velja ločen postopek brez razvoja glutena.',
+      unknown: 'Moč izbrane moke ni znana. Ocena ne more potrditi, da je primerna za izbrano trajanje; opazujte testo, hladilnik pa fermentacijo upočasni.',
+      strongerFlourMayHelp: 'Za izbrano trajanje in pogoje fermentacije lahko močnejša moka zagotovi več rezerve. Višja sobna temperatura pospeši fermentacijo, hladilnik pa jo upočasni.',
+      none: 'Izbrano trajanje in način fermentacije ustrezata razpoložljivi oceni moke. Višja sobna temperatura pospeši fermentacijo, hladilnik pa jo upočasni.',
+    },
+  }[lang])[beginnerFlourGuidanceKind];
   const beginnerScheduleSelectionVisible = isBeginner
     && method === 'direct'
     && (mixing === 'hand' || mixing === 'mixer')
@@ -2164,8 +2236,21 @@ export default function CalculatorHome() {
         <Icon name="calendar-outline" size={17} color={COLORS.brand} />
         <Text style={styles.expandText}>{t.beginnerCalc.setBakeTime}</Text>
       </Pressable>
-      {beginnerDirectHome && directHomeSchedule?.thermalUncertainty ? <Text style={styles.hint}>{directHomeSchedule.thermalUncertainty}</Text> : null}
-      {beginnerDirectHome ? (directHomeSchedule?.limitations ?? []).map((limitation) => <Text key={limitation} style={styles.hint}>{limitation}</Text>) : null}
+      {beginnerDirectHome && directHomeSchedule?.thermalUncertainty ? (
+        <Text style={styles.hint}>
+          {lang === 'hr'
+            ? 'Napomena: Tijesto se postupno hladi i zagrijava; raspored ne modelira temperaturu sredine tijesta.'
+            : lang === 'de'
+              ? 'Hinweis: Der Teig kühlt und erwärmt sich allmählich; der Zeitplan modelliert nicht die Kerntemperatur.'
+              : lang === 'sl'
+                ? 'Opomba: Testo se postopoma hladi in segreva; načrt ne modelira temperature v sredici testa.'
+                : 'Note: Dough cools and warms gradually; the schedule does not model core temperature.'}
+        </Text>
+      ) : null}
+      {beginnerDirectHome ? (directHomeSchedule?.limitations ?? [])
+        .map((limitation) => localizeBeginnerScheduleNotice(limitation, lang))
+        .filter((limitation): limitation is string => !!limitation)
+        .map((limitation) => <Text key={limitation} style={styles.hint}>{limitation}</Text>) : null}
       {method === 'direct' && !directHomeSchedule ? (
         <Text style={styles.hint}>{sharedBakeAt ? t.beginnerCalc.homePlanUnavailable : t.beginnerCalc.setBakeTime}</Text>
       ) : method !== 'direct' ? (
@@ -3545,7 +3630,10 @@ export default function CalculatorHome() {
               </Pressable>
             </View>
             <ScrollView style={{ maxHeight: 520 }} contentContainerStyle={{ paddingBottom: SPACING.md }}>
-              <Text style={styles.tooltipBody}>{beginnerFermentationInfoBody}</Text>
+              <Text style={styles.tooltipBody}>
+                {beginnerFermentationInfoBody}
+                {beginnerFlourGuidance ? `\n\n🍕 ${beginnerFlourGuidance}` : ''}
+              </Text>
             </ScrollView>
           </Pressable>
         </Pressable>

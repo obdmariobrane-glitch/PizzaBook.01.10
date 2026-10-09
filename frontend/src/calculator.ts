@@ -355,6 +355,28 @@ export type BeginnerDirectHomeStrategy = 'roomOnly' | 'hybrid' | 'coldDominant';
 export const BEGINNER_DIRECT_PHASE_A_MINUTES = 20;
 export const BEGINNER_DIRECT_PHASE_C_MINUTES = 5;
 export const BEGINNER_DIRECT_MIN_FRIDGE_HOURS = 3;
+export const BEGINNER_DIRECT_MIN_WINDOW_HOURS = 1;
+export const BEGINNER_DIRECT_MAX_WINDOW_HOURS = 48;
+
+export function isBeginnerDirectWindowWithinLimits(availableHours: number): boolean {
+  return Number.isFinite(availableHours)
+    && availableHours >= BEGINNER_DIRECT_MIN_WINDOW_HOURS
+    && availableHours <= BEGINNER_DIRECT_MAX_WINDOW_HOURS;
+}
+
+export type BeginnerFlourGuidanceKind = 'glutenFree' | 'unknown' | 'strongerFlourMayHelp' | 'none';
+
+export function getBeginnerFlourGuidanceKind(
+  evaluation: DirectHomeCandidateEvaluation | null | undefined,
+  glutenFree: boolean,
+): BeginnerFlourGuidanceKind {
+  if (glutenFree) return 'glutenFree';
+  if (!evaluation?.baseResilience.flourCapability || evaluation.baseResilience.confidence === 'low') return 'unknown';
+  if (evaluation.baseResilience.resilience === 'low' || evaluation.domain.status === 'unusual') {
+    return 'strongerFlourMayHelp';
+  }
+  return 'none';
+}
 
 export function getBeginnerDirectFinalRoomTargetHours(roomTemp: number): number | null {
   if (!Number.isFinite(roomTemp) || roomTemp < 18 || roomTemp > 26) return null;
@@ -449,7 +471,7 @@ export function generateBeginnerDirectScheduleCandidates(
   roomTemp: number,
   bakeAt: Date,
 ): BeginnerDirectScheduleCandidate[] {
-  if (!Number.isFinite(availableHours) || availableHours <= 0) return [];
+  if (!isBeginnerDirectWindowWithinLimits(availableHours)) return [];
   return [
     createBeginnerDirectScheduleCandidate('roomOnly', availableHours, roomTemp, bakeAt),
     createBeginnerDirectScheduleCandidate('fridgeRoom', availableHours, roomTemp, bakeAt),
@@ -1147,6 +1169,7 @@ export function createDirectHomePizzaPlan(
     && (input.style === 'neapolitan' || input.style === 'romana' || input.style === 'ny_style')
     && (input.mixing === 'hand' || input.mixing === 'home');
   if (isBeginnerDirectScheduleTarget) {
+    if (!isBeginnerDirectWindowWithinLimits(availableHours)) return null;
     const scheduleCandidates = generateBeginnerDirectScheduleCandidates(availableHours, input.roomTemp, input.bakeAt);
     const evaluationInput: HomeDoughToleranceInput = {
       flour,

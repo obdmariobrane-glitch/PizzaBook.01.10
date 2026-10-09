@@ -101,9 +101,12 @@ assert.match(calculator, /durationMinutes: homeSchedule!\.phaseBMinutes/);
 assert.match(calculator, /flourBehavior: homeSchedule!\.glutenFree \? 'glutenFree' : 'standard'/);
 assert.match(calculatorUi, /setCustomBallWeight\(nextBallWeight\)/);
 assert.doesNotMatch(calculatorUi, /setCustomBallWeight\(canonicalBallWeight\)/);
-assert.match(planner, /d\.getTime\(\) - Date\.now\(\) < 60 \* 60 \* 1000/);
+assert.match(planner, /BEGINNER_DIRECT_MIN_WINDOW_HOURS/);
+assert.match(planner, /BEGINNER_DIRECT_MAX_WINDOW_HOURS/);
 assert.equal((translations.match(/shortTimeTitle:/g) || []).length, 4);
 assert.equal((translations.match(/shortTimeMessage:/g) || []).length, 4);
+assert.equal((translations.match(/beginnerWindowTitle:/g) || []).length, 4);
+assert.equal((translations.match(/beginnerWindowMessage:/g) || []).length, 4);
 assert.equal((translations.match(/understand:/g) || []).length, 4);
 
 console.log('Beginner Planner fold, ball-weight, and short-time warning checks passed.');

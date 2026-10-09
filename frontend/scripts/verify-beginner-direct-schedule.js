@@ -13,7 +13,14 @@ const compiled = ts.transpileModule(source, {
 const moduleRef = { exports: {} };
 vm.runInNewContext(compiled, { module: moduleRef, exports: moduleRef.exports }, { filename: 'calculator.ts' });
 
-const { createDirectHomePizzaPlan, calculateBeginnerPhaseBPlan, getBeginnerPreheatMinutes, MAX_BEGINNER_DIRECT_COLD_HOURS } = moduleRef.exports;
+const {
+  createDirectHomePizzaPlan,
+  calculateBeginnerPhaseBPlan,
+  evaluateDirectHomeCandidate,
+  getBeginnerFlourGuidanceKind,
+  getBeginnerPreheatMinutes,
+  MAX_BEGINNER_DIRECT_COLD_HOURS,
+} = moduleRef.exports;
 const now = new Date('2026-10-06T12:00:00.000Z');
 const styles = [
   ['neapolitan', undefined],
@@ -22,7 +29,7 @@ const styles = [
   ['romana', 'teglia'],
 ];
 
-function createPlan(hours, style, romanFormat) {
+function createPlan(hours, style, romanFormat, beginner = false) {
   const bakeAt = new Date(now.getTime() + hours * 3600000);
   return createDirectHomePizzaPlan({
     style,
@@ -30,6 +37,7 @@ function createPlan(hours, style, romanFormat) {
     pizzas: 1,
     ballWeight: 250,
     method: 'direct',
+    mixing: beginner ? 'hand' : undefined,
     bakeAt,
     roomTemp: 22,
     fridgeTemp: 4,
@@ -37,6 +45,41 @@ function createPlan(hours, style, romanFormat) {
     ovenTemp: 260,
   }, { source: 'unknown' }, 65, 'dry', now, true);
 }
+
+assert.equal(createPlan(0.99, 'neapolitan', undefined, true), null);
+assert.ok(createPlan(1, 'neapolitan', undefined, true));
+assert.ok(createPlan(48, 'neapolitan', undefined, true));
+assert.equal(createPlan(48.01, 'neapolitan', undefined, true), null);
+
+const guidanceCandidate = {
+  strategy: 'roomOnly',
+  roomBeforeFridgeHours: 1,
+  fridgeHours: 0,
+  roomAfterFridgeHours: 2,
+  status: 'acceptable',
+  warnings: [],
+};
+const unknownEvaluation = evaluateDirectHomeCandidate(guidanceCandidate, {
+  flour: { source: 'unknown' },
+  hydrationPct: 65,
+  roomTemp: 22,
+  fridgeTemp: 4,
+  roomBeforeFridgeHours: 0,
+  fridgeHours: 0,
+  roomAfterFridgeHours: 0,
+}, 'dry', true);
+assert.equal(getBeginnerFlourGuidanceKind(unknownEvaluation, false), 'unknown');
+assert.equal(getBeginnerFlourGuidanceKind(unknownEvaluation, true), 'glutenFree');
+const knownEvaluation = evaluateDirectHomeCandidate(guidanceCandidate, {
+  flour: { source: 'w', w: 180 },
+  hydrationPct: 70,
+  roomTemp: 22,
+  fridgeTemp: 4,
+  roomBeforeFridgeHours: 0,
+  fridgeHours: 0,
+  roomAfterFridgeHours: 0,
+}, 'dry');
+assert.equal(getBeginnerFlourGuidanceKind(knownEvaluation, false), 'strongerFlourMayHelp');
 
 for (const ovenType of ['homeStone', 'homePan', 'ooni']) {
   const bakeAt = new Date('2026-10-07T00:15:00.000Z');
@@ -59,7 +102,7 @@ for (const ovenType of ['homeStone', 'homePan', 'ooni']) {
 }
 
 for (const [style, romanFormat] of styles) {
-  for (const hours of [4, 10, 24, 28, 48, 72, 96]) {
+  for (const hours of [4, 10, 24, 28, 48]) {
     const result = createPlan(hours, style, romanFormat);
     assert.ok(result, `${style}/${romanFormat ?? ''} ${hours}h should produce a schedule`);
     const { schedule } = result;
@@ -104,7 +147,7 @@ assert.deepEqual(
   [1, 20, 3],
 );
 
-for (const hours of [48, 72, 96]) {
+for (const hours of [48]) {
   const result = createPlan(hours, 'neapolitan');
   assert.equal(result.schedule.fridgeHours, 24);
   assert.equal(result.schedule.roomBeforeFridgeHours, 1);
@@ -117,5 +160,7 @@ for (const hours of [48, 72, 96]) {
     workflow: 'round',
   }).foldCount, 1);
 }
+assert.equal(createPlan(72, 'neapolitan', undefined, true), null);
+assert.equal(createPlan(96, 'neapolitan', undefined, true), null);
 
 console.log('Beginner Direct cold cap and delayed-start checks passed.');

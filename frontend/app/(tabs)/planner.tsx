@@ -13,6 +13,7 @@ import { getCachedTemperatureUnit, subscribeTemperatureUnit, getCachedMeasuremen
 import { formatTemperature, formatUnitText } from '../../src/units';
 import {
   reversePlan, Method, PizzaStyle,
+  BEGINNER_DIRECT_MAX_WINDOW_HOURS, BEGINNER_DIRECT_MIN_WINDOW_HOURS,
   getSharedHomeBakeAt, setSharedHomeBakeAt, subscribeSharedHomeBakeAt,
   getSharedHomeDirectSchedule, subscribeSharedHomeDirectSchedule,
   getSharedHomeBigaSchedule, subscribeSharedHomeBigaSchedule,
@@ -128,7 +129,12 @@ export default function Planner() {
       Alert.alert(t.planner.pastDate);
       return false;
     }
-    if (d.getTime() - Date.now() < 60 * 60 * 1000) {
+    const availableHours = (d.getTime() - Date.now()) / (60 * 60 * 1000);
+    if (isBeginner && (availableHours < BEGINNER_DIRECT_MIN_WINDOW_HOURS || availableHours > BEGINNER_DIRECT_MAX_WINDOW_HOURS)) {
+      Alert.alert(t.planner.beginnerWindowTitle, t.planner.beginnerWindowMessage);
+      return false;
+    }
+    if (!isBeginner && availableHours < 1) {
       Alert.alert(t.planner.shortTimeTitle, t.planner.shortTimeMessage, [{ text: t.planner.understand }]);
       return false;
     }
