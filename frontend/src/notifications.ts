@@ -147,7 +147,7 @@ export async function cancelGuidedNotificationForStep(planId: string, stepId: st
   const scheduled = await mod.getAllScheduledNotificationsAsync();
   const matching = scheduled.filter((request: any) => {
     const data = request.content?.data ?? {};
-    return data.source === 'pizza-guided-recipe' && data.planId === planId && data.stepId === stepId;
+    return data.source === 'pizza-guided-recipe' && data.planId === planId && (data.stepId === stepId || data.combinedStepId === stepId);
   });
   await Promise.all(matching.map((request: any) => mod.cancelScheduledNotificationAsync(request.identifier)));
 }

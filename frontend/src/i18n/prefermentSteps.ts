@@ -402,7 +402,7 @@ export const RESET_LABEL: Record<Lang, string> = {
 // PHASE TIMERS - short alarm chips shown next to each phase title.
 // Locale-agnostic durations + short localized labels via a shared kind system.
 // =========================================================================
-export type TimerKind = 'rt' | 'fridge' | 'rest' | 'ballsRt' | 'ballsFridge' | 'preBake' | 'preheat' | 'bake' | 'bakeFinish' | 'rotate' | 'preferment';
+export type TimerKind = 'rt' | 'fridge' | 'rest' | 'ballsRt' | 'ballsFridge' | 'preBake' | 'roomToBake' | 'preheat' | 'bake' | 'bakeFinish' | 'rotate' | 'preferment';
 
 export type BaseTimer = { id: string; seconds: number; kind: TimerKind };
 
@@ -487,10 +487,10 @@ export const PHASE_TIMER_DURATIONS: Record<string, BaseTimer[]> = {
 
 // Localized short label per kind
 export const TIMER_KIND_LABEL: Record<Lang, Record<TimerKind, string>> = {
-  hr: { rt: 'Sobna', fridge: 'Frižider', rest: 'Odmor', ballsRt: 'Loptice RT', ballsFridge: 'Loptice frižider', preBake: 'Prije pečenja', preheat: 'Zagrijavanje', bake: 'Pečenje', bakeFinish: 'Završno pečenje', rotate: 'Okretanje pizze', preferment: 'Fermentacija predtijesta' },
-  en: { rt: 'Room temp', fridge: 'Fridge', rest: 'Rest', ballsRt: 'Balls RT', ballsFridge: 'Balls Fridge', preBake: 'Before baking', preheat: 'Preheating', bake: 'Baking', bakeFinish: 'Final bake', rotate: 'Rotate pizza', preferment: 'Preferment fermentation' },
-  de: { rt: 'Raumtemp.', fridge: 'Kühlschrank', rest: 'Ruhezeit', ballsRt: 'Kugeln RT', ballsFridge: 'Kugeln Kühlschrank', preBake: 'Vor dem Backen', preheat: 'Vorheizen', bake: 'Backen', bakeFinish: 'Fertigbacken', rotate: 'Pizza drehen', preferment: 'Vorteig-Fermentation' },
-  sl: { rt: 'Sobna', fridge: 'Hladilnik', rest: 'Počitek', ballsRt: 'Kroglice RT', ballsFridge: 'Kroglice hladilnik', preBake: 'Pred peko', preheat: 'Segrevanje', bake: 'Peka', bakeFinish: 'Zaključna peka', rotate: 'Obračanje pice', preferment: 'Fermentacija predtesta' },
+  hr: { rt: 'Sobna', fridge: 'Frižider', rest: 'Odmor', ballsRt: 'Loptice RT', ballsFridge: 'Loptice frižider', preBake: 'Prije pečenja', roomToBake: 'Sobna do pečenja', preheat: 'Zagrijavanje', bake: 'Pečenje', bakeFinish: 'Završno pečenje', rotate: 'Okretanje pizze', preferment: 'Fermentacija predtijesta' },
+  en: { rt: 'Room temp', fridge: 'Fridge', rest: 'Rest', ballsRt: 'Balls RT', ballsFridge: 'Balls Fridge', preBake: 'Before baking', roomToBake: 'Room temp until baking', preheat: 'Preheating', bake: 'Baking', bakeFinish: 'Final bake', rotate: 'Rotate pizza', preferment: 'Preferment fermentation' },
+  de: { rt: 'Raumtemp.', fridge: 'Kühlschrank', rest: 'Ruhezeit', ballsRt: 'Kugeln RT', ballsFridge: 'Kugeln Kühlschrank', preBake: 'Vor dem Backen', roomToBake: 'Raumtemp. bis Backen', preheat: 'Vorheizen', bake: 'Backen', bakeFinish: 'Fertigbacken', rotate: 'Pizza drehen', preferment: 'Vorteig-Fermentation' },
+  sl: { rt: 'Sobna', fridge: 'Hladilnik', rest: 'Počitek', ballsRt: 'Kroglice RT', ballsFridge: 'Kroglice hladilnik', preBake: 'Pred peko', roomToBake: 'Sobna do peke', preheat: 'Segrevanje', bake: 'Peka', bakeFinish: 'Zaključna peka', rotate: 'Obračanje pice', preferment: 'Fermentacija predtesta' },
 };
 
 // Localized notification content

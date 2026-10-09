@@ -26,7 +26,10 @@ assert.match(appSource, /if \(roomAfterFridgeHours > 0\) \{\s*steps\.push\(\{\s*
 assert.match(appSource, /id: 'preheat'/);
 assert.equal((appSource.match(/id: 'roomFermentationEnd'/g) || []).length, 1);
 assert.match(appSource, /getBeginnerRoomOnlyEnd\(directHomeSchedule, preheatAt\)/);
-assert.equal((translations.match(/timelineRoomFermentationEnd:/g) || []).length, 4);
+assert.equal((translations.match(/roomFermentationEndPreheat:/g) || []).length, 4);
+assert.match(appSource, /planGuidedNotifications\(beginnerScheduleSteps, guidedCompletedAt, Date\.now\(\)\)/);
+assert.match(appSource, /combinedStepId: combinedWith\.id/);
+assert.match(appSource, /id: 'roomFermentationEnd'[\s\S]{0,200}?steps\.push\(\{\s*id: 'preheat'/, 'preheat event must be kept next to the room-end event');
 assert.match(appSource, /id: 'shape'/);
 assert.match(appSource, /id: 'bake'/);
 

@@ -455,9 +455,14 @@ for (const lang of languages) {
     const noGap = buildBeginnerDirectHomeSteps(roundPhases('caputo00', 'neapolitan'), schedule(0, 2, 1), phaseBPlanFor('caputo00', 2), 22, 4, 300, 'homeStone', '4–5 min', lang, 'fresh', 'neapolitan', 30, 70, 100, 'caputo00', '1250 g', '250 g', 5);
     assert.ok(!noGap[2].steps[5].includes(labels[lang]));
     // Fridge mode keeps its own Phase C step and final-phase tempering wording.
+    const roomTimers = buildBeginnerDirectHomeSteps(roundPhases('caputo00', 'neapolitan'), schedule(0, 2, 1), phaseBPlanFor('caputo00', 2), 22, 4, 300, 'homeStone', '4–5 min', lang, 'fresh', 'neapolitan', 30, 70, 100, 'caputo00', '1250 g', '250 g', 5).at(-1).timers;
+    assert.equal(roomTimers[0].kind, 'roomToBake');
+    assert.equal(roomTimers[0].seconds, 3600);
+    assert.equal(roomTimers[1].kind, 'preheat');
     const fridge = buildBeginnerDirectHomeSteps(roundPhases('caputo00', 'neapolitan'), schedule(8, 2, 3), phaseBPlanFor('caputo00', 2), 22, 4, 300, 'homeStone', '4–5 min', lang, 'fresh', 'neapolitan', 30, 70, 100, 'caputo00', '1250 g', '250 g', 5);
     assert.ok(!fridge[2].steps[5].includes(labels[lang]));
     assert.equal(fridge.at(-1).stepInfo, undefined);
+    assert.equal(fridge.at(-1).timers[0].kind, 'preBake');
   }
 }
 

@@ -40,6 +40,7 @@ import {
   getNextGuidedEvent,
   groupGuidedEventsByLocalDate,
   GuidedScheduleEvent,
+  planGuidedNotifications,
 } from '../../src/guidedRecipe';
 
 const DIAMETERS = [28, 30, 33, 35];
@@ -1254,22 +1255,24 @@ export default function CalculatorHome() {
       await cancelGuidedNotificationsForPlan(guidedPlanId);
       if (!guidedNotificationsEnabled || !isPushSupported()) return;
 
-      for (const event of beginnerScheduleSteps) {
-        if (!event.actionable || guidedCompletedAt[event.id] !== undefined || event.at.getTime() <= Date.now()) continue;
+      for (const { event, combinedWith } of planGuidedNotifications(beginnerScheduleSteps, guidedCompletedAt, Date.now())) {
         const useGentleFoldCopy = flour !== 'custom'
           && (beginnerFlourBehavior === 'spelt' || beginnerFlourBehavior === 'wholeWheat');
-        const copy = event.id === 'fold1' && useGentleFoldCopy
+        const copy = combinedWith
+          ? t.beginnerCalc.guidedNotificationCopy.roomFermentationEndPreheat
+          : event.id === 'fold1' && useGentleFoldCopy
           ? t.beginnerCalc.guidedNotificationCopy.fold1Gentle
           : event.id === 'fold2' && useGentleFoldCopy
             ? t.beginnerCalc.guidedNotificationCopy.fold2Gentle
             : t.beginnerCalc.guidedNotificationCopy[event.id];
-        const notificationBody = event.id === 'fridgeIn' || event.id === 'preheat'
+        const notificationBody = !combinedWith && (event.id === 'fridgeIn' || event.id === 'preheat')
           ? event.label
           : copy.body;
         const notificationId = await scheduleLocalAt(copy.title, notificationBody, event.at, {
           source: 'pizza-guided-recipe',
           planId: guidedPlanId,
           stepId: event.id,
+          ...(combinedWith ? { combinedStepId: combinedWith.id } : {}),
         });
         if (!notificationId) throw new Error(`No notification was scheduled for guided step "${event.id}".`);
         if (generation !== notificationSyncGeneration.current) {
@@ -6454,7 +6457,7 @@ function getBeginnerPhaseBTimers(plan: BeginnerPhaseBPlan): BaseTimer[] {
 function getBeginnerPhaseCTimers(schedule: HomePizzaPlanSchedule, temperingMinutes: number): BaseTimer[] {
   const timers: BaseTimer[] = [];
   if (temperingMinutes > 0) {
-    timers.push({ id: 'beginner-phase-c-tempering', seconds: temperingMinutes * 60, kind: 'preBake' });
+    timers.push({ id: 'beginner-phase-c-tempering', seconds: temperingMinutes * 60, kind: schedule.fridgeHours > 0 ? 'preBake' : 'roomToBake' });
   }
   if (schedule.preheatAt) {
     const preheatSeconds = Math.round((schedule.bakeAt.getTime() - schedule.preheatAt.getTime()) / 1000);

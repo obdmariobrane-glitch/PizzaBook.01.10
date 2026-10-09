@@ -67,3 +67,22 @@ export function getLocalDayOffset(from: Date, to: Date): number {
   const toDay = Date.UTC(to.getFullYear(), to.getMonth(), to.getDate());
   return Math.round((toDay - fromDay) / 86_400_000);
 }
+
+export type GuidedNotificationItem = {
+  event: GuidedScheduleEvent;
+  combinedWith?: GuidedScheduleEvent;
+};
+
+// Events are all kept for the UI; only the notification layer merges a room-fermentation end with a preheat at the same instant.
+export function planGuidedNotifications(
+  events: readonly GuidedScheduleEvent[],
+  completedAt: Readonly<Record<string, number>>,
+  now: number,
+): GuidedNotificationItem[] {
+  const pending = events.filter((event) => event.actionable && completedAt[event.id] === undefined && event.at.getTime() > now);
+  const roomEnd = pending.find((event) => event.id === 'roomFermentationEnd');
+  const preheat = roomEnd ? pending.find((event) => event.id === 'preheat' && event.at.getTime() === roomEnd.at.getTime()) : undefined;
+  return pending
+    .filter((event) => event !== preheat)
+    .map((event) => (event === roomEnd && preheat ? { event, combinedWith: preheat } : { event }));
+}

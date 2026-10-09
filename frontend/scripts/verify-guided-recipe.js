@@ -21,6 +21,7 @@ const {
   getLocalDayOffset,
   getNextGuidedEvent,
   groupGuidedEventsByLocalDate,
+  planGuidedNotifications,
 } = moduleRef.exports;
 
 const firstDay = new Date(2027, 3, 12, 23, 30);
@@ -56,5 +57,35 @@ const identity = [firstDay.getTime(), nextDay.getTime(), 'neapolitan'];
 assert.equal(createGuidedPlanId(identity), createGuidedPlanId([...identity]), 'equal plan inputs should have a stable identity');
 assert.notEqual(createGuidedPlanId(identity), createGuidedPlanId([...identity, 'changed']), 'material plan changes should create a new identity');
 assert.equal(getLocalDayOffset(firstDay, nextDay), 1, 'day offsets should use local calendar days');
+
+{
+  const t0 = now + 3_600_000;
+  const ev = (id, offset, actionable = true) => ({ id, at: new Date(t0 + offset), label: id, actionable });
+  const ids = (items) => items.map((item) => item.combinedWith ? `${item.event.id}+${item.combinedWith.id}` : item.event.id).join(',');
+  const base = [ev('mix', -600_000), ev('balling', -300_000), ev('shape', 900_000), ev('bake', 1_000_000)];
+
+  // Same timestamp: one combined notification, both logical events remain in the input.
+  const same = [...base, ev('roomFermentationEnd', 0), ev('preheat', 0), ev('fold1', 0)];
+  assert.equal(ids(planGuidedNotifications(same, {}, now)), 'mix,balling,shape,bake,roomFermentationEnd+preheat,fold1');
+  assert.equal(same.length, 7);
+  // Regeneration with identical input is deterministic: no extra items.
+  assert.equal(ids(planGuidedNotifications(same, {}, now)), ids(planGuidedNotifications([...same], {}, now)));
+
+  // Different timestamps: two notifications.
+  const diff = [...base, ev('roomFermentationEnd', 0), ev('preheat', 60_000)];
+  assert.equal(ids(planGuidedNotifications(diff, {}, now)), 'mix,balling,shape,bake,roomFermentationEnd,preheat');
+
+  // Unrelated event at the same time is preserved.
+  assert.ok(ids(planGuidedNotifications(same, {}, now)).includes('fold1'));
+
+  // Completed or past halves are not merged and not scheduled.
+  assert.equal(ids(planGuidedNotifications(same, { roomFermentationEnd: 1 }, now)), 'mix,balling,shape,bake,preheat,fold1');
+  assert.equal(ids(planGuidedNotifications(same, { preheat: 1 }, now)), 'mix,balling,shape,bake,roomFermentationEnd,fold1');
+  assert.equal(ids(planGuidedNotifications(same, {}, t0 + 1)), 'shape,bake');
+
+  // Fridge mode has no roomFermentationEnd: preheat stays single.
+  const fridge = [...base, ev('fridgeOut', 0), ev('preheat', 0)];
+  assert.equal(ids(planGuidedNotifications(fridge, {}, now)), 'mix,balling,shape,bake,fridgeOut,preheat');
+}
 
 console.log('Guided recipe verification passed: local grouping, event order, progress, countdown, and plan identity.');
