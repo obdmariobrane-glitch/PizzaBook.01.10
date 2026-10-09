@@ -373,6 +373,8 @@ assert.deepEqual(
   Array.from(tegliaWithFridge, (phase) => phase.title.match(/(?:Phase|Faza) ([A-E]):/)?.[1]),
   ['A', 'B', 'C', 'D', 'E'],
 );
+assert.equal(tegliaWithFridge[2].steps.length, 6);
+assert.equal(tegliaWithFridge[2].stepInfo.length, 6);
 assert.ok(!tegliaWithFridge.some((phase) => phase.steps.some((step) => /ball|kugli|kroglic/i.test(step))));
 
 assert.match(source, /timers=\{beginnerDirectHomeSteps \? phase\.timers : directHomeSchedule \? \[\] : phase\.timers\}/);
