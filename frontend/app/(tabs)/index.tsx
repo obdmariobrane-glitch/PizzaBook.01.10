@@ -5719,20 +5719,22 @@ function buildBeginnerTegliaHomeSteps(
   return addSequentialBeginnerPhaseLetters(adapted, lang);
 }
 
-function buildNeapolitanTipo00PhaseC(
+function buildNeapolitanDirectPhaseC(
   lang: Lang,
   totalDoughLabel: string,
   ballWeightLabel: string,
   pizzas: number,
   refrigerated: boolean,
+  flourType: FlourType,
 ) {
+  const croatianPieceForm = pizzas >= 5 ? 'jednakih komada' : 'jednaka komada';
   const copy = {
     hr: {
       title: 'Faza C: Podjela i oblikovanje kuglica',
       steps: [
         'Lagano pospite čistu radnu površinu brašnom. Brašno za radnu površinu nije uključeno u izračun recepta.',
         'Nježno izvadite tijesto iz posude uz minimalno istiskivanje plina.',
-        `Podijelite ukupno ${totalDoughLabel} tijesta na ${pizzas} jednakih komada od približno ${ballWeightLabel}.`,
+        `Podijelite ukupno ${totalDoughLabel} tijesta na ${pizzas} ${croatianPieceForm} od približno ${ballWeightLabel}.`,
         'Svaki komad nježno oblikujte u kuglicu. Podvucite rubove prema donjoj strani i zatvorite spoj kako biste stvorili blagu površinsku napetost bez trganja tijesta.',
         'Stavite kuglice u fermentacijsku kutiju sa spojem prema dolje. Ostavite dovoljno razmaka između njih i zatvorite kutiju.',
         refrigerated
@@ -5812,6 +5814,72 @@ function buildNeapolitanTipo00PhaseC(
       ],
     },
   }[lang];
+  const flourStep4 = {
+    caputo00: {
+      hr: copy.steps[3],
+      en: copy.steps[3],
+      de: copy.steps[3],
+      sl: copy.steps[3],
+    },
+    manitoba: {
+      hr: 'Svaki komad nježno oblikujte u kuglicu. Manitoba tijesto može biti elastičnije i opirati se oblikovanju; nemojte ga siliti ni trgati. Podvucite rubove, zatvorite spoj i prestanite kada kuglica drži oblik.',
+      en: 'Gently shape each piece into a dough ball. Manitoba dough may be more elastic and resist shaping; do not force or tear it. Tuck the edges underneath, close the seam, and stop when the ball holds its shape.',
+      de: 'Formen Sie jedes Stück vorsichtig zu einer Teigkugel. Manitoba-Teig kann elastischer sein und sich beim Formen widersetzen; erzwingen oder reißen Sie ihn nicht. Schlagen Sie die Ränder ein, schließen Sie die Naht und hören Sie auf, sobald die Kugel ihre Form hält.',
+      sl: 'Vsak kos nežno oblikujte v kroglico. Manitobsko testo je lahko bolj elastično in se upira oblikovanju; ne silite vanj in ga ne trgajte. Robove spodvijte, zaprite stik in končajte, ko kroglica drži obliko.',
+    },
+    spelt: {
+      hr: 'Svaki komad nježno oblikujte u kuglicu bez pretjeranog zatezanja. Ako se površina počne trgati, stanite. Nemojte tijesto opetovano rastezati ni previše obrađivati.',
+      en: 'Gently shape each piece into a dough ball without excessive tightening. Stop if the surface begins to tear. Do not repeatedly stretch or overwork the dough.',
+      de: 'Formen Sie jedes Stück vorsichtig zu einer Teigkugel, ohne es stark zu straffen. Hören Sie auf, wenn die Oberfläche zu reißen beginnt. Dehnen oder überarbeiten Sie den Teig nicht wiederholt.',
+      sl: 'Vsak kos nežno oblikujte v kroglico brez pretiranega zategovanja. Če se površina začne trgati, nehajte. Testa ne raztegujte večkrat in ga ne obdelujte preveč.',
+    },
+    wholeWheat: {
+      hr: 'Svaki komad nježno oblikujte u kuglicu bez stvaranja prevelike površinske napetosti. Površina može biti manje glatka, a malo ljepljivosti ili nepravilnosti je normalno. Nemojte tijesto siliti u savršeno glatku kuglicu.',
+      en: 'Gently shape each piece into a dough ball without creating excessive surface tension. The surface may be less smooth, and some stickiness or minor irregularities are normal. Do not force the dough into a perfectly smooth ball.',
+      de: 'Formen Sie jedes Stück vorsichtig zu einer Teigkugel, ohne zu viel Oberflächenspannung zu erzeugen. Die Oberfläche kann weniger glatt sein; etwas Klebrigkeit oder kleine Unregelmäßigkeiten sind normal. Zwingen Sie den Teig nicht in eine vollkommen glatte Kugel.',
+      sl: 'Vsak kos nežno oblikujte v kroglico brez prevelike površinske napetosti. Površina je lahko manj gladka, nekaj lepljivosti ali manjših nepravilnosti pa je normalnih. Testa ne silite v popolnoma gladko kroglico.',
+    },
+    glutenFree: {
+      hr: 'Svaki komad nježno oblikujte u mekanu kuglicu pomoću strugača ili lagano nauljenih ruku. Zatvorite spoj koliko je moguće, ali nemojte stvarati površinsku napetost, snažno pritiskati ni rastezati smjesu.',
+      en: 'Gently shape each piece into a soft dough ball using a scraper or lightly oiled hands. Close the seam as much as practical, but do not build surface tension, press firmly, or stretch the mixture.',
+      de: 'Formen Sie jedes Stück vorsichtig mit einem Schaber oder leicht geölten Händen zu einer weichen Teigkugel. Schließen Sie die Naht so gut wie möglich, aber erzeugen Sie keine Oberflächenspannung, drücken Sie nicht fest und dehnen Sie die Masse nicht.',
+      sl: 'Vsak kos nežno oblikujte v mehko kroglico s strgalom ali rahlo naoljenimi rokami. Stik zaprite, kolikor je mogoče, vendar ne ustvarjajte površinske napetosti, močno pritiskajte ali raztegujte zmesi.',
+    },
+  }[flourType === 'custom' ? 'caputo00' : flourType] ?? {
+    hr: copy.steps[3],
+    en: copy.steps[3],
+    de: copy.steps[3],
+    sl: copy.steps[3],
+  };
+  const flourStep4Help = {
+    caputo00: copy.info[3][1],
+    manitoba: {
+      hr: `${copy.info[3][1]} Manitoba tijesto može biti elastičnije i opirati se oblikovanju. Radite nježno i nemojte ga siliti ili trgati. Ako je potrebno, ostavite ga kratko pokrivenog da se opusti prije nastavka, ali nemojte time mijenjati izračunati raspored.`,
+      en: `${copy.info[3][1]} Manitoba dough may be more elastic and resist shaping. Work gently and do not force or tear it. If necessary, leave it covered briefly to relax before continuing, without changing the calculated schedule.`,
+      de: `${copy.info[3][1]} Manitoba-Teig kann elastischer sein und sich beim Formen widersetzen. Arbeiten Sie vorsichtig und erzwingen oder reißen Sie ihn nicht. Lassen Sie ihn bei Bedarf kurz abgedeckt entspannen, ohne den berechneten Zeitplan zu ändern.`,
+      sl: `${copy.info[3][1]} Manitobsko testo je lahko bolj elastično in se upira oblikovanju. Delajte nežno in ga ne silite ali trgajte. Po potrebi ga pred nadaljevanjem za kratek čas pokritega pustite počivati, ne da bi spremenili izračunani načrt.`,
+    }[lang],
+    spelt: {
+      hr: 'Stavite porciju na lagano pobrašnjenu površinu i rubove nježno podvucite ispod. Ne zatežite kuglicu više nego što je potrebno. Ako se površina počne trgati, stanite; nemojte tijesto opetovano rastezati ili previše obrađivati.',
+      en: 'Place a portion on the lightly floured surface and gently tuck the edges underneath. Do not tighten the ball more than necessary. If the surface starts tearing, stop; do not repeatedly stretch or overwork the dough.',
+      de: 'Legen Sie eine Portion auf die leicht bemehlte Fläche und schlagen Sie die Ränder vorsichtig ein. Straffen Sie die Kugel nicht stärker als nötig. Wenn die Oberfläche zu reißen beginnt, hören Sie auf; dehnen oder überarbeiten Sie den Teig nicht wiederholt.',
+      sl: 'Porcijo položite na rahlo pomokano površino in robove nežno spodvijte. Kroglice ne zategujte bolj, kot je potrebno. Če se površina začne trgati, nehajte; testa ne raztegujte večkrat in ga ne obdelujte preveč.',
+    }[lang],
+    wholeWheat: {
+      hr: 'Porciju nježno oblikujte bez pretjeranog zatezanja. Površina može ostati manje glatka, a malo ljepljivosti ili nepravilnosti je normalno. Ne pritiskajte jače samo da biste dobili savršeno glatku kuglicu.',
+      en: 'Shape the portion gently without excessive tightening. The surface may remain less smooth, and some stickiness or irregularity is normal. Do not press harder just to make a perfectly smooth ball.',
+      de: 'Formen Sie die Portion vorsichtig, ohne sie stark zu straffen. Die Oberfläche kann weniger glatt bleiben; etwas Klebrigkeit oder Unregelmäßigkeit ist normal. Drücken Sie nicht stärker, nur um eine vollkommen glatte Kugel zu erhalten.',
+      sl: 'Porcijo oblikujte nežno brez pretiranega zategovanja. Površina lahko ostane manj gladka, nekaj lepljivosti ali nepravilnosti je normalnih. Ne pritiskajte močneje samo zato, da bi dobili popolnoma gladko kroglico.',
+    }[lang],
+    glutenFree: {
+      hr: 'Porciju stavite na podlogu i nježno je skupite strugačem ili lagano nauljenim rukama. Zatvorite spoj koliko je moguće, ali ne pokušavajte razviti gluten, stvarati napetost ili rastezati smjesu kao pšenično tijesto. Ako je smjesa ljepljiva, koristite strugač i minimalno dodatne obrade.',
+      en: 'Gather the portion gently with a scraper or lightly oiled hands. Close the seam as much as practical, but do not try to develop gluten, create surface tension, or stretch the mixture like wheat dough. If sticky, use the scraper and minimal extra handling.',
+      de: 'Sammeln Sie die Portion vorsichtig mit einem Schaber oder leicht geölten Händen. Schließen Sie die Naht so gut wie möglich, aber versuchen Sie nicht, Gluten oder Oberflächenspannung zu entwickeln oder die Masse wie Weizenteig zu dehnen. Bei Klebrigkeit Schaber und möglichst wenig zusätzliche Bearbeitung verwenden.',
+      sl: 'Porcijo nežno zberite s strgalom ali rahlo naoljenimi rokami. Stik zaprite, kolikor je mogoče, vendar ne poskušajte razviti glutena, ustvariti površinske napetosti ali zmesi raztegovati kot pšenično testo. Če je lepljiva, uporabite strgalo in čim manj dodatnega dela.',
+    }[lang],
+  }[flourType === 'custom' ? 'caputo00' : flourType] ?? copy.info[3][1];
+  copy.steps[3] = flourStep4[lang];
+  copy.info[3][1] = flourStep4Help;
   return {
     title: copy.title,
     steps: copy.steps,
@@ -6006,8 +6074,8 @@ function buildBeginnerDirectHomeSteps(
     },
   }[lang]);
 
-  const tipo00PhaseC = pizzaStyle === 'neapolitan' && flourType === 'caputo00'
-    ? buildNeapolitanTipo00PhaseC(lang, totalDoughLabel, ballWeightLabel, pizzas, schedule.fridgeHours > 0)
+  const neapolitanPhaseC = pizzaStyle === 'neapolitan'
+    ? buildNeapolitanDirectPhaseC(lang, totalDoughLabel, ballWeightLabel, pizzas, schedule.fridgeHours > 0, flourType)
     : undefined;
   const tipo00ColdFermentationStep = {
     hr: `Nastavite hladnu fermentaciju zatvorene kutije u hladnjaku ${formatDuration(schedule.fridgeHours * 3600, lang)} prema izračunanom rasporedu.`,
@@ -6037,8 +6105,8 @@ function buildBeginnerDirectHomeSteps(
     if (index === 2) {
       return {
         ...phase,
-        ...(tipo00PhaseC
-          ? { title: tipo00PhaseC.title, steps: tipo00PhaseC.steps, stepInfo: tipo00PhaseC.stepInfo }
+        ...(neapolitanPhaseC
+          ? { title: neapolitanPhaseC.title, steps: neapolitanPhaseC.steps, stepInfo: neapolitanPhaseC.stepInfo }
           : {
             steps: steps.length > 1
               ? [...steps.slice(0, 2), ballingInstruction, ballingContainerInstruction]
@@ -6048,7 +6116,7 @@ function buildBeginnerDirectHomeSteps(
       };
     }
     if (index === 3 && schedule.fridgeHours > 0) {
-      return { ...phase, steps: [tipo00PhaseC ? tipo00ColdFermentationStep : labels.fridge(duration(schedule.fridgeHours))], timers: [] };
+      return { ...phase, steps: [neapolitanPhaseC ? tipo00ColdFermentationStep : labels.fridge(duration(schedule.fridgeHours))], timers: [] };
     }
     const finalPhaseIndex = schedule.fridgeHours > 0 ? 4 : 3;
     if (index === finalPhaseIndex) {

@@ -11,7 +11,7 @@ const source = fs.readFileSync(appPath, 'utf8');
 const sourceFile = ts.createSourceFile(appPath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const requestedFunctions = new Set([
   'buildBeginnerPhaseBSteps',
-  'buildNeapolitanTipo00PhaseC',
+  'buildNeapolitanDirectPhaseC',
   'buildBeginnerDirectHomeSteps',
   'buildBeginnerTegliaHomeSteps',
   'getBeginnerPhaseBTimers',
@@ -155,11 +155,15 @@ for (const lang of languages) {
 
             assertSingleDisplayPrefix(result, lang);
             assert.deepEqual(Array.from(phaseA.timers, (timer) => timer.id), ['post-mix-rest']);
-            if (style === 'neapolitan' && flour === 'caputo00') {
-              assert.equal(phaseC.steps.length, 6, 'Neapolitan Tipo 00 Phase C should render six focused steps');
+            if (style === 'neapolitan') {
+              assert.equal(phaseC.steps.length, 6, 'Neapolitan Direct Phase C should render six focused steps');
               assert.equal(phaseC.stepInfo.length, 6);
               assert.match(phaseC.title, /Podjela|Dividing|Teilen|Delitev/i);
               assert.match(phaseC.steps[2], /1250|250|5/);
+              if (flour === 'glutenFree') {
+                assert.match(phaseC.steps[3], /mekanu kuglicu|soft dough ball|weichen Teigkugel|mehko kroglico/i);
+                assert.match(phaseC.stepInfo[3].body, /ne pokušavajte razviti gluten|do not try to develop gluten|versuchen Sie nicht, Gluten|ne poskušajte razviti glutena/i);
+              }
             } else {
               assert.equal(phaseC.steps.length, 4, 'Round-style Phase C should combine division, ball count, and balling without duplicates');
               assert.match(phaseC.steps.at(-2), /površinsku napetost|surface tension|Oberflächenspannung|površinsko napetost/i);
