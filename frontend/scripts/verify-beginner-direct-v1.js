@@ -127,7 +127,7 @@ for (const [style, romanFormat] of beginnerStyles) {
         flourType,
         mixing,
         beginnerScheduleMode: mode,
-      }, { source: 'w', w: flourType === 'glutenFree' ? 0 : 280 }, 62, 'dry', now, true);
+      }, { source: 'w', w: 280 }, 62, 'dry', now, true);
       assert.ok(plan, `${style}/${romanFormat ?? ''}/${flourType}/${mode} should produce a plan`);
       assert.equal(plan.input.beginnerScheduleMode, mode);
       assert.equal(plan.selectedEvaluation.candidate.mode, mode);
@@ -143,13 +143,13 @@ for (const [style, romanFormat] of beginnerStyles) {
   }
 }
 
-const unavailableFridgePlan = calculator.createDirectHomePizzaPlan({
+const roomOnlyFallbackPlan = calculator.createDirectHomePizzaPlan({
   style: 'romana',
   romanFormat: 'teglia',
   pizzas: 1,
   ballWeight: 250,
   method: 'direct',
-  bakeAt: new Date(now.getTime() + 2 * 3600000),
+  bakeAt: new Date(now.getTime() + 5 * 3600000),
   roomTemp: 22,
   fridgeTemp: 4,
   ovenType: 'homeStone',
@@ -158,9 +158,42 @@ const unavailableFridgePlan = calculator.createDirectHomePizzaPlan({
   mixing: 'home',
   beginnerScheduleMode: 'fridgeRoom',
 }, { source: 'w', w: 280 }, 62, 'dry', now, true);
-assert.ok(unavailableFridgePlan);
-assert.equal(unavailableFridgePlan.selectedEvaluation.candidate.mode, 'fridgeRoom');
-assert.equal(unavailableFridgePlan.selectedEvaluation.selectable, false);
-assert.ok(unavailableFridgePlan.selectedEvaluation.rejectionReasons.length > 0);
+assert.ok(roomOnlyFallbackPlan);
+assert.equal(roomOnlyFallbackPlan.selectedEvaluation.candidate.mode, 'roomOnly');
+assert.equal(roomOnlyFallbackPlan.schedule.fridgeHours, 0);
+
+const fridgeOnlyPlan = calculator.createDirectHomePizzaPlan({
+  style: 'ny_style',
+  pizzas: 1,
+  ballWeight: 250,
+  method: 'direct',
+  bakeAt: new Date(now.getTime() + 28 * 3600000),
+  roomTemp: 22,
+  fridgeTemp: 4,
+  ovenType: 'homeStone',
+  ovenTemp: 260,
+  flourType: 'manitoba',
+  mixing: 'home',
+  beginnerScheduleMode: 'roomOnly',
+}, { source: 'w', w: 280 }, 62, 'dry', now, true);
+assert.ok(fridgeOnlyPlan);
+assert.equal(fridgeOnlyPlan.selectedEvaluation.candidate.mode, 'fridgeRoom');
+assert.ok(fridgeOnlyPlan.schedule.fridgeHours >= 3);
+
+const noFeasiblePlan = calculator.createDirectHomePizzaPlan({
+  style: 'neapolitan',
+  pizzas: 1,
+  ballWeight: 250,
+  method: 'direct',
+  bakeAt: new Date(now.getTime() + 30 * 60000),
+  roomTemp: 22,
+  fridgeTemp: 4,
+  ovenType: 'homeStone',
+  ovenTemp: 260,
+  flourType: 'caputo00',
+  mixing: 'hand',
+  beginnerScheduleMode: 'roomOnly',
+}, { source: 'w', w: 280 }, 62, 'dry', now, true);
+assert.equal(noFeasiblePlan, null);
 
 console.log('Beginner Direct V1 schedule regression checks passed.');

@@ -1177,7 +1177,7 @@ export function createDirectHomePizzaPlan(
     const recommended = annotatedCandidateEvaluations.find((evaluation) => evaluation.recommended)
       ?? annotatedCandidateEvaluations.find((evaluation) => evaluation.selectable)
       ?? null;
-    const selectedEvaluation = requested ?? recommended;
+    const selectedEvaluation = requested?.selectable ? requested : recommended;
     if (!selectedEvaluation) return null;
     const selectedCandidate = selectedEvaluation.candidate as BeginnerDirectScheduleCandidate;
     const schedule: HomePizzaPlanSchedule = {

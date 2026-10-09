@@ -850,9 +850,13 @@ export default function CalculatorHome() {
     ? (homePlan?.candidateEvaluations ?? [])
     : [];
   const beginnerSelectableModes = beginnerCandidateEvaluations.filter((evaluation) => evaluation.selectable);
+  const beginnerScheduleSelectionVisible = isBeginner
+    && method === 'direct'
+    && (mixing === 'hand' || mixing === 'mixer')
+    && sharedBakeAt !== null;
   useEffect(() => {
     const current = beginnerCandidateEvaluations.find((evaluation) => (evaluation.candidate as unknown as { mode?: BeginnerDirectScheduleMode }).mode === beginnerScheduleMode);
-    if (current) return;
+    if (current?.selectable) return;
     if (beginnerSelectableModes.length === 0) return;
     const fallback = beginnerSelectableModes.find((evaluation) => evaluation.recommended) ?? beginnerSelectableModes[0];
     const mode = (fallback.candidate as unknown as { mode: BeginnerDirectScheduleMode }).mode;
@@ -2682,7 +2686,7 @@ export default function CalculatorHome() {
                 </Pressable>
               </View>
               <View style={{ flexDirection: 'column-reverse', gap: SPACING.sm }}>
-              {method === 'direct' && beginnerDirectHome && beginnerCandidateEvaluations.length > 0 ? (
+              {beginnerScheduleSelectionVisible ? (
                 <View testID="beginner-direct-schedule-mode" style={{ gap: SPACING.sm, marginTop: SPACING.md }}>
                   <View style={styles.labelWithInfo}>
                     <Text style={styles.label}>{lang === 'hr' ? 'Način fermentacije' : lang === 'de' ? 'Fermentationsart' : lang === 'sl' ? 'Način fermentacije' : 'Fermentation mode'}</Text>
@@ -2706,12 +2710,11 @@ export default function CalculatorHome() {
                       <Icon name="information-circle-outline" size={18} color={COLORS.brand} />
                     </Pressable>
                   </View>
-                  <View style={styles.fermentationModeOptions}>
-                    {beginnerCandidateEvaluations.map((evaluation) => {
+                  {beginnerSelectableModes.length > 0 ? (
+                    <View style={styles.fermentationModeOptions}>
+                    {beginnerSelectableModes.map((evaluation) => {
                       const mode = (evaluation.candidate as unknown as { mode: BeginnerDirectScheduleMode }).mode;
                       const selected = beginnerScheduleMode === mode;
-                      const unavailableReason = evaluation.rejectionReasons[0]
-                        ?? (lang === 'hr' ? 'Ova opcija nije dostupna za odabrano vrijeme.' : lang === 'de' ? 'Diese Option ist für das gewählte Zeitfenster nicht verfügbar.' : lang === 'sl' ? 'Ta možnost ni na voljo za izbrani čas.' : 'This option is unavailable for the selected time window.');
                       const label = mode === 'fridgeRoom'
                         ? (lang === 'hr' ? 'Fermentacija u hladnjaku' : lang === 'de' ? 'Gärung im Kühlschrank' : lang === 'sl' ? 'Fermentacija v hladilniku' : 'Refrigerator fermentation')
                         : (lang === 'hr' ? 'Fermentacija na sobnoj temperaturi' : lang === 'de' ? 'Gärung bei Raumtemperatur' : lang === 'sl' ? 'Fermentacija pri sobni temperaturi' : 'Room-temperature fermentation');
@@ -2719,25 +2722,33 @@ export default function CalculatorHome() {
                         <Pressable
                           key={mode}
                           testID={`beginner-mode-${mode}`}
-                          disabled={!evaluation.selectable}
-                          onPress={() => evaluation.selectable && setBeginnerScheduleMode(mode)}
+                          onPress={() => setBeginnerScheduleMode(mode)}
                           style={[
                             styles.fermentationModeOption,
                             selected && styles.fermentationModeOptionSelected,
-                            !evaluation.selectable && { opacity: 0.55 },
                           ]}
                         >
                           <View style={{ flex: 1 }}>
                             <Text style={styles.fermentationModeOptionText}>{label}</Text>
                             {mode === 'fridgeRoom' ? <Text style={styles.hint}>{lang === 'hr' ? 'Uključuje završno odmaranje na sobnoj temperaturi' : lang === 'de' ? 'Mit abschließender Ruhezeit bei Raumtemperatur' : lang === 'sl' ? 'Vključuje končni počitek pri sobni temperaturi' : 'Includes a final room-temperature rest'}</Text> : null}
                             {evaluation.recommended ? <Text style={styles.fermentationRecommendation}>{lang === 'hr' ? 'Preporučeno' : lang === 'de' ? 'Empfohlen' : lang === 'sl' ? 'Priporočeno' : 'Recommended'}</Text> : null}
-                            {!evaluation.selectable ? <Text style={styles.hint}>{unavailableReason}</Text> : null}
                           </View>
                           {selected ? <Icon name="checkmark" size={22} color={COLORS.brand} /> : null}
                         </Pressable>
                       );
                     })}
-                  </View>
+                    </View>
+                  ) : (
+                    <Text style={styles.hint}>
+                      {lang === 'hr'
+                        ? 'Za odabrano vrijeme nije moguće sigurno izračunati fermentaciju. Odaberite kasnije vrijeme pečenja.'
+                        : lang === 'de'
+                          ? 'Für das gewählte Zeitfenster konnte keine sichere Gärung berechnet werden. Wählen Sie eine spätere Backzeit.'
+                          : lang === 'sl'
+                            ? 'Za izbrani čas ni mogoče izračunati varne fermentacije. Izberite poznejši čas peke.'
+                            : 'No safe fermentation schedule can be calculated for the selected time window. Choose a later bake time.'}
+                    </Text>
+                  )}
                 </View>
               ) : null}
               <View style={{ gap: SPACING.sm }}>
