@@ -44,6 +44,8 @@ const runtimeSource = `
 function formatDuration(seconds) {
   return seconds === 0 ? '0 hours' : \`\${seconds / 3600} hours\`;
 }
+function getBeginnerPreheatMinutes(oven) { return oven === 'homeStone' ? 60 : 20; }
+function formatBeginnerClockTime(at) { return at.toISOString().slice(11, 16); }
 function labelSelectedYeast(text) { return text; }
 ${functionSources.join('\n')}
 module.exports = { buildBeginnerDirectHomeSteps, buildBeginnerTegliaHomeSteps, getBeginnerOvenTimers };

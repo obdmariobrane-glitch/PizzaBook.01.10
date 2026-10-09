@@ -24,7 +24,7 @@ import { displayTemperature, formatLength, formatTemperature, formatUnitText, fo
 import {
   dimensionsCalc, doughCalc, getFermentationSchedule, iceCalc, getBakingTimeRange, formatBakingTimeRange,
   Method, OvenType, FlourType, PizzaStyle, HomeFlourStrengthSource, PIZZA_STYLE_PROFILES, FLOUR_PROFILES, BASE_FLOURS, normalizeBeginnerSavedState, beginnerHydrationFor, beginnerBallWeightForDiameter, beginnerDiameterForBallWeight, blendIdealHydration,
-  calculateBeginnerPhaseBPlan, createDirectHomePizzaPlan, createBigaHomePizzaPlan, createPoolishHomePizzaPlan, getHomeFlourStrengthInput, getHomePlanLegacyFermentationHours,
+  calculateBeginnerPhaseBPlan, createDirectHomePizzaPlan, createBigaHomePizzaPlan, createPoolishHomePizzaPlan, getBeginnerPreheatMinutes, getHomeFlourStrengthInput, getHomePlanLegacyFermentationHours,
   BeginnerPhaseBPlan, BeginnerDirectScheduleMode,
   HomePizzaPlanSchedule, BigaHomePizzaSchedule, PoolishHomePizzaSchedule, getBigaHomeScheduleMilestones, getPoolishHomeScheduleMilestones, getSharedHomeBakeAt, subscribeSharedHomeBakeAt,
   setSharedHomeBakeAt, setSharedHomeDirectSchedule, setSharedHomeBigaSchedule, setSharedHomePoolishSchedule,
@@ -89,6 +89,11 @@ function croatianMinutes(minutes: number): string {
   if (hours === 0) return `${remainingMinutes} minuta`;
   if (remainingMinutes === 0) return croatianHours(hours);
   return `${croatianHours(hours)} i ${remainingMinutes} minuta`;
+}
+
+function formatBeginnerClockTime(at: Date, lang: Lang): string {
+  const locale = { hr: 'hr-HR', en: 'en-GB', de: 'de-DE', sl: 'sl-SI' }[lang];
+  return new Intl.DateTimeFormat(locale, { timeStyle: 'short' }).format(at);
 }
 
 function labelSelectedYeast(text: string, lang: Lang, yeastType: 'fresh' | 'dry'): string {
@@ -966,7 +971,7 @@ export default function CalculatorHome() {
         actionable: true,
       });
     }
-    const preheatAt = directHomeSchedule.preheatAt ?? new Date(bakeAt.getTime() - (oven === 'homeStone' ? 60 : 20) * 60000);
+    const preheatAt = directHomeSchedule.preheatAt ?? new Date(bakeAt.getTime() - getBeginnerPreheatMinutes(oven) * 60000);
     const preheatMinutes = Math.round((bakeAt.getTime() - preheatAt.getTime()) / 60000);
     steps.push({
       id: 'preheat',
@@ -1154,7 +1159,7 @@ export default function CalculatorHome() {
           : event.id === 'fold2' && useGentleFoldCopy
             ? t.beginnerCalc.guidedNotificationCopy.fold2Gentle
             : t.beginnerCalc.guidedNotificationCopy[event.id];
-        const notificationBody = event.id === 'fridgeIn'
+        const notificationBody = event.id === 'fridgeIn' || event.id === 'preheat'
           ? event.label
           : copy.body;
         const notificationId = await scheduleLocalAt(copy.title, notificationBody, event.at, {
@@ -5641,7 +5646,7 @@ function buildBeginnerDirectHomeSteps(
     de: 'Legen Sie die Teigkugeln in eine geschlossene Gärbox und fahren Sie zum geplanten Vorbereitungszeitpunkt fort.',
     sl: 'Kroglice položite v zaprto fermentacijsko posodo in nadaljujte ob načrtovanem času priprave.',
   })[lang];
-  const fallbackPreheatMinutes = oven === 'homeStone' ? 60 : 20;
+  const fallbackPreheatMinutes = getBeginnerPreheatMinutes(oven);
   const preheatAt = schedule.preheatAt ?? new Date(schedule.bakeAt.getTime() - fallbackPreheatMinutes * 60000);
   const preheatMinutes = Math.round((schedule.bakeAt.getTime() - preheatAt.getTime()) / 60000);
   const labels = {
@@ -5651,11 +5656,11 @@ function buildBeginnerDirectHomeSteps(
       roomOnlyRestStart: (hours: string) => `Držite oblikovane kuglice pokrivene na sobnoj temperaturi do ${hours} prije pečenja.`,
       takeOutNow: 'Izvadite kuglice iz hladnjaka u planirano vrijeme i nastavite s oblikovanjem.',
       roomOnlyNow: 'Nakon oblikovanja kuglica nastavite prema planiranom vremenu pripreme.',
-      preheat: (minutes: number) => oven === 'homePan'
-        ? `Zagrijte kućnu pećnicu s ventilacijom ${minutes} minuta na ${ovenTemp} °C.`
+      preheat: (minutes: number, time: string) => oven === 'homePan'
+        ? `U ${time} uključite kućnu pećnicu s ventilacijom i zagrijte je ${minutes} minuta na ${ovenTemp} °C.`
         : oven === 'ooni'
-          ? `Zagrijte pizza peć ${minutes} minuta na ${ovenTemp} °C.`
-          : `Zagrijte kamen ili čelik za pizzu ${minutes} minuta na ${ovenTemp} °C s uključenim grillom.`,
+          ? `U ${time} uključite pizza peć i zagrijte je ${minutes} minuta na ${ovenTemp} °C.`
+          : `U ${time} uključite pećnicu i zagrijte kamen ili čelik za pizzu ${minutes} minuta na ${ovenTemp} °C s uključenim grillom.`,
       bake: (time: string) => pizzaStyle === 'ny_style'
         ? `Pecite pizzu ${time} i po potrebi kratko završite grillom unutar tog raspona.`
         : `Pecite pizzu ${time}.`,
@@ -5668,11 +5673,11 @@ function buildBeginnerDirectHomeSteps(
       roomOnlyRestStart: (hours: string) => `Keep the shaped dough balls covered at room temperature until ${hours} before baking.`,
       takeOutNow: 'Take the dough balls out of the refrigerator at the scheduled time and continue with shaping.',
       roomOnlyNow: 'After shaping the dough balls, continue according to the planned preparation time.',
-      preheat: (minutes: number) => oven === 'homePan'
-        ? `Preheat the home oven with convection for ${minutes} minutes to ${ovenTemp} °C.`
+      preheat: (minutes: number, time: string) => oven === 'homePan'
+        ? `At ${time}, turn on the convection oven and preheat it for ${minutes} minutes to ${ovenTemp} °C.`
         : oven === 'ooni'
-          ? `Preheat the pizza oven for ${minutes} minutes to ${ovenTemp} °C.`
-          : `Preheat the pizza stone or steel to ${ovenTemp} °C with the grill on for ${minutes} minutes.`,
+          ? `At ${time}, turn on the pizza oven and preheat it for ${minutes} minutes to ${ovenTemp} °C.`
+          : `At ${time}, turn on the oven and preheat the pizza stone or steel to ${ovenTemp} °C with the grill on for ${minutes} minutes.`,
       bake: (time: string) => pizzaStyle === 'ny_style'
         ? `Bake the pizza for ${time}, including any brief grill finish.`
         : `Bake the pizza for ${time}.`,
@@ -5685,11 +5690,11 @@ function buildBeginnerDirectHomeSteps(
       roomOnlyRestStart: (hours: string) => `Lassen Sie die geformten Teigkugeln bis ${hours} vor dem Backen abgedeckt bei Raumtemperatur stehen.`,
       takeOutNow: 'Nehmen Sie die Teigkugeln zum geplanten Zeitpunkt aus dem Kühlschrank und fahren Sie mit dem Formen fort.',
       roomOnlyNow: 'Fahren Sie nach dem Formen der Teigkugeln zum geplanten Vorbereitungszeitpunkt fort.',
-      preheat: (minutes: number) => oven === 'homePan'
-        ? `Heizen Sie den Haushaltsbackofen ${minutes} Minuten lang auf ${ovenTemp} °C mit Umluft vor.`
+      preheat: (minutes: number, time: string) => oven === 'homePan'
+        ? `Schalten Sie um ${time} den Umluftbackofen ein und heizen Sie ihn ${minutes} Minuten lang auf ${ovenTemp} °C vor.`
         : oven === 'ooni'
-          ? `Heizen Sie den Pizzaofen ${minutes} Minuten lang auf ${ovenTemp} °C vor.`
-          : `Heizen Sie den Pizzastein oder -stahl ${minutes} Minuten lang auf ${ovenTemp} °C mit eingeschaltetem Grill vor.`,
+          ? `Schalten Sie um ${time} den Pizzaofen ein und heizen Sie ihn ${minutes} Minuten lang auf ${ovenTemp} °C vor.`
+          : `Schalten Sie um ${time} den Ofen ein und heizen Sie den Pizzastein oder -stahl ${minutes} Minuten lang auf ${ovenTemp} °C mit eingeschaltetem Grill vor.`,
       bake: (time: string) => pizzaStyle === 'ny_style'
         ? `Backen Sie die Pizza ${time}${lang === 'de' ? '' : '.'} Ein kurzer Grillabschluss ist in diesem Zeitraum enthalten.`
         : `Backen Sie die Pizza ${time}.`,
@@ -5702,11 +5707,11 @@ function buildBeginnerDirectHomeSteps(
       roomOnlyRestStart: (hours: string) => `Oblikovane kroglice naj ostanejo pokrite pri sobni temperaturi do ${hours} pred peko.`,
       takeOutNow: 'Kroglice ob načrtovanem času vzemite iz hladilnika in nadaljujte z oblikovanjem.',
       roomOnlyNow: 'Po oblikovanju kroglic nadaljujte ob načrtovanem času priprave.',
-      preheat: (minutes: number) => oven === 'homePan'
-        ? `Domačo pečico z ventilacijo segrevajte ${minutes} minut na ${ovenTemp} °C.`
+      preheat: (minutes: number, time: string) => oven === 'homePan'
+        ? `Ob ${time} vklopite domačo pečico z ventilacijo in jo segrevajte ${minutes} minut na ${ovenTemp} °C.`
         : oven === 'ooni'
-          ? `Pizza pečico segrevajte ${minutes} minut na ${ovenTemp} °C.`
-          : `Kamen ali jeklo za pico segrejte ${minutes} minut na ${ovenTemp} °C z vklopljenim žarom.`,
+          ? `Ob ${time} vklopite pizza pečico in jo segrevajte ${minutes} minut na ${ovenTemp} °C.`
+          : `Ob ${time} vklopite pečico in kamen ali jeklo za pico segrevajte ${minutes} minut na ${ovenTemp} °C z vklopljenim žarom.`,
       bake: (time: string) => pizzaStyle === 'ny_style'
         ? `Pico pecite ${time}; čas vključuje morebitno kratko zapečenje pod žarom.`
         : `Pico pecite ${time}.`,
@@ -5828,7 +5833,7 @@ function buildBeginnerDirectHomeSteps(
             : finalRestHours > 0
             ? labels.roomOnlyRestStart(duration(finalRestHours))
               : labels.roomOnlyNow,
-          labels.preheat(preheatMinutes),
+          labels.preheat(preheatMinutes, formatBeginnerClockTime(preheatAt, lang)),
           isGlutenFree ? ({ hr: 'Radnu površinu obilno pospite bezglutenskim ili rižinim brašnom.', en: 'Generously dust the work surface with gluten-free or rice flour.', de: 'Bestäuben Sie die Arbeitsfläche großzügig mit glutenfreiem oder Reismehl.', sl: 'Delovno površino obilno posujte z brezglutensko ali riževo moko.' }[lang]) : shapingSteps.surface,
           shapingSteps.ball,
           shapingSteps.shape,

@@ -11,6 +11,15 @@ export type BeginnerDirectMixing = 'hand' | 'home' | 'spiral';
 export type BeginnerPhaseBFlourBehavior = 'standard' | 'gentle' | 'glutenFree';
 export type BeginnerPhaseBWorkflow = 'round' | 'teglia';
 
+export function getBeginnerPreheatMinutes(ovenType: OvenType): number {
+  return ovenType === 'homeStone' ? 60 : 20;
+}
+
+function formatPlannerClockTime(at: Date, lang: BakingLanguage): string {
+  const locale = { hr: 'hr-HR', en: 'en-GB', de: 'de-DE', sl: 'sl-SI' }[lang];
+  return new Intl.DateTimeFormat(locale, { timeStyle: 'short' }).format(at);
+}
+
 export interface BeginnerPhaseBFold {
   index: 1 | 2;
   offsetMinutes: number;
@@ -1186,7 +1195,7 @@ export function createDirectHomePizzaPlan(
       ballingAt: selectedCandidate.ballingAt,
       fridgeAt: selectedCandidate.fridgeAt,
       doughReadyAt: selectedCandidate.doughReadyAt,
-      preheatAt: new Date(input.bakeAt.getTime() - (input.ovenType === 'homeStone' ? 60 : 20) * 60000),
+      preheatAt: new Date(input.bakeAt.getTime() - getBeginnerPreheatMinutes(input.ovenType) * 60000),
       strategy: selectedCandidate.strategy,
       style: input.style,
       ovenType: input.ovenType,
@@ -1262,7 +1271,7 @@ export function createDirectHomePizzaPlan(
     bakeAt: input.bakeAt,
     ballingAt: new Date(startAt.getTime() + selectedEvaluation.candidate.roomBeforeFridgeHours * 3600000),
     preheatAt: conservativeUnknownFlour
-      ? new Date(input.bakeAt.getTime() - (input.ovenType === 'homeStone' ? 60 : 20) * 60000)
+      ? new Date(input.bakeAt.getTime() - getBeginnerPreheatMinutes(input.ovenType) * 60000)
       : undefined,
     strategy: conservativeUnknownFlour ? selectedEvaluation.candidate.strategy : undefined,
     style: conservativeUnknownFlour ? input.style : undefined,
@@ -2246,7 +2255,8 @@ export function reversePlan(
       }
       return steps.sort((a, b) => a.at.getTime() - b.at.getTime());
     }
-    const preheatAt = homeSchedule!.preheatAt ?? new Date(bakeAt.getTime() - 60 * 60000);
+    const preheatAt = homeSchedule!.preheatAt
+      ?? new Date(bakeAt.getTime() - getBeginnerPreheatMinutes(homeSchedule!.ovenType ?? 'homeStone') * 60000);
     const ballingAt = homeSchedule!.ballingAt
       ?? new Date(homeSchedule!.startAt.getTime() + roomBeforeFridgeHours * 3600000);
     const finalRoomAt = new Date(ballingAt.getTime() + fridgeHours * 3600000);
@@ -2279,6 +2289,7 @@ export function reversePlan(
       FRIDGE_TEMP: `${homeSchedule!.fridgeTemp ?? ''}°C`,
       WEIGHT: homeSchedule!.ballWeight ?? PIZZA_STYLE_PROFILES[style].ballWeight,
       PREHEAT_MINUTES: Math.round((bakeAt.getTime() - preheatAt.getTime()) / 60000),
+      PREHEAT_TIME: formatPlannerClockTime(preheatAt, bakingLanguage),
       OVEN_TEMP: `${homeSchedule!.ovenTemp ?? 250}°C`,
       OVEN_TEMP_DISPLAY: bakingTemperatureLabel ?? `${homeSchedule!.ovenTemp ?? 250}°C`,
       BAKE_TIME: formatBakingTimeRange(homeSchedule!.ovenType ?? 'homeStone', homeSchedule!.ovenTemp ?? 250, bakingLanguage),

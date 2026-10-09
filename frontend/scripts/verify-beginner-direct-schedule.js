@@ -13,7 +13,7 @@ const compiled = ts.transpileModule(source, {
 const moduleRef = { exports: {} };
 vm.runInNewContext(compiled, { module: moduleRef, exports: moduleRef.exports }, { filename: 'calculator.ts' });
 
-const { createDirectHomePizzaPlan, calculateBeginnerPhaseBPlan, MAX_BEGINNER_DIRECT_COLD_HOURS } = moduleRef.exports;
+const { createDirectHomePizzaPlan, calculateBeginnerPhaseBPlan, getBeginnerPreheatMinutes, MAX_BEGINNER_DIRECT_COLD_HOURS } = moduleRef.exports;
 const now = new Date('2026-10-06T12:00:00.000Z');
 const styles = [
   ['neapolitan', undefined],
@@ -36,6 +36,26 @@ function createPlan(hours, style, romanFormat) {
     ovenType: 'homeStone',
     ovenTemp: 260,
   }, { source: 'unknown' }, 65, 'dry', now, true);
+}
+
+for (const ovenType of ['homeStone', 'homePan', 'ooni']) {
+  const bakeAt = new Date('2026-10-07T00:15:00.000Z');
+  const result = createDirectHomePizzaPlan({
+    style: 'neapolitan',
+    pizzas: 1,
+    ballWeight: 250,
+    method: 'direct',
+    bakeAt,
+    roomTemp: 22,
+    fridgeTemp: 4,
+    ovenType,
+    ovenTemp: ovenType === 'ooni' ? 450 : 260,
+  }, { source: 'unknown' }, 65, 'dry', new Date('2026-10-06T12:00:00.000Z'), true);
+  assert.ok(result);
+  assert.equal(
+    result.schedule.preheatAt.getTime(),
+    bakeAt.getTime() - getBeginnerPreheatMinutes(ovenType) * 60000,
+  );
 }
 
 for (const [style, romanFormat] of styles) {
