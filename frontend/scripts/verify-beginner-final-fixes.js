@@ -107,6 +107,8 @@ assert.match(calculator, /BEGINNER_DIRECT_MAX_WINDOW_HOURS/);
 assert.doesNotMatch(calculatorUi, /thermalUncertainty/);
 assert.doesNotMatch(calculator, /thermalUncertainty/);
 assert.match(calculatorUi, /testID="beginner-oven-info"/);
+assert.match(calculatorUi, /phase\.stepInfo \?\?/);
+assert.match(calculatorUi, /customStepInfo \? \(/);
 assert.equal((translations.match(/shortTimeTitle:/g) || []).length, 4);
 assert.equal((translations.match(/shortTimeMessage:/g) || []).length, 4);
 assert.equal((translations.match(/beginnerWindowTitle:/g) || []).length, 4);
