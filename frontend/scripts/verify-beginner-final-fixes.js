@@ -102,7 +102,8 @@ assert.match(calculator, /flourBehavior: homeSchedule!\.glutenFree \? 'glutenFre
 assert.match(calculatorUi, /setCustomBallWeight\(nextBallWeight\)/);
 assert.doesNotMatch(calculatorUi, /setCustomBallWeight\(canonicalBallWeight\)/);
 assert.match(planner, /BEGINNER_DIRECT_MIN_WINDOW_HOURS/);
-assert.match(planner, /BEGINNER_DIRECT_MAX_WINDOW_HOURS/);
+assert.doesNotMatch(planner, /BEGINNER_DIRECT_MAX_WINDOW_HOURS/);
+assert.match(calculator, /BEGINNER_DIRECT_MAX_WINDOW_HOURS/);
 assert.equal((translations.match(/shortTimeTitle:/g) || []).length, 4);
 assert.equal((translations.match(/shortTimeMessage:/g) || []).length, 4);
 assert.equal((translations.match(/beginnerWindowTitle:/g) || []).length, 4);

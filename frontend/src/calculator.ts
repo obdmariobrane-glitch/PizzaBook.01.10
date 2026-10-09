@@ -409,20 +409,25 @@ function createBeginnerDirectScheduleCandidate(
   let phaseBMinutes: 0 | 60 | 90 = availableHours >= 3 ? 90 : availableHours >= 2 ? 60 : 0;
   let fridgeHours = 0;
   let roomAfterFridgeHours = 0;
+  const planningHours = Math.min(availableHours, BEGINNER_DIRECT_MAX_WINDOW_HOURS);
 
-  if (mode === 'fridgeRoom') {
+  if (mode === 'roomOnly') {
+    const preferredRoomAfter = finalRoomTarget ?? Math.max(0, planningHours - fixedHours - phaseBMinutes / 60);
+    const preferredDuration = fixedHours + phaseBMinutes / 60 + preferredRoomAfter;
+    roomAfterFridgeHours = Math.max(0, Math.min(planningHours, preferredDuration) - fixedHours - phaseBMinutes / 60);
+  } else {
     if (finalRoomTarget === null) {
       limitations.push('Final room target is only defined provisionally for 18–26°C.');
     } else {
-      const remaining = availableHours - fixedHours - phaseBMinutes / 60 - finalRoomTarget;
+      const remaining = planningHours - fixedHours - phaseBMinutes / 60 - finalRoomTarget;
       if (remaining >= BEGINNER_DIRECT_MIN_FRIDGE_HOURS) {
-        fridgeHours = remaining;
+        fridgeHours = Math.min(MAX_BEGINNER_DIRECT_COLD_HOURS, remaining);
         roomAfterFridgeHours = finalRoomTarget;
       } else {
         phaseBMinutes = 0;
-        const adjustedRemaining = availableHours - fixedHours - finalRoomTarget;
+        const adjustedRemaining = planningHours - fixedHours - finalRoomTarget;
         if (adjustedRemaining >= BEGINNER_DIRECT_MIN_FRIDGE_HOURS) {
-          fridgeHours = adjustedRemaining;
+          fridgeHours = Math.min(MAX_BEGINNER_DIRECT_COLD_HOURS, adjustedRemaining);
           roomAfterFridgeHours = finalRoomTarget;
         } else {
           limitations.push('Fridge + room requires at least 3 hours in the fridge plus the provisional final room target.');
@@ -432,7 +437,6 @@ function createBeginnerDirectScheduleCandidate(
   }
 
   const roomBeforeFridgeHours = (BEGINNER_DIRECT_PHASE_A_MINUTES + phaseBMinutes + BEGINNER_DIRECT_PHASE_C_MINUTES) / 60;
-  if (mode === 'roomOnly') roomAfterFridgeHours = Math.max(0, availableHours - roomBeforeFridgeHours);
   const thermalUncertainty = mode === 'fridgeRoom'
     ? 'Thermal uncertainty: dough cools and warms gradually; this schedule does not model core temperature.'
     : undefined;
@@ -471,7 +475,7 @@ export function generateBeginnerDirectScheduleCandidates(
   roomTemp: number,
   bakeAt: Date,
 ): BeginnerDirectScheduleCandidate[] {
-  if (!isBeginnerDirectWindowWithinLimits(availableHours)) return [];
+  if (!Number.isFinite(availableHours) || availableHours < BEGINNER_DIRECT_MIN_WINDOW_HOURS) return [];
   return [
     createBeginnerDirectScheduleCandidate('roomOnly', availableHours, roomTemp, bakeAt),
     createBeginnerDirectScheduleCandidate('fridgeRoom', availableHours, roomTemp, bakeAt),
@@ -1169,7 +1173,7 @@ export function createDirectHomePizzaPlan(
     && (input.style === 'neapolitan' || input.style === 'romana' || input.style === 'ny_style')
     && (input.mixing === 'hand' || input.mixing === 'home');
   if (isBeginnerDirectScheduleTarget) {
-    if (!isBeginnerDirectWindowWithinLimits(availableHours)) return null;
+    if (availableHours < BEGINNER_DIRECT_MIN_WINDOW_HOURS) return null;
     const scheduleCandidates = generateBeginnerDirectScheduleCandidates(availableHours, input.roomTemp, input.bakeAt);
     const evaluationInput: HomeDoughToleranceInput = {
       flour,
@@ -1236,6 +1240,7 @@ export function createDirectHomePizzaPlan(
       thermalUncertainty: selectedCandidate.thermalUncertainty,
       limitations: selectedCandidate.limitations,
     };
+    if (!isBeginnerDirectWindowWithinLimits(getHomeScheduleDurationHours(schedule))) return null;
     return { input, schedule, selectedEvaluation, candidateEvaluations: annotatedCandidateEvaluations };
   }
 

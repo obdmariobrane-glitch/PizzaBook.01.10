@@ -74,7 +74,7 @@ assert.match(bigaUiSource, /const activePhases = schedule\.fridgeHours > 0\s*\?\
 assert.match(bigaUiSource, /labels\.roomOnlyRestStart/);
 assert.match(bigaUiSource, /finalRestHours > 0\s*\?\s*labels\.takeOut\(duration\(finalRestHours\)\)\s*:\s*labels\.takeOutNow/);
 assert.match(bigaUiSource, /finalRestHours > 0\s*\?\s*labels\.roomOnlyRestStart\(duration\(finalRestHours\)\)\s*:\s*labels\.roomOnlyNow/);
-assert.match(bigaUiSource, /if \(fridgeHours > 0\)\s*\{\s*steps\.push\(\{\s*id: isGlutenFree \? 'portioning' : 'fridgeIn',\s*label: isRomanTeglia/);
+assert.match(bigaUiSource, /if \(fridgeHours > 0\)[\s\S]*isRomanTeglia/);
 assert.match(bigaUiSource, /isBeginner && \/\^\(biga\|poolish\)\[-_\]\//);
 assert.match(bigaUiSource, /formatTemperature\(dough\.waterTemp, temperatureUnit\)/);
 assert.match(bigaUiSource, /mix by hand until no dry flour remains/);

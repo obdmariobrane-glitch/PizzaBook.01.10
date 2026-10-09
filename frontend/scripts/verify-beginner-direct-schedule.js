@@ -49,7 +49,11 @@ function createPlan(hours, style, romanFormat, beginner = false) {
 assert.equal(createPlan(0.99, 'neapolitan', undefined, true), null);
 assert.ok(createPlan(1, 'neapolitan', undefined, true));
 assert.ok(createPlan(48, 'neapolitan', undefined, true));
-assert.equal(createPlan(48.01, 'neapolitan', undefined, true), null);
+const farBeginnerPlan = createPlan(48.01, 'neapolitan', undefined, true);
+assert.ok(farBeginnerPlan);
+assert.ok(farBeginnerPlan.schedule.startAt.getTime() > now.getTime());
+assert.ok(farBeginnerPlan.schedule.bakeAt.getTime() - farBeginnerPlan.schedule.startAt.getTime() <= 48 * 3600000);
+assert.notEqual(farBeginnerPlan.schedule.startAt.getTime(), farBeginnerPlan.schedule.bakeAt.getTime() - 48.01 * 3600000);
 
 const guidanceCandidate = {
   strategy: 'roomOnly',
@@ -160,7 +164,10 @@ for (const hours of [48]) {
     workflow: 'round',
   }).foldCount, 1);
 }
-assert.equal(createPlan(72, 'neapolitan', undefined, true), null);
-assert.equal(createPlan(96, 'neapolitan', undefined, true), null);
+for (const hours of [72, 168]) {
+  const farPlan = createPlan(hours, 'neapolitan', undefined, true);
+  assert.ok(farPlan);
+  assert.ok(farPlan.schedule.bakeAt.getTime() - farPlan.schedule.startAt.getTime() <= 48 * 3600000);
+}
 
 console.log('Beginner Direct cold cap and delayed-start checks passed.');

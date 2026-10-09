@@ -24,7 +24,7 @@ import { displayTemperature, formatLength, formatTemperature, formatUnitText, fo
 import {
   dimensionsCalc, doughCalc, getFermentationSchedule, iceCalc, getBakingTimeRange, formatBakingTimeRange,
   Method, OvenType, FlourType, PizzaStyle, HomeFlourStrengthSource, PIZZA_STYLE_PROFILES, FLOUR_PROFILES, BASE_FLOURS, normalizeBeginnerSavedState, beginnerHydrationFor, beginnerBallWeightForDiameter, beginnerDiameterForBallWeight, blendIdealHydration,
-  calculateBeginnerPhaseBPlan, createDirectHomePizzaPlan, createBigaHomePizzaPlan, createPoolishHomePizzaPlan, getBeginnerFlourGuidanceKind, getBeginnerPreheatMinutes, getHomeFlourStrengthInput, getHomePlanLegacyFermentationHours, isBeginnerDirectWindowWithinLimits,
+  calculateBeginnerPhaseBPlan, createDirectHomePizzaPlan, createBigaHomePizzaPlan, createPoolishHomePizzaPlan, getBeginnerFlourGuidanceKind, getBeginnerPreheatMinutes, getHomeFlourStrengthInput, getHomePlanLegacyFermentationHours,
   BeginnerPhaseBPlan, BeginnerDirectScheduleMode,
   HomePizzaPlanSchedule, BigaHomePizzaSchedule, PoolishHomePizzaSchedule, getBigaHomeScheduleMilestones, getPoolishHomeScheduleMilestones, getSharedHomeBakeAt, subscribeSharedHomeBakeAt,
   setSharedHomeBakeAt, setSharedHomeDirectSchedule, setSharedHomeBigaSchedule, setSharedHomePoolishSchedule,
@@ -419,7 +419,7 @@ export default function CalculatorHome() {
       const parsed = new Date(value);
       const availableHours = (parsed.getTime() - Date.now()) / 3600000;
       if (Number.isFinite(parsed.getTime()) && parsed.getTime() > Date.now()
-        && (!isBeginner || isBeginnerDirectWindowWithinLimits(availableHours))) {
+        && (!isBeginner || availableHours >= 1)) {
         setSharedHomeBakeAt(parsed);
       }
     }).catch((error) => {
