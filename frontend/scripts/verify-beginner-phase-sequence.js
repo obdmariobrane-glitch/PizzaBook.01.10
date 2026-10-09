@@ -14,6 +14,7 @@ const requestedFunctions = new Set([
   'buildBeginnerDirectHomeSteps',
   'buildBeginnerTegliaHomeSteps',
   'getBeginnerPhaseBTimers',
+  'getBeginnerPhaseCTimers',
   'addSequentialBeginnerPhaseLetters',
   'getBeginnerOvenTimers',
 ]);
@@ -175,12 +176,24 @@ for (const lang of languages) {
             if (style === 'neapolitan') {
               assert.deepEqual(
                 Array.from(result.at(-1).timers, (timer) => timer.id),
-                ['tempering', 'preheat', 'bake'],
-                'Neapolitan final phase should expose tempering, preheat, and bake timers',
+                roomAfterFridgeHours > 0
+                  ? ['beginner-phase-c-tempering', 'beginner-phase-c-preheat']
+                  : ['beginner-phase-c-preheat'],
+                'scheduled Phase C should expose only tempering and preheat timers',
               );
             } else {
-              assert.deepEqual(Array.from(result.at(-1).timers), [], 'scheduled preheat, tempering, and bake are controlled by the schedule');
+              assert.deepEqual(
+                Array.from(result.at(-1).timers, (timer) => timer.id),
+                roomAfterFridgeHours > 0
+                  ? ['beginner-phase-c-tempering', 'beginner-phase-c-preheat']
+                  : ['beginner-phase-c-preheat'],
+                'all scheduled styles should expose only tempering and preheat timers',
+              );
             }
+            assert.deepEqual(
+              Array.from(result.at(-1).timers, (timer) => timer.seconds),
+              roomAfterFridgeHours > 0 ? [roomAfterFridgeHours * 3600, 3600] : [3600],
+            );
 
             if (flour === 'glutenFree') {
               assert.ok(!phaseB.steps.some((step) => /stretch & fold|fold|preklapan|prepogn/i.test(step)));
@@ -231,7 +244,8 @@ for (const lang of languages) {
     assert.ok(!phaseB.steps.some((step) => /stretch & fold|fold|preklapan|prepogn/i.test(step)));
     assert.ok(!phaseB.steps.some((step) => /gentle folds during this scheduled phase/i.test(step)));
     assert.ok(!result.some((phase) => phase.steps.some((step) => /\b(?:divide into balls|form dough balls|kugeln formen)\b/i.test(step))));
-    assert.deepEqual(Array.from(result.at(-1).timers), []);
+    assert.deepEqual(Array.from(result.at(-1).timers, (timer) => timer.id), ['beginner-phase-c-preheat']);
+    assert.equal(result.at(-1).timers[0].seconds, 3600);
   }
 }
 
@@ -266,7 +280,7 @@ const scheduledOoni = buildBeginnerDirectHomeSteps(
   100,
   'caputo00',
 );
-assert.deepEqual(Array.from(scheduledOoni.at(-1).timers, (timer) => timer.id), ['tempering', 'preheat', 'bake', 'rotate']);
+assert.deepEqual(Array.from(scheduledOoni.at(-1).timers, (timer) => timer.id), ['beginner-phase-c-tempering', 'beginner-phase-c-preheat']);
 assert.deepEqual(
   Array.from(scheduledOoni, (phase) => phase.title.match(/(?:Phase|Faza) ([A-E]):/)?.[1]),
   ['A', 'B', 'C', 'D', 'E'],
@@ -295,6 +309,11 @@ assert.deepEqual(
   'room-only workflows must shift phases after removing refrigeration',
 );
 assert.ok(!scheduledRoomOnly.some((phase) => /cold fermentation/i.test(phase.title)));
+assert.deepEqual(
+  Array.from(scheduledRoomOnly.at(-1).timers, (timer) => timer.id),
+  ['beginner-phase-c-tempering', 'beginner-phase-c-preheat'],
+  'room-only round workflows should expose only room rest and preheat timers',
+);
 const gfRoomOnly = buildBeginnerDirectHomeSteps(
   roundPhases('glutenFree', 'neapolitan'),
   schedule(0, 2, 1),

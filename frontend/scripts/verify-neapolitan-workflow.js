@@ -62,7 +62,9 @@ assert.match(
   uiSource,
   /doughHandlingInfoStepIndex=\{[^}]*isTargetNeapolitanMixerPhaseA[^}]*index === 0 \? 7 : undefined\)?\}/,
 );
-assert.match(uiSource, /existingTimer\) => !\['preheat', 'bake', 'bake-finish', 'rotate'\]\.includes\(existingTimer\.id\)/);
+assert.match(uiSource, /function getBeginnerPhaseCTimers\(schedule: HomePizzaPlanSchedule, temperingMinutes: number\)/);
+assert.match(uiSource, /id: 'beginner-phase-c-preheat'/);
+assert.doesNotMatch(uiSource, /getBeginnerPhaseCTimers[\s\S]{0,500}id: 'bake'/);
 assert.match(uiSource, /const hasWaterInfo = !!waterInfo && \(waterInfoStepIndex !== undefined \? i === waterInfoStepIndex : \/ukupno \.\*vode\|total water\|Sieben und wiegen Sie\.\*Wasser\|skupno \.\*vode\/i\.test\(s\)\)/);
 assert.match(uiSource, /Mixer mixing usually takes about 8–10 minutes/);
 assert.match(uiSource, /Mixer mixing spelt dough usually takes about 5–7 minutes/);

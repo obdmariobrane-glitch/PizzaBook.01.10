@@ -5594,7 +5594,7 @@ function buildBeginnerTegliaHomeSteps(
         pressSteps.bake,
         pressSteps.grill,
       ],
-      timers: [],
+      timers: getBeginnerPhaseCTimers(schedule, Math.round(schedule.roomAfterFridgeHours * 60)),
     };
   });
   return addSequentialBeginnerPhaseLetters(adapted, lang);
@@ -5836,12 +5836,9 @@ function buildBeginnerDirectHomeSteps(
           shapingSteps.launch,
           shapingSteps.bake,
         ],
-        timers: pizzaStyle === 'neapolitan'
-          ? [
-              ...(phase.timers ?? []).filter((existingTimer) => !['preheat', 'bake', 'bake-finish', 'rotate'].includes(existingTimer.id)),
-              ...getBeginnerOvenTimers(oven, ovenTemp, false, false),
-            ]
-          : oven === 'ooni' ? [{ id: 'rotate', seconds: 25, kind: 'rotate' as const }] : [],
+        timers: getBeginnerPhaseCTimers(schedule, schedule.fridgeHours > 0 || schedule.roomAfterFridgeHours > 0
+          ? Math.round(schedule.roomAfterFridgeHours * 60)
+          : 0),
       };
     }
     return { ...phase, steps };
@@ -5901,6 +5898,18 @@ function getBeginnerPhaseBTimers(plan: BeginnerPhaseBPlan): BaseTimer[] {
   });
   if (plan.finalRestMinutes > 0) {
     timers.push({ id: 'beginner-phase-b-rest-final', seconds: plan.finalRestMinutes * 60, kind: 'rt' });
+  }
+  return timers;
+}
+
+function getBeginnerPhaseCTimers(schedule: HomePizzaPlanSchedule, temperingMinutes: number): BaseTimer[] {
+  const timers: BaseTimer[] = [];
+  if (temperingMinutes > 0) {
+    timers.push({ id: 'beginner-phase-c-tempering', seconds: temperingMinutes * 60, kind: 'preBake' });
+  }
+  if (schedule.preheatAt) {
+    const preheatSeconds = Math.round((schedule.bakeAt.getTime() - schedule.preheatAt.getTime()) / 1000);
+    if (preheatSeconds > 0) timers.push({ id: 'beginner-phase-c-preheat', seconds: preheatSeconds, kind: 'preheat' });
   }
   return timers;
 }
