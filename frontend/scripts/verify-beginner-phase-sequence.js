@@ -14,6 +14,7 @@ const requestedFunctions = new Set([
   'buildNeapolitanDirectPhaseC',
   'buildBeginnerDirectHomeSteps',
   'buildBeginnerTegliaHomeSteps',
+  'buildBeginnerTegliaPhaseC',
   'getBeginnerPhaseBTimers',
   'getBeginnerPhaseCTimers',
   'addSequentialBeginnerPhaseLetters',
@@ -155,8 +156,8 @@ for (const lang of languages) {
 
             assertSingleDisplayPrefix(result, lang);
             assert.deepEqual(Array.from(phaseA.timers, (timer) => timer.id), ['post-mix-rest']);
-            if (style === 'neapolitan') {
-              assert.equal(phaseC.steps.length, 6, 'Neapolitan Direct Phase C should render six focused steps');
+            if (style !== 'romana_teglia') {
+              assert.equal(phaseC.steps.length, 6, 'Round Direct Phase C should render six focused steps');
               assert.equal(phaseC.stepInfo.length, 6);
               assert.match(phaseC.title, /Podjela|Dividing|Teilen|Delitev/i);
               assert.match(phaseC.steps[2], /1250|250|5/);

@@ -5685,14 +5685,32 @@ function buildBeginnerTegliaHomeSteps(
     },
   }[lang];
   const coldTitle = /cold fermentation|kalte fermentation|hladna fermentacija/i;
-  const active = refrigerated ? phases : phases.filter((phase) => !coldTitle.test(phase.title));
+  const tegliaPhaseC = buildBeginnerTegliaPhaseC(lang, refrigerated, flourType);
+  const activeBase = refrigerated ? phases : phases.filter((phase) => !coldTitle.test(phase.title));
+  const hasPhaseC = activeBase.some((phase) => /(?:Phase|Faza) C\b/i.test(phase.title));
+  const active = refrigerated || hasPhaseC || activeBase.length < 1
+    ? activeBase
+    : [
+      ...activeBase.slice(0, -1),
+      { title: tegliaPhaseC.title, steps: [] },
+      activeBase[activeBase.length - 1],
+    ];
+  const tegliaColdContinuation = {
+    hr: `Nastavite hladnu fermentaciju zatvorene posude u hladnjaku ${formatDuration(schedule.fridgeHours * 3600, lang)} prema izračunanom rasporedu.`,
+    en: `Continue cold fermentation of the closed container in the refrigerator for ${formatDuration(schedule.fridgeHours * 3600, lang)} according to the calculated schedule.`,
+    de: `Setzen Sie die kalte Fermentation des geschlossenen Behälters im Kühlschrank ${formatDuration(schedule.fridgeHours * 3600, lang)} nach dem berechneten Zeitplan fort.`,
+    sl: `Nadaljujte hladno fermentacijo zaprte posode v hladilniku ${formatDuration(schedule.fridgeHours * 3600, lang)} po izračunanem načrtu.`,
+  }[lang];
   const phasesWithoutEmptyB = phaseBPlan.durationMinutes === 0
     ? active.filter((_, index) => index !== 1)
     : active;
   const lastIndex = active.length - 1;
   const adapted = phasesWithoutEmptyB.map((phase, activeIndex) => {
     const index = phaseBPlan.durationMinutes === 0 && activeIndex >= 1 ? activeIndex + 1 : activeIndex;
-    if (coldTitle.test(phase.title)) return { ...phase, timers: [] };
+    if (index === 2) {
+      return { ...phase, title: tegliaPhaseC.title, steps: tegliaPhaseC.steps, stepInfo: tegliaPhaseC.stepInfo, timers: [] };
+    }
+    if (coldTitle.test(phase.title)) return { ...phase, steps: [tegliaColdContinuation], timers: [] };
     if (index === 1) {
       return { ...phase, title: phaseBTitle, steps: buildBeginnerPhaseBSteps(phaseBPlan, lang, true, flourType), timers: getBeginnerPhaseBTimers(phaseBPlan) };
     }
@@ -5717,6 +5735,92 @@ function buildBeginnerTegliaHomeSteps(
     };
   });
   return addSequentialBeginnerPhaseLetters(adapted, lang);
+}
+
+function buildBeginnerTegliaPhaseC(
+  lang: Lang,
+  refrigerated: boolean,
+  flourType: FlourType,
+) {
+  const copy = {
+    hr: {
+      title: 'Faza C: Priprema mase za tepsiju',
+      steps: [
+        flourType === 'glutenFree' ? 'Lagano pospite čistu radnu površinu bezglutenskim ili rižinim brašnom. Brašno za radnu površinu nije uključeno u izračun recepta.' : 'Lagano pospite čistu radnu površinu brašnom. Brašno za radnu površinu nije uključeno u izračun recepta.',
+        'Nježno izvadite tijesto iz posude uz minimalno istiskivanje plina.',
+        'Ostavite tijesto u jednoj masi. Nemojte ga dijeliti na pojedinačne komade.',
+        flourType === 'glutenFree' ? 'Nježno skupite tijesto u jednu masu pomoću strugalice ili lagano nauljenih ruku. Nemojte ga rastezati ni pokušavati razviti površinsku napetost.' : flourType === 'manitoba' ? 'Nježno skupite tijesto u kompaktnu masu. Manitoba tijesto može biti elastičnije i opirati se oblikovanju; nemojte ga siliti ni trgati. Prestanite čim tijesto zadrži oblik.' : flourType === 'spelt' ? 'Nježno skupite tijesto u jednu masu. Izbjegavajte ponavljano rastezanje i pretjerano zatezanje osjetljivijeg pirovog tijesta.' : flourType === 'wholeWheat' ? 'Nježno skupite tijesto u kompaktnu masu. Manje nepravilnosti na površini su prihvatljive; nemojte ga pretjerano zatezati.' : flourType === 'custom' ? 'Nježno skupite tijesto u kompaktnu masu. Prilagodite rukovanje njegovoj stvarnoj čvrstoći i ljepljivosti.' : 'Nježno skupite tijesto u kompaktnu masu. Lagano podvucite rubove i prestanite kada tijesto zadrži oblik.',
+        'Stavite tijesto u odgovarajuću fermentacijsku posudu. Ostavite dovoljno prostora za povećanje volumena i zatvorite posudu.',
+        refrigerated ? 'Premjestite zatvorenu fermentacijsku posudu u hladnjak u vrijeme određeno izračunatim rasporedom.' : 'Ostavite zatvorenu fermentacijsku posudu na sobnoj temperaturi i nastavite fermentaciju prema izračunatom rasporedu.',
+      ],
+      info: [
+        ['Radna površina', flourType === 'glutenFree' ? 'Pripremite čistu i suhu površinu, strugač i vagu. Koristite bezglutensko brašno ili certificirano bezglutensko rižino brašno, nikada obično pšenično brašno, i rasporedite ga u tanak sloj.' : 'Pripremite čistu i suhu površinu, strugač i vagu. Koristite malu količinu brašna u tankom sloju; višak može otežati rukovanje.'],
+        ['Vađenje tijesta', 'Strugačem nježno odvojite tijesto, nagnite posudu i pustite da masa polako klizne van uz potporu ruku ili strugača. Ne vucite, ne udarajte i ne rastežite agresivno; gubitak malo plina je normalan.'],
+        ['Jedna masa', 'Romana Teglia ostaje jedna masa tijekom ove faze. Nemojte vagati pojedinačne kuglice niti oblikovati konvencionalne kuglice; ukupna masa već je izračunata za odabranu tepsiju.'],
+        ['Oblikovanje mase', 'Masu nježno skupite bez pretjeranog istiskivanja plina i bez rastezanja do dimenzija tepsije. Kod bezglutenske mase koristite strugač ili lagano nauljene ruke; kod ostalih vrsta prilagodite pritisak stvarnoj čvrstoći i ljepljivosti.'],
+        ['Fermentacijska posuda', 'Upotrijebite čistu posudu prikladnu za kontakt s hranom, s dovoljno prostora za povećanje volumena. Po potrebi je lagano nauljite, stavite jednu masu unutra i zatvorite je da se tijesto ne osuši.'],
+        refrigerated ? ['Nastavak fermentacije', 'Provjerite izračunato vrijeme premještanja u hladnjak, držite jednu masu pokrivenu u zatvorenoj posudi i slijedite izračunato vrijeme vađenja i završnog temperiranja.'] : ['Nastavak fermentacije', 'Držite zatvorenu posudu na stabilnom mjestu, dalje od sunca i izvora topline. Slijedite izračunati raspored i ne produljujte fermentaciju nepotrebno.'],
+      ],
+    },
+    en: {
+      title: 'Phase C: Preparing the Tray Dough Mass',
+      steps: [
+        flourType === 'glutenFree' ? 'Lightly dust a clean work surface with gluten-free flour or certified gluten-free rice flour. Flour used for the work surface is not included in the recipe calculation.' : 'Lightly flour a clean work surface. Flour used for the work surface is not included in the recipe calculation.',
+        'Gently remove the dough from the container while minimizing degassing.',
+        'Keep the dough as one mass. Do not divide it into individual pieces.',
+        flourType === 'glutenFree' ? 'Gently gather the dough into one mass using a scraper or lightly oiled hands. Do not stretch it or try to develop surface tension.' : flourType === 'manitoba' ? 'Gently gather the dough into a compact mass. Manitoba dough may be more elastic and resist shaping; do not force or tear it. Stop as soon as it holds its shape.' : flourType === 'spelt' ? 'Gently gather the dough into one mass. Avoid repeated stretching and excessive tightening of the more delicate spelt dough.' : flourType === 'wholeWheat' ? 'Gently gather the dough into a compact mass. Minor surface irregularities are acceptable; do not over-tighten it.' : flourType === 'custom' ? 'Gently gather the dough into a compact mass. Adapt handling to its actual firmness and stickiness.' : 'Gently gather the dough into a compact mass. Tuck the edges lightly and stop when it holds its shape.',
+        'Place the dough in a suitable fermentation container. Leave enough room for expansion and close the container.',
+        refrigerated ? 'Transfer the closed fermentation container to the refrigerator at the time set by the calculated schedule.' : 'Keep the closed fermentation container at room temperature and continue fermentation according to the calculated schedule.',
+      ],
+      info: [
+        ['Work surface', flourType === 'glutenFree' ? 'Prepare a clean, dry surface, scraper, and scale. Use gluten-free flour or certified gluten-free rice flour, never regular wheat flour, and spread it in a thin layer.' : 'Prepare a clean, dry surface, scraper, and scale. Use a small amount of flour in a thin layer; excess flour can make handling difficult.'],
+        ['Remove the dough', 'Loosen the dough gently with a scraper, tilt the container, and let the mass slide out slowly while supporting it with your hands or scraper. Do not pull, punch, or stretch aggressively; some gas loss is normal.'],
+        ['One dough mass', 'Romana Teglia remains one mass during this phase. Do not weigh individual balls or form conventional dough balls; the total mass is already calculated for the selected tray.'],
+        ['Handle the mass', 'Gather the mass gently without aggressively degassing or stretching it to tray dimensions. For gluten-free dough use a scraper or lightly oiled hands; for other flours adapt pressure to the actual firmness and stickiness.'],
+        ['Fermentation container', 'Use a clean, food-safe container with enough room for expansion. Lightly oil it if needed, place the single mass inside, and close it to prevent drying.'],
+        refrigerated ? ['Continue fermentation', 'Check the calculated fridge-in time, keep the single mass covered in the closed container, and follow the calculated fridge-out time and final tempering.'] : ['Continue fermentation', 'Keep the closed container in a stable place away from sunlight and heat sources. Follow the calculated schedule and do not extend fermentation unnecessarily.'],
+      ],
+    },
+    de: {
+      title: 'Phase C: Teigmasse für das Blech vorbereiten',
+      steps: [
+        flourType === 'glutenFree' ? 'Bestäuben Sie eine saubere Arbeitsfläche leicht mit glutenfreiem Mehl oder zertifiziert glutenfreiem Reismehl. Das Mehl für die Arbeitsfläche ist nicht in der Rezeptberechnung enthalten.' : 'Bestäuben Sie eine saubere Arbeitsfläche leicht mit Mehl. Das Mehl für die Arbeitsfläche ist nicht in der Rezeptberechnung enthalten.',
+        'Nehmen Sie den Teig vorsichtig aus dem Behälter und drücken Sie dabei möglichst wenig Gas heraus.',
+        'Lassen Sie den Teig als eine Masse. Teilen Sie ihn nicht in einzelne Stücke.',
+        flourType === 'glutenFree' ? 'Sammeln Sie den Teig vorsichtig mit einem Schaber oder leicht geölten Händen zu einer Masse. Dehnen Sie ihn nicht und versuchen Sie nicht, Oberflächenspannung zu entwickeln.' : flourType === 'manitoba' ? 'Sammeln Sie den Teig vorsichtig zu einer kompakten Masse. Manitoba-Teig kann elastischer sein und sich widersetzen; erzwingen oder reißen Sie ihn nicht. Hören Sie auf, sobald er seine Form hält.' : flourType === 'spelt' ? 'Sammeln Sie den Teig vorsichtig zu einer Masse. Vermeiden Sie wiederholtes Dehnen und starkes Straffen des empfindlicheren Dinkelteigs.' : flourType === 'wholeWheat' ? 'Sammeln Sie den Teig vorsichtig zu einer kompakten Masse. Kleine Unregelmäßigkeiten sind akzeptabel; straffen Sie ihn nicht übermäßig.' : flourType === 'custom' ? 'Sammeln Sie den Teig vorsichtig zu einer kompakten Masse. Passen Sie die Behandlung an seine tatsächliche Festigkeit und Klebrigkeit an.' : 'Sammeln Sie den Teig vorsichtig zu einer kompakten Masse. Schlagen Sie die Ränder leicht ein und hören Sie auf, sobald er seine Form hält.',
+        'Geben Sie den Teig in einen geeigneten Gärbehälter. Lassen Sie ausreichend Platz zum Aufgehen und schließen Sie den Behälter.',
+        refrigerated ? 'Stellen Sie den geschlossenen Gärbehälter zum im berechneten Zeitplan festgelegten Zeitpunkt in den Kühlschrank.' : 'Lassen Sie den geschlossenen Gärbehälter bei Raumtemperatur stehen und setzen Sie die Fermentation nach dem berechneten Zeitplan fort.',
+      ],
+      info: [
+        ['Arbeitsfläche', flourType === 'glutenFree' ? 'Bereiten Sie eine saubere, trockene Fläche, Schaber und Waage vor. Verwenden Sie glutenfreies Mehl oder zertifiziert glutenfreies Reismehl, niemals normales Weizenmehl, und verteilen Sie es dünn.' : 'Bereiten Sie eine saubere, trockene Fläche, Schaber und Waage vor. Verwenden Sie wenig Mehl in einer dünnen Schicht; zu viel Mehl erschwert die Handhabung.'],
+        ['Teig herausnehmen', 'Lösen Sie den Teig vorsichtig mit einem Schaber, neigen Sie den Behälter und lassen Sie die Masse langsam herausgleiten, während Sie sie mit Händen oder Schaber stützen. Nicht ziehen, schlagen oder aggressiv dehnen; etwas Gasverlust ist normal.'],
+        ['Eine Masse', 'Romana Teglia bleibt in dieser Phase eine Masse. Wiegen Sie keine einzelnen Kugeln und formen Sie keine herkömmlichen Teigkugeln; die Gesamtmasse ist bereits für das ausgewählte Blech berechnet.'],
+        ['Masse behandeln', 'Sammeln Sie die Masse vorsichtig, ohne sie stark zu entgasen oder auf Blechgröße zu dehnen. Verwenden Sie bei glutenfreiem Teig einen Schaber oder leicht geölte Hände; passen Sie bei anderen Mehlen den Druck an Festigkeit und Klebrigkeit an.'],
+        ['Gärbehälter', 'Verwenden Sie einen sauberen, lebensmittelechten Behälter mit ausreichend Platz zum Aufgehen. Ölen Sie ihn bei Bedarf leicht, geben Sie die einzelne Masse hinein und schließen Sie ihn gegen Austrocknen.'],
+        refrigerated ? ['Fermentation fortsetzen', 'Prüfen Sie den berechneten Zeitpunkt zum Einräumen, lassen Sie die einzelne Masse im geschlossenen Behälter und beachten Sie Herausnehmen und abschließendes Temperieren nach Plan.'] : ['Fermentation fortsetzen', 'Stellen Sie den geschlossenen Behälter an einen stabilen Ort ohne Sonne und Wärmequellen. Befolgen Sie den berechneten Zeitplan und verlängern Sie die Fermentation nicht unnötig.'],
+      ],
+    },
+    sl: {
+      title: 'Faza C: Priprava mase za pekač',
+      steps: [
+        flourType === 'glutenFree' ? 'Čisto delovno površino rahlo posujte z brezglutensko moko ali certificirano brezglutensko riževo moko. Moka za delovno površino ni vključena v izračun recepta.' : 'Čisto delovno površino rahlo posujte z moko. Moka za delovno površino ni vključena v izračun recepta.',
+        'Testo nežno vzemite iz posode in pri tem čim manj iztisnite plin.',
+        'Testo pustite v eni masi. Ne delite ga na posamezne kose.',
+        flourType === 'glutenFree' ? 'Testo nežno zberite v eno maso s strgalom ali rahlo naoljenimi rokami. Ne raztegujte ga in ne poskušajte ustvariti površinske napetosti.' : flourType === 'manitoba' ? 'Testo nežno zberite v kompaktno maso. Manitobsko testo je lahko bolj elastično in se upira oblikovanju; ne silite vanj in ga ne trgajte. Končajte, ko drži obliko.' : flourType === 'spelt' ? 'Testo nežno zberite v eno maso. Izogibajte se ponavljanemu raztezanju in pretiranemu zategovanju občutljivega pirinega testa.' : flourType === 'wholeWheat' ? 'Testo nežno zberite v kompaktno maso. Manjše nepravilnosti na površini so sprejemljive; ne zategujte ga preveč.' : flourType === 'custom' ? 'Testo nežno zberite v kompaktno maso. Ravnanje prilagodite dejanski čvrstosti in lepljivosti.' : 'Testo nežno zberite v kompaktno maso. Robove rahlo spodvijte in končajte, ko drži obliko.',
+        'Testo položite v ustrezno fermentacijsko posodo. Pustite dovolj prostora za širjenje in posodo zaprite.',
+        refrigerated ? 'Zaprto fermentacijsko posodo ob času, določenem z izračunanim načrtom, prestavite v hladilnik.' : 'Zaprto fermentacijsko posodo pustite pri sobni temperaturi in nadaljujte fermentacijo po izračunanem načrtu.',
+      ],
+      info: [
+        ['Delovna površina', flourType === 'glutenFree' ? 'Pripravite čisto in suho površino, strgalo in tehtnico. Uporabite brezglutensko moko ali certificirano brezglutensko riževo moko, nikoli navadne pšenične moke, ter jo razporedite v tanek sloj.' : 'Pripravite čisto in suho površino, strgalo in tehtnico. Uporabite malo moke v tankem sloju; preveč moke oteži delo.'],
+        ['Odstranitev testa', 'Testo nežno ločite s strgalom, posodo nagnite in pustite, da masa počasi zdrsne ven, pri tem pa jo podprite z rokami ali strgalom. Ne vlecite, udarjajte ali agresivno raztegujte; nekaj izgube plina je normalne.'],
+        ['Ena masa', 'Romana Teglia v tej fazi ostane ena masa. Ne tehtajte posameznih kroglic in ne oblikujte običajnih kroglic; skupna masa je že izračunana za izbrani pekač.'],
+        ['Ravnanje z maso', 'Maso nežno zberite brez močnega iztiskanja plina in brez raztegovanja do mer pekača. Pri brezglutenskem testu uporabite strgalo ali rahlo naoljene roke; pri drugih mokah pritisk prilagodite dejanski čvrstosti in lepljivosti.'],
+        ['Fermentacijska posoda', 'Uporabite čisto posodo, primerno za stik z živili, z dovolj prostora za širjenje. Po potrebi jo rahlo naoljite, vanjo položite eno maso in jo zaprite, da se testo ne izsuši.'],
+        refrigerated ? ['Nadaljevanje fermentacije', 'Preverite izračunani čas za prestavitev, eno maso pustite pokrito v zaprti posodi ter upoštevajte čas odvzema in končnega temperiranja po načrtu.'] : ['Nadaljevanje fermentacije', 'Zaprto posodo hranite na stabilnem mestu brez sonca in virov toplote. Upoštevajte izračunani načrt in fermentacije ne podaljšujte po nepotrebnem.'],
+      ],
+    },
+  }[lang];
+  return { title: copy.title, steps: copy.steps, stepInfo: copy.info.map(([title, body]) => ({ title, body })) };
 }
 
 function buildNeapolitanDirectPhaseC(
@@ -5839,13 +5943,19 @@ function buildNeapolitanDirectPhaseC(
       de: 'Formen Sie jedes Stück vorsichtig zu einer Teigkugel, ohne zu viel Oberflächenspannung zu erzeugen. Die Oberfläche kann weniger glatt sein; etwas Klebrigkeit oder kleine Unregelmäßigkeiten sind normal. Zwingen Sie den Teig nicht in eine vollkommen glatte Kugel.',
       sl: 'Vsak kos nežno oblikujte v kroglico brez prevelike površinske napetosti. Površina je lahko manj gladka, nekaj lepljivosti ali manjših nepravilnosti pa je normalnih. Testa ne silite v popolnoma gladko kroglico.',
     },
+    custom: {
+      hr: 'Svaki komad nježno oblikujte u kuglicu. Podvucite rubove prema donjoj strani i zatvorite spoj. Jačinu oblikovanja prilagodite stvarnoj elastičnosti tijesta i prestanite kada kuglica drži oblik.',
+      en: 'Gently shape each piece into a dough ball. Tuck the edges underneath and close the seam. Adapt the firmness of shaping to the dough’s actual elasticity and stop when the ball holds its shape.',
+      de: 'Formen Sie jedes Stück vorsichtig zu einer Teigkugel. Schlagen Sie die Ränder ein und schließen Sie die Naht. Passen Sie die Stärke des Formens an die tatsächliche Elastizität des Teigs an und hören Sie auf, sobald die Kugel ihre Form hält.',
+      sl: 'Vsak kos nežno oblikujte v kroglico. Robove spodvijte in zaprite stik. Moč oblikovanja prilagodite dejanski elastičnosti testa in končajte, ko kroglica drži obliko.',
+    },
     glutenFree: {
       hr: 'Svaki komad nježno oblikujte u mekanu kuglicu pomoću strugača ili lagano nauljenih ruku. Zatvorite spoj koliko je moguće, ali nemojte stvarati površinsku napetost, snažno pritiskati ni rastezati smjesu.',
       en: 'Gently shape each piece into a soft dough ball using a scraper or lightly oiled hands. Close the seam as much as practical, but do not build surface tension, press firmly, or stretch the mixture.',
       de: 'Formen Sie jedes Stück vorsichtig mit einem Schaber oder leicht geölten Händen zu einer weichen Teigkugel. Schließen Sie die Naht so gut wie möglich, aber erzeugen Sie keine Oberflächenspannung, drücken Sie nicht fest und dehnen Sie die Masse nicht.',
       sl: 'Vsak kos nežno oblikujte v mehko kroglico s strgalom ali rahlo naoljenimi rokami. Stik zaprite, kolikor je mogoče, vendar ne ustvarjajte površinske napetosti, močno pritiskajte ali raztegujte zmesi.',
     },
-  }[flourType === 'custom' ? 'caputo00' : flourType] ?? {
+  }[flourType] ?? {
     hr: copy.steps[3],
     en: copy.steps[3],
     de: copy.steps[3],
@@ -5871,13 +5981,19 @@ function buildNeapolitanDirectPhaseC(
       de: 'Formen Sie die Portion vorsichtig, ohne sie stark zu straffen. Die Oberfläche kann weniger glatt bleiben; etwas Klebrigkeit oder Unregelmäßigkeit ist normal. Drücken Sie nicht stärker, nur um eine vollkommen glatte Kugel zu erhalten.',
       sl: 'Porcijo oblikujte nežno brez pretiranega zategovanja. Površina lahko ostane manj gladka, nekaj lepljivosti ali nepravilnosti je normalnih. Ne pritiskajte močneje samo zato, da bi dobili popolnoma gladko kroglico.',
     }[lang],
+    custom: {
+      hr: 'Stavite porciju na lagano pobrašnjenu površinu. Rubove nježno podvucite ispod i zatvorite spoj, ali jačinu oblikovanja prilagodite stvarnoj elastičnosti, čvrstoći i ljepljivosti tijesta. Prestanite kada kuglica drži oblik.',
+      en: 'Place a portion on the lightly floured surface. Gently tuck the edges underneath and close the seam, adapting the firmness of shaping to the dough’s actual elasticity, firmness, and stickiness. Stop when the ball holds its shape.',
+      de: 'Legen Sie eine Portion auf die leicht bemehlte Fläche. Schlagen Sie die Ränder vorsichtig ein und schließen Sie die Naht. Passen Sie die Stärke des Formens an die tatsächliche Elastizität, Festigkeit und Klebrigkeit des Teigs an. Hören Sie auf, sobald die Kugel ihre Form hält.',
+      sl: 'Porcijo položite na rahlo pomokano površino. Robove nežno spodvijte in zaprite stik, moč oblikovanja pa prilagodite dejanski elastičnosti, čvrstosti in lepljivosti testa. Končajte, ko kroglica drži obliko.',
+    }[lang],
     glutenFree: {
       hr: 'Porciju stavite na podlogu i nježno je skupite strugačem ili lagano nauljenim rukama. Zatvorite spoj koliko je moguće, ali ne pokušavajte razviti gluten, stvarati napetost ili rastezati smjesu kao pšenično tijesto. Ako je smjesa ljepljiva, koristite strugač i minimalno dodatne obrade.',
       en: 'Gather the portion gently with a scraper or lightly oiled hands. Close the seam as much as practical, but do not try to develop gluten, create surface tension, or stretch the mixture like wheat dough. If sticky, use the scraper and minimal extra handling.',
       de: 'Sammeln Sie die Portion vorsichtig mit einem Schaber oder leicht geölten Händen. Schließen Sie die Naht so gut wie möglich, aber versuchen Sie nicht, Gluten oder Oberflächenspannung zu entwickeln oder die Masse wie Weizenteig zu dehnen. Bei Klebrigkeit Schaber und möglichst wenig zusätzliche Bearbeitung verwenden.',
       sl: 'Porcijo nežno zberite s strgalom ali rahlo naoljenimi rokami. Stik zaprite, kolikor je mogoče, vendar ne poskušajte razviti glutena, ustvariti površinske napetosti ali zmesi raztegovati kot pšenično testo. Če je lepljiva, uporabite strgalo in čim manj dodatnega dela.',
     }[lang],
-  }[flourType === 'custom' ? 'caputo00' : flourType] ?? copy.info[3][1];
+  }[flourType] ?? copy.info[3][1];
   if (flourType === 'glutenFree') {
     copy.steps[0] = {
       hr: 'Lagano pospite čistu radnu površinu bezglutenskim ili rižinim brašnom. Brašno za radnu površinu nije uključeno u izračun recepta.',
@@ -6088,9 +6204,7 @@ function buildBeginnerDirectHomeSteps(
     },
   }[lang]);
 
-  const neapolitanPhaseC = pizzaStyle === 'neapolitan'
-    ? buildNeapolitanDirectPhaseC(lang, totalDoughLabel, ballWeightLabel, pizzas, schedule.fridgeHours > 0, flourType)
-    : undefined;
+  const neapolitanPhaseC = buildNeapolitanDirectPhaseC(lang, totalDoughLabel, ballWeightLabel, pizzas, schedule.fridgeHours > 0, flourType);
   const tipo00ColdFermentationStep = {
     hr: `Nastavite hladnu fermentaciju zatvorene kutije u hladnjaku ${formatDuration(schedule.fridgeHours * 3600, lang)} prema izračunanom rasporedu.`,
     en: `Continue cold fermentation of the closed box in the refrigerator for ${formatDuration(schedule.fridgeHours * 3600, lang)} according to the calculated schedule.`,
