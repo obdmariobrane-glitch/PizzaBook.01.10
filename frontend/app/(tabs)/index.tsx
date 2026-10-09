@@ -5490,8 +5490,12 @@ function buildBeginnerTegliaHomeSteps(
   }[lang];
   const coldTitle = /cold fermentation|kalte fermentation|hladna fermentacija/i;
   const active = refrigerated ? phases : phases.filter((phase) => !coldTitle.test(phase.title));
+  const phasesWithoutEmptyB = phaseBPlan.durationMinutes === 0
+    ? active.filter((_, index) => index !== 1)
+    : active;
   const lastIndex = active.length - 1;
-  const adapted = active.map((phase, index) => {
+  const adapted = phasesWithoutEmptyB.map((phase, activeIndex) => {
+    const index = phaseBPlan.durationMinutes === 0 && activeIndex >= 1 ? activeIndex + 1 : activeIndex;
     if (coldTitle.test(phase.title)) return { ...phase, timers: [] };
     if (index === 1) {
       return { ...phase, title: phaseBTitle, steps: buildBeginnerPhaseBSteps(phaseBPlan, lang, true), timers: [] };

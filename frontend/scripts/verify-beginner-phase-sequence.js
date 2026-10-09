@@ -338,4 +338,24 @@ assert.match(source, /timer\('post-mix-rest', Math\.round\(mixRestMinutes \* 60\
 assert.match(source, /napolitanaGlutenFreeRemainingMinutes > 0\s*\?\s*\[timer\('gluten-free-napolitana-rest'/);
 assert.match(source, /getBeginnerOvenTimers\(oven, ovenTemp, useBakeEstimate, isRomanTeglia\)/);
 
+for (const lang of languages) {
+  const shortTeglia = buildBeginnerTegliaHomeSteps(
+    roundPhases('caputo00', 'romana'),
+    schedule(0, 0, 1),
+    phaseBPlanFor('caputo00', 0, 'teglia'),
+    22,
+    lang,
+    300,
+    '4–5 min',
+    { width: 30, length: 40 },
+    'caputo00',
+  );
+  const prefix = lang === 'hr' || lang === 'sl' ? 'Faza' : 'Phase';
+  assert.equal(shortTeglia.length, 3, `${lang} short Teglia workflow should omit empty Phase B`);
+  shortTeglia.forEach((phase, index) => {
+    assert.match(phase.title, new RegExp(`^${prefix} ${String.fromCharCode(65 + index)}: `));
+    assert.ok(phase.steps.every((step) => !/\b0 (?:hours?|minutes?|Stunden|Minuten|ur|minuta)\b/i.test(step)));
+  });
+}
+
 console.log('Beginner phase sequence and timer verification passed for HR/EN/DE/SL, styles, flour paths, and room/cold schedule variants.');

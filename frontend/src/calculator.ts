@@ -2251,12 +2251,14 @@ export function reversePlan(
     const ballingAt = homeSchedule!.ballingAt
       ?? new Date(homeSchedule!.startAt.getTime() + roomBeforeFridgeHours * 3600000);
     const finalRoomAt = new Date(ballingAt.getTime() + fridgeHours * 3600000);
-    if (homeCopy && style === 'neapolitan' && homeSchedule!.phaseAMinutes !== undefined && homeSchedule!.phaseBMinutes !== undefined) {
-      const phaseBStart = new Date(homeSchedule!.startAt.getTime() + homeSchedule!.phaseAMinutes * 60000);
+    if (homeCopy) {
+      const phaseBStart = new Date(
+        homeSchedule!.startAt.getTime() + (homeSchedule!.phaseAMinutes ?? 0) * 60000,
+      );
       const phaseBFolds = calculateBeginnerPhaseBPlan({
-        durationMinutes: homeSchedule!.phaseBMinutes,
-        flourBehavior: 'standard',
-        workflow: 'round',
+        durationMinutes: homeSchedule!.phaseBMinutes ?? homeSchedule!.roomBeforeFridgeHours * 60,
+        flourBehavior: homeSchedule!.glutenFree ? 'glutenFree' : 'standard',
+        workflow: style === 'romana' && homeSchedule!.romanFormat === 'teglia' ? 'teglia' : 'round',
       }).folds;
       phaseBFolds.forEach((fold) => {
         const title = fold.index === 1 ? copy.fold1Title : copy.fold2Title;

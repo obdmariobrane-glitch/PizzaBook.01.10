@@ -37,27 +37,68 @@ const plannerCopy = {
     start: 'Mix', ballingFridge: 'Ball', roomOnlyBalling: 'Ball', finalRoom: 'Warm',
     preheat: 'Preheat', shapingTitle: 'Shape', shaping: 'Shape', bake: 'Bake',
   },
+  directHomeTegliaCopy: {
+    start: 'Mix', ballingFridge: 'Tray', roomOnlyBalling: 'Tray', finalRoom: 'Warm',
+    preheat: 'Preheat', shapingTitle: 'Shape', shaping: 'Shape', bake: 'Bake',
+  },
 };
 const startAt = new Date('2026-10-08T11:00:00');
 const bakeAt = new Date('2026-10-08T14:00:00');
-const makeSchedule = (phaseBMinutes) => ({
-  bakeAt, startAt, roomBeforeFridgeHours: 0, fridgeHours: 0, roomAfterFridgeHours: 2,
+const makeSchedule = (phaseBMinutes, fridgeHours = 0, glutenFree = false, romanFormat) => ({
+  bakeAt, startAt, roomBeforeFridgeHours: phaseBMinutes / 60, fridgeHours, roomAfterFridgeHours: 2,
   phaseAMinutes: 20, phaseBMinutes,
   ballingAt: new Date(startAt.getTime() + (20 + phaseBMinutes) * 60000),
   preheatAt: new Date(bakeAt.getTime() - 60 * 60000),
   strategy: 'beginner',
+  glutenFree,
+  romanFormat,
 });
-const oneFoldSteps = reversePlan(bakeAt, 'direct', 'neapolitan', plannerCopy, makeSchedule(60));
-assert.equal(oneFoldSteps.find((step) => step.title === 'First Stretch & Fold').at.getTime(), startAt.getTime() + 40 * 60000);
-assert.equal(oneFoldSteps.find((step) => step.title === 'Balls').at.getTime(), startAt.getTime() + 80 * 60000);
-const twoFoldSteps = reversePlan(bakeAt, 'direct', 'neapolitan', plannerCopy, makeSchedule(90));
-assert.equal(twoFoldSteps.find((step) => step.title === 'First Stretch & Fold').at.getTime(), startAt.getTime() + 40 * 60000);
-assert.equal(twoFoldSteps.find((step) => step.title === 'Second Stretch & Fold').at.getTime(), startAt.getTime() + 70 * 60000);
-assert.equal(twoFoldSteps.find((step) => step.title === 'Balls').at.getTime(), startAt.getTime() + 110 * 60000);
-assert.equal(reversePlan(bakeAt, 'direct', 'neapolitan', plannerCopy, makeSchedule(30)).filter((step) => step.title.includes('Stretch')).length, 0);
+for (const [style, romanFormat] of [
+  ['neapolitan'],
+  ['romana', 'tonda'],
+  ['romana', 'teglia'],
+  ['ny_style'],
+]) {
+  for (const fridgeHours of [0, 8]) {
+    for (const [phaseBMinutes, expectedFoldOffsets] of [[30, []], [60, [20]], [90, [20, 50]]]) {
+      const steps = reversePlan(
+        bakeAt,
+        'direct',
+        style,
+        plannerCopy,
+        makeSchedule(phaseBMinutes, fridgeHours, false, romanFormat),
+      );
+      const foldSteps = steps.filter((step) => step.title.includes('Stretch'));
+      assert.deepEqual(
+        [...foldSteps].map((step) => step.at.getTime()),
+        expectedFoldOffsets.map((offset) => startAt.getTime() + (20 + offset) * 60000),
+        `${style}/${romanFormat ?? ''} ${fridgeHours}h fold timestamps`,
+      );
+    }
+  }
+}
+const glutenFreeSteps = reversePlan(
+  bakeAt,
+  'direct',
+  'romana',
+  plannerCopy,
+  makeSchedule(90, 8, true, 'teglia'),
+);
+assert.equal(glutenFreeSteps.filter((step) => step.title.includes('Stretch')).length, 0);
+assert.equal(
+  reversePlan(bakeAt, 'direct', 'neapolitan', plannerCopy, makeSchedule(60)).find((step) => step.title === 'Balls').at.getTime(),
+  startAt.getTime() + 80 * 60000,
+);
+const midnightBakeAt = new Date('2026-10-09T02:00:00');
+const midnightStartAt = new Date('2026-10-08T23:00:00');
+const midnightSchedule = { ...makeSchedule(90), startAt: midnightStartAt, bakeAt: midnightBakeAt };
+const midnightFold = reversePlan(midnightBakeAt, 'direct', 'ny_style', plannerCopy, midnightSchedule)
+  .find((step) => step.title === 'Second Stretch & Fold');
+assert.equal(midnightFold.at.getTime(), new Date('2026-10-09T00:10:00').getTime());
 
 assert.match(calculator, /phaseBStart[\s\S]*fold\.offsetMinutes/);
 assert.match(calculator, /durationMinutes: homeSchedule!\.phaseBMinutes/);
+assert.match(calculator, /flourBehavior: homeSchedule!\.glutenFree \? 'glutenFree' : 'standard'/);
 assert.match(calculatorUi, /setCustomBallWeight\(nextBallWeight\)/);
 assert.doesNotMatch(calculatorUi, /setCustomBallWeight\(canonicalBallWeight\)/);
 assert.match(planner, /d\.getTime\(\) - Date\.now\(\) < 60 \* 60 \* 1000/);
