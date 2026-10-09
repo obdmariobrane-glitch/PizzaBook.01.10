@@ -881,6 +881,7 @@ export default function CalculatorHome() {
   const directRecipeRoomHours = directHomeSchedule?.roomAfterFridgeHours ?? roomHours;
   const directRecipeFridgeHours = directHomeSchedule?.fridgeHours ?? fridgeHours;
   const directHomeScheduleDisplay = directHomeSchedule ? formatDirectHomeSchedule(directHomeSchedule, roomTemp, fridgeTemp, lang) : null;
+  const beginnerFlourBehavior = getBeginnerPhaseAFlourBehavior(flour, blendA, blendB);
   const beginnerScheduleSteps: GuidedScheduleEvent[] = useMemo(() => directHomeSchedule ? (() => {
     const dateLocale = { hr: 'hr-HR', en: 'en-GB', de: 'de-DE', sl: 'sl-SI' }[lang];
     const formatAt = (at: Date, previousAt?: Date) => {
@@ -892,6 +893,9 @@ export default function CalculatorHome() {
     };
     const { startAt, bakeAt, roomBeforeFridgeHours, fridgeHours, roomAfterFridgeHours } = directHomeSchedule;
     const isGlutenFree = flour === 'glutenFree';
+    const phaseBStart = new Date(
+      startAt.getTime() + (directHomeSchedule.phaseAMinutes ?? 0) * 60000,
+    );
     const isTargetBeginnerSchedule = beginnerDirectHome
       && pizzaStyle === 'neapolitan'
       && flour === 'caputo00'
@@ -904,7 +908,7 @@ export default function CalculatorHome() {
         steps.push({
           id: fold.index === 1 ? 'fold1' : 'fold2',
           label: fold.index === 1 ? t.beginnerCalc.timelineFold1 : t.beginnerCalc.timelineFold2,
-          at: new Date(startAt.getTime() + fold.offsetMinutes * 60000),
+          at: new Date(phaseBStart.getTime() + fold.offsetMinutes * 60000),
           actionable: true,
         });
       }
@@ -912,7 +916,11 @@ export default function CalculatorHome() {
     const ballingAt = directHomeSchedule.ballingAt ?? new Date(startAt.getTime() + roomBeforeFridgeHours * 3600000);
     if (fridgeHours > 0) {
       steps.push({
-        id: isGlutenFree ? 'portioning' : 'fridgeIn',
+        id: isGlutenFree
+          ? 'portioning'
+          : isRomanTeglia || isTargetBeginnerSchedule
+            ? 'fridgeIn'
+            : 'fridgeInCombined',
         label: isRomanTeglia
           ? t.beginnerCalc.timelineRefrigerateDough
           : isGlutenFree
@@ -984,7 +992,7 @@ export default function CalculatorHome() {
         time: formatAt(step.at, index > 0 ? sorted[index - 1].at : undefined),
       }));
   })() : [], [
-    directHomeSchedule, beginnerPhaseBPlan, lang, t.beginnerCalc, isRomanTeglia, pizzaStyle, flour, mixing, oven, ovenTemp, temperatureUnit, beginnerDirectHome,
+    directHomeSchedule, beginnerPhaseBPlan, lang, t.beginnerCalc, isRomanTeglia, pizzaStyle, flour, blendA, blendB, mixing, oven, ovenTemp, temperatureUnit, beginnerDirectHome,
   ]);
   const legacyDoughHours = getHomePlanLegacyFermentationHours(homePlan, roomHours, fridgeHours);
   const bigaHomePlan = useMemo(() => {
@@ -1139,7 +1147,13 @@ export default function CalculatorHome() {
 
       for (const event of beginnerScheduleSteps) {
         if (!event.actionable || guidedCompletedAt[event.id] !== undefined || event.at.getTime() <= Date.now()) continue;
-        const copy = t.beginnerCalc.guidedNotificationCopy[event.id];
+        const useGentleFoldCopy = flour !== 'custom'
+          && (beginnerFlourBehavior === 'spelt' || beginnerFlourBehavior === 'wholeWheat');
+        const copy = event.id === 'fold1' && useGentleFoldCopy
+          ? t.beginnerCalc.guidedNotificationCopy.fold1Gentle
+          : event.id === 'fold2' && useGentleFoldCopy
+            ? t.beginnerCalc.guidedNotificationCopy.fold2Gentle
+            : t.beginnerCalc.guidedNotificationCopy[event.id];
         const notificationBody = event.id === 'fridgeIn'
           ? event.label
           : copy.body;
