@@ -7,6 +7,7 @@ const ts = require('typescript');
 const vm = require('vm');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'calculator.ts'), 'utf8');
+const translationsSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'i18n', 'translations.ts'), 'utf8');
 const bigaUiSource = fs.readFileSync(path.join(__dirname, '..', 'app', '(tabs)', 'index.tsx'), 'utf8');
 const plannerUiSource = fs.readFileSync(path.join(__dirname, '..', 'app', '(tabs)', 'planner.tsx'), 'utf8');
 const compiled = ts.transpileModule(source, {
@@ -86,6 +87,12 @@ assert.match(plannerUiSource, /isBeginner \? m\.key === 'direct'/);
 assert.match(plannerUiSource, /cancelPlannerNotificationsForMethods\(\['biga', 'poolish'\]\)/);
 assert.match(plannerUiSource, /await cancelPlannerNotificationsForMethods\(\['direct', 'biga', 'poolish'\]\)/);
 assert.match(plannerUiSource, /scheduleLocal\(`🍕 \$\{s\.title\}`, s\.desc, Math\.round\(trigger \/ 1000\), \{ source: 'pizza-planner', method \}\)/);
+const tegliaTranslationBlocks = [...translationsSource.matchAll(/directHomeTegliaCopy:\s*\{([\s\S]*?)\n\s*\},/g)].map((match) => match[1]);
+assert.equal(tegliaTranslationBlocks.length, 4);
+for (const block of tegliaTranslationBlocks) {
+  assert.doesNotMatch(block, /kuglice|kroglice|balls\b|Kugeln/i);
+  assert.match(block, /one mass|eine Masse|ena masa|jednu masu/i);
+}
 assert.match(bigaUiSource, /const finalMixSteps = mixing === 'mixer'\s*\?\s*mixerFinalMixSteps\s*:/);
 assert.match(bigaUiSource, /fit the dough hook, and start on speed 1/);
 assert.match(bigaUiSource, /switch the mixer to speed 2/);
