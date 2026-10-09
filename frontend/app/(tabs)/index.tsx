@@ -1833,7 +1833,7 @@ export default function CalculatorHome() {
   const beginnerDirectHomeSteps = beginnerDirectHome && beginnerDirectRecipeSteps
     ? isRomanTeglia
       ? buildBeginnerTegliaHomeSteps(beginnerDirectRecipeSteps, directHomeSchedule, beginnerPhaseBPlan!, roomTemp, lang, ovenTemp, bakingTimeRange, { width: trayWidth, length: trayLength }, flour)
-      : buildBeginnerDirectHomeSteps(beginnerDirectRecipeSteps, directHomeSchedule, beginnerPhaseBPlan!, roomTemp, fridgeTemp, ovenTemp, oven, bakingTimeRange, lang, preferredYeastType, pizzaStyle, diameter, dims.sauce, dims.cheese, flour)
+      : buildBeginnerDirectHomeSteps(beginnerDirectRecipeSteps, directHomeSchedule, beginnerPhaseBPlan!, roomTemp, fridgeTemp, ovenTemp, oven, bakingTimeRange, lang, preferredYeastType, pizzaStyle, diameter, dims.sauce, dims.cheese, flour, weight(dough.totalDough), weight(effectiveBall), pizzas)
     : null;
   const beginnerUnscheduledDirectSteps = beginnerDirectRecipeSteps && !directHomeSchedule
     ? buildBeginnerUnscheduledDirectSteps(beginnerDirectRecipeSteps, fridgeTemp, lang)
@@ -5733,6 +5733,9 @@ function buildBeginnerDirectHomeSteps(
   saucePerPizza: number,
   cheesePerPizza: number,
   flourType: FlourType = 'caputo00',
+  totalDoughLabel: string,
+  ballWeightLabel: string,
+  pizzas: number,
 ): DetailedPhase[] {
   const phaseBTitle = {
     hr: 'Prva fermentacija',
@@ -5742,21 +5745,21 @@ function buildBeginnerDirectHomeSteps(
   }[lang];
   const isGlutenFree = flourType === 'glutenFree';
   const ballingInstruction = {
-    hr: 'Svaki komad oblikujte nježno: podvucite rubove prema donjoj strani i zatvorite spoj kako biste stvorili površinsku napetost bez snažnog istiskivanja plina ili trganja tijesta.',
-    en: 'Shape each piece gently: tuck the edges underneath and seal the seam to create surface tension without aggressively degassing or tearing the dough.',
-    de: 'Formen Sie jedes Stück vorsichtig: schlagen Sie die Ränder nach unten ein und schließen Sie die Naht, um Oberflächenspannung zu erzeugen, ohne das Gas stark auszudrücken oder den Teig zu reißen.',
-    sl: 'Vsak kos nežno oblikujte: robove spodvijte na spodnjo stran in zaprite stik, da ustvarite površinsko napetost brez močnega iztiskanja plina ali trganja testa.',
+    hr: `Podijelite ukupno ${totalDoughLabel} tijesta na ${pizzas} jednakih komada od približno ${ballWeightLabel}. Svaki komad oblikujte nježno: podvucite rubove prema donjoj strani i zatvorite spoj kako biste stvorili površinsku napetost bez snažnog istiskivanja plina ili trganja tijesta.`,
+    en: `Divide the total ${totalDoughLabel} of dough into ${pizzas} equal pieces of approximately ${ballWeightLabel} each. Shape each piece gently: tuck the edges underneath and seal the seam to create surface tension without aggressively degassing or tearing the dough.`,
+    de: `Teilen Sie insgesamt ${totalDoughLabel} Teig in ${pizzas} gleich große Stücke von jeweils ungefähr ${ballWeightLabel}. Formen Sie jedes Stück vorsichtig: schlagen Sie die Ränder nach unten ein und schließen Sie die Naht, um Oberflächenspannung zu erzeugen, ohne das Gas stark auszudrücken oder den Teig zu reißen.`,
+    sl: `Skupno ${totalDoughLabel} testa razdelite na ${pizzas} enakih kosov po približno ${ballWeightLabel}. Vsak kos nežno oblikujte: robove spodvijte na spodnjo stran in zaprite stik, da ustvarite površinsko napetost brez močnega iztiskanja plina ali trganja testa.`,
   }[lang];
   const ballingContainerInstruction = (schedule.fridgeHours > 0 ? {
-    hr: 'Stavite kugle u zatvorenu fermentacijsku kutiju i prebacite ih u hladnjak u planirano vrijeme.',
-    en: 'Place the balls in a closed fermentation box and transfer them to the refrigerator at the scheduled time.',
-    de: 'Legen Sie die Teigkugeln in eine geschlossene Gärbox und stellen Sie sie zum geplanten Zeitpunkt in den Kühlschrank.',
-    sl: 'Kroglice položite v zaprto fermentacijsko posodo in jih ob načrtovanem času prestavite v hladilnik.',
+    hr: 'Stavite kuglice u fermentacijsku kutiju s dovoljno razmaka između njih, zatvorite kutiju i premjestite je u hladnjak u vrijeme određeno izračunatim rasporedom.',
+    en: 'Place the dough balls in a fermentation box with enough space between them, close the box, and transfer it to the refrigerator at the time set by the calculated schedule.',
+    de: 'Legen Sie die Teigkugeln mit ausreichend Abstand zueinander in eine Gärbox, schließen Sie die Box und stellen Sie sie zum im berechneten Zeitplan festgelegten Zeitpunkt in den Kühlschrank.',
+    sl: 'Kroglice položite v fermentacijsko posodo z dovolj prostora med njimi, posodo zaprite in jo ob času, določenem z izračunanim načrtom, prestavite v hladilnik.',
   } : {
-    hr: 'Stavite kugle u zatvorenu fermentacijsku kutiju i nastavite prema planiranom vremenu pripreme.',
-    en: 'Place the balls in a closed fermentation box and continue at the scheduled preparation time.',
-    de: 'Legen Sie die Teigkugeln in eine geschlossene Gärbox und fahren Sie zum geplanten Vorbereitungszeitpunkt fort.',
-    sl: 'Kroglice položite v zaprto fermentacijsko posodo in nadaljujte ob načrtovanem času priprave.',
+    hr: 'Stavite kuglice u zatvorenu fermentacijsku kutiju, ostavite dovoljno razmaka između njih i nastavite fermentaciju na sobnoj temperaturi prema izračunatom rasporedu.',
+    en: 'Place the dough balls in a closed fermentation box, leave enough space between them, and continue fermentation at room temperature according to the calculated schedule.',
+    de: 'Legen Sie die Teigkugeln mit ausreichend Abstand zueinander in eine geschlossene Gärbox und setzen Sie die Fermentation bei Raumtemperatur nach dem berechneten Zeitplan fort.',
+    sl: 'Kroglice položite v zaprto fermentacijsko posodo, med njimi pustite dovolj prostora in nadaljujte fermentacijo pri sobni temperaturi po izračunanem načrtu.',
   })[lang];
   const fallbackPreheatMinutes = getBeginnerPreheatMinutes(oven);
   const preheatAt = schedule.preheatAt ?? new Date(schedule.bakeAt.getTime() - fallbackPreheatMinutes * 60000);
@@ -5923,8 +5926,8 @@ function buildBeginnerDirectHomeSteps(
     if (index === 2) {
       return {
         ...phase,
-        steps: pizzaStyle === 'neapolitan' && steps.length > 0
-          ? [...steps.slice(0, -1), ballingInstruction, ballingContainerInstruction]
+        steps: steps.length > 1
+          ? [...steps.slice(0, 2), ballingInstruction, ballingContainerInstruction]
           : steps,
         timers: [],
       };

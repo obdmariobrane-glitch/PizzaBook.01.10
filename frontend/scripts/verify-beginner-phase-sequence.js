@@ -143,6 +143,9 @@ for (const lang of languages) {
               70,
               100,
               flour,
+              '1250 g',
+              '250 g',
+              5,
             );
             const phaseA = result[0];
             const phaseB = result[1];
@@ -151,13 +154,14 @@ for (const lang of languages) {
 
             assertSingleDisplayPrefix(result, lang);
             assert.deepEqual(Array.from(phaseA.timers, (timer) => timer.id), ['post-mix-rest']);
-            if (style === 'neapolitan') {
-              assert.equal(phaseC.steps.length, phases[2].steps.length + 1, 'Neapolitan Phase C should add one container-transition step without duplicating division/balling');
+            if (style !== 'romana_teglia') {
+              assert.equal(phaseC.steps.length, 4, 'Round-style Phase C should combine division, ball count, and balling without duplicates');
               assert.match(phaseC.steps.at(-2), /površinsku napetost|surface tension|Oberflächenspannung|površinsko napetost/i);
+              assert.match(phaseC.steps.at(-2), /1250|250|5/);
             } else {
               assert.deepEqual(phaseC.steps, phases[2].steps, 'Phase C should remain the single round-style division/balling phase');
             }
-            if (style !== 'neapolitan') {
+            if (fridgeHours === 0) {
               assert.ok(!phaseC.steps.some((step) => /refrigerat|fridge|kühlschrank|hladilnik/i.test(step)));
             }
             assert.ok(result.every((phase) => (phase.timers ?? []).every((timer) => timer.seconds > 0)));
