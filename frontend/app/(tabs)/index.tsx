@@ -1051,7 +1051,7 @@ export default function CalculatorHome() {
         steps.push({
           id: 'fridgeOut',
           label: t.beginnerCalc.timelineRemoveFromFridge,
-          at: new Date(startAt.getTime() + (roomBeforeFridgeHours + fridgeHours) * 3600000),
+          at: getBeginnerFridgeOutAt(directHomeSchedule),
           actionable: true,
         });
       }
@@ -1844,7 +1844,7 @@ export default function CalculatorHome() {
     : null;
   const beginnerDirectHomeSteps = beginnerDirectHome && beginnerDirectRecipeSteps
     ? isRomanTeglia
-      ? buildBeginnerTegliaHomeSteps(beginnerDirectRecipeSteps, directHomeSchedule, beginnerPhaseBPlan!, roomTemp, lang, ovenTemp, bakingTimeRange, { width: trayWidth, length: trayLength }, flour)
+      ? buildBeginnerTegliaHomeSteps(beginnerDirectRecipeSteps, directHomeSchedule, beginnerPhaseBPlan!, roomTemp, lang, ovenTemp, bakingTimeRange, { width: trayWidth, length: trayLength }, flour, dims.sauce, dims.cheese, temperatureUnit)
       : buildBeginnerDirectHomeSteps(beginnerDirectRecipeSteps, directHomeSchedule, beginnerPhaseBPlan!, roomTemp, fridgeTemp, ovenTemp, oven, bakingTimeRange, lang, preferredYeastType, pizzaStyle, diameter, dims.sauce, dims.cheese, flour, weight(dough.totalDough), weight(effectiveBall), pizzas)
     : null;
   const beginnerUnscheduledDirectSteps = beginnerDirectRecipeSteps && !directHomeSchedule
@@ -5628,6 +5628,222 @@ function getBeginnerRoomOnlyEnd(schedule: HomePizzaPlanSchedule, preheatAt: Date
   return Number.isFinite(minutes) && minutes >= 1 ? { endAt, minutes } : null;
 }
 
+function getBeginnerFridgeOutAt(schedule: HomePizzaPlanSchedule): Date {
+  return new Date(schedule.startAt.getTime() + (schedule.roomBeforeFridgeHours + schedule.fridgeHours) * 3600000);
+}
+
+function formatBeginnerScheduledTime(at: Date, reference: Date, lang: Lang): string {
+  const locale = { hr: 'hr-HR', en: 'en-GB', de: 'de-DE', sl: 'sl-SI' }[lang];
+  const sameDate = at.getFullYear() === reference.getFullYear()
+    && at.getMonth() === reference.getMonth()
+    && at.getDate() === reference.getDate();
+  return new Intl.DateTimeFormat(locale, sameDate
+    ? { timeStyle: 'short' }
+    : { dateStyle: 'medium', timeStyle: 'short' }).format(at);
+}
+
+function buildBeginnerColdPhaseD(schedule: HomePizzaPlanSchedule, lang: Lang, teglia: boolean) {
+  const fridgeOutAt = getBeginnerFridgeOutAt(schedule);
+  const time = formatBeginnerScheduledTime(fridgeOutAt, schedule.bakeAt, lang);
+  const duration = formatDuration(schedule.fridgeHours * 3600, lang);
+  const copy = {
+    hr: {
+      step: teglia
+        ? `Ostavite zatvorenu fermentacijsku posudu s jednom masom tijesta u hladnjaku ${duration}, do ${time}.`
+        : `Ostavite zatvorenu fermentacijsku kutiju s kuglicama u hladnjaku ${duration}, do ${time}.`,
+      title: 'Hladna fermentacija',
+      body: teglia
+        ? 'Tijekom hladne fermentacije jedna masa tijesta polako razvija okus i strukturu. Zatvorenu posudu držite u hladnjaku kako se površina ne bi osušila. Preporučena temperatura hladnjaka je približno 3–5 °C. Nemojte nepotrebno otvarati posudu.'
+        : 'Tijekom hladne fermentacije tijesto polako razvija okus i strukturu. Kutiju držite zatvorenom kako se površina kuglica ne bi osušila. Preporučena temperatura hladnjaka je približno 3–5 °C. Nemojte nepotrebno otvarati kutiju.',
+      alarm: 'Izvadite tijesto iz hladnjaka',
+    },
+    en: {
+      step: teglia
+        ? `Leave the closed fermentation container with the single dough mass in the refrigerator for ${duration}, until ${time}.`
+        : `Leave the closed fermentation box with the dough balls in the refrigerator for ${duration}, until ${time}.`,
+      title: 'Cold fermentation',
+      body: teglia
+        ? 'During cold fermentation, the single dough mass slowly develops flavor and structure. Keep the closed container refrigerated so its surface does not dry out. A refrigerator temperature of about 3–5 °C is recommended. Avoid opening the container unnecessarily.'
+        : 'During cold fermentation, the dough slowly develops flavor and structure. Keep the box closed so the dough-ball surfaces do not dry out. A refrigerator temperature of about 3–5 °C is recommended. Avoid opening the box unnecessarily.',
+      alarm: 'Take the dough out of the refrigerator',
+    },
+    de: {
+      step: teglia
+        ? `Lassen Sie den geschlossenen Gärbehälter mit der einzelnen Teigmasse ${duration} im Kühlschrank, bis ${time}.`
+        : `Lassen Sie die geschlossene Gärbox mit den Teigkugeln ${duration} im Kühlschrank, bis ${time}.`,
+      title: 'Kalte Fermentation',
+      body: teglia
+        ? 'Während der kalten Fermentation entwickelt die einzelne Teigmasse langsam Aroma und Struktur. Bewahren Sie den geschlossenen Behälter im Kühlschrank auf, damit die Oberfläche nicht austrocknet. Empfohlen werden etwa 3–5 °C. Öffnen Sie den Behälter nicht unnötig.'
+        : 'Während der kalten Fermentation entwickelt der Teig langsam Aroma und Struktur. Halten Sie die Box geschlossen, damit die Oberfläche der Teigkugeln nicht austrocknet. Empfohlen werden etwa 3–5 °C. Öffnen Sie die Box nicht unnötig.',
+      alarm: 'Teig aus dem Kühlschrank nehmen',
+    },
+    sl: {
+      step: teglia
+        ? `Zaprto fermentacijsko posodo z eno maso testa pustite v hladilniku ${duration}, do ${time}.`
+        : `Zaprto fermentacijsko posodo s kroglicami pustite v hladilniku ${duration}, do ${time}.`,
+      title: 'Hladna fermentacija',
+      body: teglia
+        ? 'Med hladno fermentacijo ena masa testa počasi razvija okus in strukturo. Zaprto posodo hranite v hladilniku, da se površina ne izsuši. Priporočena temperatura hladilnika je približno 3–5 °C. Posode ne odpirajte po nepotrebnem.'
+        : 'Med hladno fermentacijo testo počasi razvija okus in strukturo. Posodo hranite zaprto, da se površina kroglic ne izsuši. Priporočena temperatura hladilnika je približno 3–5 °C. Posode ne odpirajte po nepotrebnem.',
+      alarm: 'Vzemi testo iz hladilnika',
+    },
+  }[lang];
+  return {
+    step: schedule.roomAfterFridgeHours > 0
+      ? `${copy.step}\nAlarm — ${copy.alarm}\n${time}`
+      : copy.step,
+    stepInfo: { title: copy.title, body: copy.body },
+    fridgeOutAt,
+    alarm: copy.alarm,
+  };
+}
+
+function buildBeginnerColdFinalStart(schedule: HomePizzaPlanSchedule, lang: Lang, teglia: boolean) {
+  const fridgeOutAt = getBeginnerFridgeOutAt(schedule);
+  const time = formatBeginnerScheduledTime(fridgeOutAt, schedule.bakeAt, lang);
+  const duration = formatDuration(schedule.roomAfterFridgeHours * 3600, lang);
+  const copy = {
+    hr: {
+      step: teglia
+        ? `U ${time} izvadite zatvorenu posudu s tijestom iz hladnjaka ${duration} prije pečenja. Tijesto ostavite pokriveno kao jednu masu do pripreme za tepsiju.`
+        : `U ${time} izvadite fermentacijsku kutiju iz hladnjaka ${duration} prije pečenja. Kuglice ostavite pokrivene na sobnoj temperaturi do oblikovanja pizze.`,
+      title: 'Temperiranje tijesta',
+      body: teglia
+        ? 'Jedna masa tijesta postupno se zagrijava do sobne temperature. Držite posudu zatvorenom i tijesto pokriveno; nemojte ga ponovno mijesiti ni dijeliti na kuglice.'
+        : 'Tijesto iz hladnjaka može biti hladno i manje rastezljivo. Tijekom temperiranja postupno se zagrijava i lakše oblikuje. Kuglice nemojte ponovno mijesiti niti pritiskati. Kutiju držite zatvorenom kako se površina ne bi osušila.',
+    },
+    en: {
+      step: teglia
+        ? `At ${time}, take the closed dough container out of the refrigerator ${duration} before baking. Keep the dough covered as one mass until tray preparation.`
+        : `At ${time}, take the fermentation box out of the refrigerator ${duration} before baking. Keep the dough balls covered at room temperature until shaping.`,
+      title: 'Tempering the dough',
+      body: teglia
+        ? 'The single dough mass gradually warms to room temperature. Keep the container closed and the dough covered; do not knead it again or divide it into balls.'
+        : 'Dough from the refrigerator may be cold and less extensible. During tempering it gradually warms and becomes easier to shape. Do not knead or press the balls again. Keep the box closed so the surface does not dry out.',
+    },
+    de: {
+      step: teglia
+        ? `Nehmen Sie den geschlossenen Teigbehälter um ${time}, ${duration} vor dem Backen, aus dem Kühlschrank. Lassen Sie den Teig bis zur Blechvorbereitung als eine abgedeckte Masse.`
+        : `Nehmen Sie die Gärbox um ${time}, ${duration} vor dem Backen, aus dem Kühlschrank. Lassen Sie die Teigkugeln bis zum Formen abgedeckt bei Raumtemperatur.`,
+      title: 'Teig temperieren',
+      body: teglia
+        ? 'Die einzelne Teigmasse erwärmt sich allmählich auf Raumtemperatur. Halten Sie den Behälter geschlossen und den Teig abgedeckt; nicht erneut kneten oder in Kugeln teilen.'
+        : 'Teig aus dem Kühlschrank kann kalt und weniger dehnbar sein. Beim Temperieren erwärmt er sich allmählich und lässt sich leichter formen. Kneten oder drücken Sie die Kugeln nicht erneut. Halten Sie die Box geschlossen, damit die Oberfläche nicht austrocknet.',
+    },
+    sl: {
+      step: teglia
+        ? `Ob ${time} vzemite zaprto posodo s testom iz hladilnika ${duration} pred peko. Testo naj ostane pokrito v eni masi do priprave pekača.`
+        : `Ob ${time} vzemite fermentacijsko posodo iz hladilnika ${duration} pred peko. Kroglice naj ostanejo pokrite pri sobni temperaturi do oblikovanja pice.`,
+      title: 'Temperiranje testa',
+      body: teglia
+        ? 'Ena masa testa se postopoma segreje na sobno temperaturo. Posodo pustite zaprto in testo pokrito; ne gnetite ga znova in ga ne delite na kroglice.'
+        : 'Testo iz hladilnika je lahko hladno in manj raztegljivo. Med temperiranjem se postopoma ogreje in lažje oblikuje. Kroglic ne gnetite ali pritiskajte znova. Posodo pustite zaprto, da se površina ne izsuši.',
+    },
+  }[lang];
+  return { step: copy.step, stepInfo: { title: copy.title, body: copy.body } };
+}
+
+function buildBeginnerTegliaPreheat(
+  schedule: HomePizzaPlanSchedule,
+  preheatAt: Date,
+  preheatMinutes: number,
+  ovenTemp: number,
+  lang: Lang,
+  temperatureUnit: 'celsius' | 'fahrenheit',
+): string {
+  const oven = schedule.ovenType ?? 'homePan';
+  const time = formatBeginnerClockTime(preheatAt, lang);
+  const temperature = formatTemperature(ovenTemp, temperatureUnit);
+  return ({
+    hr: oven === 'homeStone'
+      ? `U ${time} uključite pećnicu i zagrijavajte kamen ili čelik za pizzu ${preheatMinutes} minuta na ${temperature} s uključenim grillom.`
+      : oven === 'ooni'
+        ? `U ${time} uključite pizza peć i zagrijavajte je ${preheatMinutes} minuta na ${temperature} prema uputama proizvođača.`
+        : `U ${time} uključite kućnu pećnicu s ventilacijom i zagrijte je ${preheatMinutes} minuta na ${temperature}.`,
+    en: oven === 'homeStone'
+      ? `At ${time}, turn on the oven and preheat the pizza stone or steel for ${preheatMinutes} minutes to ${temperature} with the grill on.`
+      : oven === 'ooni'
+        ? `At ${time}, turn on the pizza oven and preheat it for ${preheatMinutes} minutes to ${temperature} according to the manufacturer’s instructions.`
+        : `At ${time}, turn on the convection oven and preheat it for ${preheatMinutes} minutes to ${temperature}.`,
+    de: oven === 'homeStone'
+      ? `Schalten Sie um ${time} den Ofen ein und heizen Sie Pizzastein oder -stahl ${preheatMinutes} Minuten lang auf ${temperature} mit eingeschaltetem Grill vor.`
+      : oven === 'ooni'
+        ? `Schalten Sie um ${time} den Pizzaofen ein und heizen Sie ihn ${preheatMinutes} Minuten lang gemäß Herstellerangaben auf ${temperature} vor.`
+        : `Schalten Sie um ${time} den Umluftofen ein und heizen Sie ihn ${preheatMinutes} Minuten lang auf ${temperature} vor.`,
+    sl: oven === 'homeStone'
+      ? `Ob ${time} vklopite pečico in kamen ali jeklo za pico segrevajte ${preheatMinutes} minut na ${temperature} z vklopljenim žarom.`
+      : oven === 'ooni'
+        ? `Ob ${time} vklopite pizza pečico in jo segrevajte ${preheatMinutes} minut na ${temperature} po navodilih proizvajalca.`
+        : `Ob ${time} vklopite domačo pečico z ventilacijo in jo segrevajte ${preheatMinutes} minut na ${temperature}.`,
+  }[lang]);
+}
+
+function buildBeginnerFinalPhaseInfo(
+  lang: Lang,
+  style: PizzaStyle,
+  flourType: FlourType,
+  oven: OvenType,
+  teglia = false,
+): Array<{ title: string; body: string }> {
+  const round = !teglia;
+  const ny = style === 'ny_style';
+  const romana = style === 'romana';
+  const copy = {
+    hr: [
+      [teglia ? 'Odmor tijesta' : 'Temperiranje', teglia ? 'Tijesto ostaje jedna pokrivena masa. Ne dijelite ga na kuglice; slijedite raspored do pripreme tepsije.' : 'Hladne kuglice postupno se zagrijavaju i lakše oblikuju. Držite kutiju zatvorenom i kuglice pokrivene; nemojte ih ponovno mijesiti ni pritiskati.'],
+      ['Predgrijavanje pećnice', oven === 'homeStone' ? 'Kamen ili čelik stavite u hladnu pećnicu prije zagrijavanja. Ako predgrijavate s grillom, prije pečenja prijeđite na program Pizza ili gornji i donji grijač bez ventilatora. Koristite samo temperaturu koju dopuštaju pećnica i podloga.' : oven === 'ooni' ? 'Slijedite upute proizvođača pizza peći za sigurno zagrijavanje i provjerite temperaturu podloge prije pečenja. Ne dodirujte vruću unutrašnjost.' : 'Koristite lim za pečenje i način rada koji odgovara vašoj pećnici. Ne postavljajte prazan lim pod grill ako proizvođač to ne dopušta.'],
+      ['Radna površina', flourType === 'glutenFree' ? 'Koristite certificirano bezglutensko brašno ili rižino brašno, ne pšeničnu semolu. Pospite umjereno; višak može zagorjeti ili isušiti tijesto.' : oven === 'homePan' || teglia ? 'Pripremite i lagano nauljite lim ili tepsiju prema receptu; nemojte dodavati nepotrebno brašno.' : 'Semola pomaže da se tijesto ne lijepi. Koristite je umjereno jer višak može zagorjeti na vrućem kamenu ili čeliku. Brašno za radnu površinu nije uključeno u izračun recepta.'],
+      [teglia ? 'Rukovanje masom' : 'Vađenje kuglice', teglia ? 'Tijesto nježno odvojite strugačem i premjestite kao jednu masu. Ostavite ostale dijelove tijesta pokrivene; koristite lagano nauljene ruke ili strugač ako je masa ljepljiva.' : `${flourType === 'glutenFree' ? 'Upotrijebite strugač ili lagano nauljene ruke za nježno podizanje mekše kuglice. Ne pokušavajte je vući ili rastezati.' : 'Koristite lopaticu za tijesto ili lagano pobrašnjene ruke. Nemojte vući ili trgati tijesto.'} Ostale kuglice ostavite pokrivene dok ne dođu na red.`],
+      [teglia ? 'Razvlačenje u tepsiji' : 'Oblikovanje', teglia ? 'Masu nježno rasporedite u nauljenoj tepsiji. Ako se skuplja, ostavite je pokrivenu da se opusti pa nastavite; kod ljepljivog tijesta koristite lagano nauljene prste ili strugač.' : flourType === 'glutenFree' ? 'Bezglutensko tijesto nježno pritisnite i oblikujte na bezglutenskoj ili rižinoj podlozi, uz strugač ili nauljene prste. Ne rastežite ga kao pšenično tijesto i ne pokušavajte oblikovati napuhani rub.' : romana ? 'Romanu oblikujte tanko i ravno pritiskanjem ili valjkom. Ako se tijesto opire, ostavite ga kratko pokriveno da se opusti; ne rastežite ga silom u zraku.' : ny ? 'New York pizzu oblikujte ujednačene debljine s tanjom sredinom i umjerenim rubom. Ne razvijajte visoki napuhani rub napolitane; ako se tijesto opire, ostavite ga kratko pokriveno.' : `Nježno potiskujte tijesto od sredine prema rubu i sačuvajte zrak u rubu. ${flourType === 'manitoba' ? 'Manitoba tijesto može biti elastično; pustite ga da se opusti ako se vraća.' : flourType === 'spelt' ? 'Pirovo tijesto je osjetljivije; izbjegavajte opetovano rastezanje.' : flourType === 'wholeWheat' ? 'Integralno tijesto može biti manje glatko i ljepljivije; oblikujte ga nježno.' : flourType === 'custom' ? 'Silu oblikovanja prilagodite stvarnoj elastičnosti i ljepljivosti mješavine.' : 'Ostavite rub približno 1–2 cm i nemojte koristiti valjak.'}`],
+      ['Nadjev', 'Umak rasporedite tanko. Mozzarellu dobro ocijedite i ravnomjerno rasporedite. Ostavite rub bez nadjeva; kod tepsije nadjev rasporedite po površini prema receptu.'],
+      ['Prijenos u pećnicu', teglia || oven === 'homePan' ? 'Premjestite pizzu u pripremljenu tepsiju ili ostavite pizzu u limu; koristite rukavice i ne dodirujte vrući lim.' : 'Provjerite da se pizza slobodno pomiče na lopati. Lagano je protresite i pažljivo prenesite na potpuno zagrijani kamen ili čelik. Oslobodite zalijepljeni dio uz minimalno semole; nikad ne dodirujte vruću podlogu rukom.'],
+      ['Pečenje', oven === 'homeStone' ? 'Pratite boju ruba i dna te postojeći raspon pečenja. Koristite odobreni program ili gornji i donji grijač; grill uključite kratko samo ako je sigurno i potrebno.' : oven === 'ooni' ? 'Pratite pizzu cijelo vrijeme; u pizza peći se peče brzo. Rotirajte je prema postojećoj uputi i izvadite kada rub i dno dobiju odgovarajuću boju.' : 'Pratite boju vrha i dna u postojećem vremenskom rasponu. Grill koristite za završno rumenjenje samo ako je sigurno; ne ostavljajte pizzu bez nadzora.'],
+    ],
+    en: [
+      [teglia ? 'Dough rest' : 'Tempering', teglia ? 'Keep the dough as one covered mass. Do not divide it into balls; follow the schedule until tray preparation.' : 'Cold dough balls warm gradually and become easier to shape. Keep the box closed and balls covered; do not knead or press them again.'],
+      ['Oven preheating', oven === 'homeStone' ? 'Place the stone or steel in the cold oven before heating. If preheating with the grill, switch to the Pizza program or top-and-bottom heat without a fan before baking. Use only temperatures allowed by the oven and baking surface.' : oven === 'ooni' ? 'Follow the pizza-oven manufacturer’s safe preheating instructions and check the baking surface before baking. Do not touch the hot interior.' : 'Use the baking tray and oven mode appropriate for your oven. Do not place an empty tray under the grill unless the manufacturer allows it.'],
+      ['Work surface', flourType === 'glutenFree' ? 'Use certified gluten-free flour or rice flour, not wheat semolina. Dust lightly; excess can burn or dry the dough.' : oven === 'homePan' || teglia ? 'Prepare and lightly oil the tray as directed by the recipe; avoid adding unnecessary flour.' : 'Semolina helps prevent sticking. Use it sparingly because excess can burn on hot stone or steel. Work-surface flour is not included in the recipe calculation.'],
+      [teglia ? 'Handle the dough mass' : 'Lift one dough ball', teglia ? 'Loosen the dough gently with a scraper and transfer it as one mass. Keep other dough covered; use lightly oiled hands or a scraper if it is sticky.' : `${flourType === 'glutenFree' ? 'Use a scraper or lightly oiled hands to lift the soft ball gently. Do not pull or stretch it.' : 'Use a dough spatula or lightly floured hands. Do not pull or tear the dough.'} Keep the remaining balls covered until needed.`],
+      [teglia ? 'Stretch in the tray' : 'Shape the pizza', teglia ? 'Gently spread the mass in the oiled tray. If it springs back, cover and let it relax briefly before continuing; use lightly oiled fingers or a scraper for sticky dough.' : flourType === 'glutenFree' ? 'Gently press and shape gluten-free dough on a gluten-free or rice-floured surface, using a scraper or oiled fingers. Do not stretch it like wheat dough or try to form an airy rim.' : romana ? 'Shape Romana thin and flat by pressing or rolling. If the dough resists, cover it briefly to relax; do not force an airborne stretch.' : ny ? 'Shape New York pizza to an even thickness with a thinner center and moderate rim. Do not form a tall Neapolitan rim; cover briefly if the dough resists.' : `Gently press the dough from the center toward the edge, preserving gas in the rim. ${flourType === 'manitoba' ? 'Manitoba dough can be elastic; let it relax if it springs back.' : flourType === 'spelt' ? 'Spelt dough is more delicate; avoid repeated stretching.' : flourType === 'wholeWheat' ? 'Whole-wheat dough may be less smooth and stickier; shape gently.' : flourType === 'custom' ? 'Adjust shaping pressure to the blend’s actual elasticity and stickiness.' : 'Leave a rim about 1–2 cm wide and do not use a rolling pin.'}`],
+      ['Toppings', 'Spread the sauce thinly. Drain the mozzarella well and distribute it evenly. Keep the rim clear; for tray pizza, distribute toppings over the surface as directed by the recipe.'],
+      ['Transfer to the oven', teglia || oven === 'homePan' ? 'Move the pizza into the prepared tray or keep it in the baking tray; use oven gloves and do not touch a hot tray.' : 'Check that the pizza moves freely on the peel. Shake it gently and transfer it carefully to the fully heated stone or steel. Free any sticking with minimal semolina; never touch the hot surface by hand.'],
+      ['Bake', oven === 'homeStone' ? 'Watch the rim and base and follow the existing bake range. Use the approved program or top-and-bottom heat; use the grill briefly only if safe and needed.' : oven === 'ooni' ? 'Watch the pizza continuously; pizza ovens bake quickly. Rotate it as directed and remove it when the rim and base have the right color.' : 'Watch the top and base within the existing bake range. Use the grill for browning only if safe; do not leave the pizza unattended.'],
+    ],
+    de: [
+      [teglia ? 'Teigruhe' : 'Temperieren', teglia ? 'Lassen Sie den Teig als eine abgedeckte Masse. Teilen Sie ihn nicht in Kugeln; folgen Sie dem Zeitplan bis zur Blechvorbereitung.' : 'Kalte Teigkugeln erwärmen sich allmählich und lassen sich leichter formen. Halten Sie die Box geschlossen und die Kugeln abgedeckt; kneten oder drücken Sie sie nicht erneut.'],
+      ['Ofen vorheizen', oven === 'homeStone' ? 'Legen Sie Stein oder Stahl in den kalten Ofen, bevor Sie ihn aufheizen. Wenn Sie mit Grill vorheizen, wechseln Sie vor dem Backen zum Pizza-Programm oder zu Ober-/Unterhitze ohne Umluft. Verwenden Sie nur Temperaturen, die Ofen und Backfläche erlauben.' : oven === 'ooni' ? 'Befolgen Sie die sicheren Aufheizanweisungen des Pizzaofen-Herstellers und prüfen Sie die Backfläche. Berühren Sie nicht den heißen Innenraum.' : 'Verwenden Sie Blech und Ofenmodus passend zu Ihrem Ofen. Stellen Sie ein leeres Blech nur dann unter den Grill, wenn der Hersteller dies erlaubt.'],
+      ['Arbeitsfläche', flourType === 'glutenFree' ? 'Verwenden Sie zertifiziert glutenfreies Mehl oder Reismehl, keine Weizensemola. Sparsam bestäuben; zu viel Mehl kann verbrennen oder den Teig austrocknen.' : oven === 'homePan' || teglia ? 'Bereiten und ölen Sie das Blech leicht gemäß Rezept vor; verwenden Sie kein unnötiges zusätzliches Mehl.' : 'Semola verhindert das Kleben. Verwenden Sie sie sparsam, da Überschuss auf heißem Stein oder Stahl verbrennen kann. Arbeitsflächenmehl ist nicht in der Rezeptberechnung enthalten.'],
+      [teglia ? 'Teigmasse handhaben' : 'Eine Teigkugel aufnehmen', teglia ? 'Lösen Sie den Teig vorsichtig mit einem Schaber und bewegen Sie ihn als eine Masse. Halten Sie den übrigen Teig abgedeckt; bei Klebrigkeit leicht geölte Hände oder einen Schaber verwenden.' : `${flourType === 'glutenFree' ? 'Heben Sie die weiche Kugel vorsichtig mit einem Schaber oder leicht geölten Händen an. Nicht ziehen oder dehnen.' : 'Verwenden Sie einen Teigspatel oder leicht bemehlte Hände. Ziehen oder reißen Sie den Teig nicht.'} Lassen Sie die übrigen Kugeln bis zur Verwendung abgedeckt.`],
+      [teglia ? 'Im Blech ausbreiten' : 'Pizza formen', teglia ? 'Verteilen Sie die Masse vorsichtig im geölten Blech. Zieht sie sich zusammen, decken Sie sie kurz ab und lassen Sie sie entspannen; bei klebrigem Teig leicht geölte Finger oder Schaber verwenden.' : flourType === 'glutenFree' ? 'Drücken und formen Sie glutenfreien Teig vorsichtig auf einer glutenfreien oder mit Reismehl bestäubten Fläche, mit Schaber oder geölten Fingern. Nicht wie Weizenteig dehnen und keinen luftigen Rand erzwingen.' : romana ? 'Formen Sie Romana dünn und flach durch Drücken oder Rollen. Deckt sich der Teig, kurz abgedeckt entspannen lassen; nicht gewaltsam in der Luft dehnen.' : ny ? 'Formen Sie New York gleichmäßig dick mit dünnerer Mitte und mäßigem Rand. Keinen hohen neapolitanischen Rand formen; bei Widerstand kurz abgedeckt entspannen lassen.' : `Drücken Sie den Teig vorsichtig von der Mitte zum Rand und bewahren Sie das Gas im Rand. ${flourType === 'manitoba' ? 'Manitoba-Teig kann elastisch sein; bei Rückfedern entspannen lassen.' : flourType === 'spelt' ? 'Dinkelteig ist empfindlicher; wiederholtes Dehnen vermeiden.' : flourType === 'wholeWheat' ? 'Vollkornteig kann weniger glatt und klebriger sein; vorsichtig formen.' : flourType === 'custom' ? 'Passen Sie den Druck an Elastizität und Klebrigkeit der Mischung an.' : 'Lassen Sie etwa 1–2 cm Rand und verwenden Sie kein Nudelholz.'}`],
+      ['Belag', 'Verteilen Sie die Sauce dünn. Lassen Sie den Mozzarella gut abtropfen und verteilen Sie ihn gleichmäßig. Lassen Sie den Rand frei; bei Blechpizza den Belag gemäß Rezept auf der Fläche verteilen.'],
+      ['In den Ofen geben', teglia || oven === 'homePan' ? 'Legen Sie die Pizza in das vorbereitete Blech oder lassen Sie sie auf dem Backblech; verwenden Sie Ofenhandschuhe und berühren Sie kein heißes Blech.' : 'Prüfen Sie, ob sich die Pizza frei auf dem Schieber bewegt. Rütteln Sie leicht und legen Sie sie vorsichtig auf den vollständig aufgeheizten Stein oder Stahl. Lösen Sie klebende Stellen mit wenig Semola; berühren Sie die heiße Fläche niemals mit der Hand.'],
+      ['Backen', oven === 'homeStone' ? 'Beobachten Sie Rand und Boden und beachten Sie den bestehenden Backzeitbereich. Nutzen Sie das freigegebene Programm oder Ober-/Unterhitze; den Grill nur bei Bedarf und sicher kurz verwenden.' : oven === 'ooni' ? 'Beobachten Sie die Pizza durchgehend; Pizzaöfen backen schnell. Drehen Sie sie wie angegeben und nehmen Sie sie heraus, wenn Rand und Boden passend gebräunt sind.' : 'Beobachten Sie Oberseite und Boden innerhalb des bestehenden Zeitbereichs. Den Grill nur sicher zum Bräunen nutzen; Pizza nicht unbeaufsichtigt lassen.'],
+    ],
+    sl: [
+      [teglia ? 'Počitek testa' : 'Temperiranje', teglia ? 'Testo naj ostane pokrito v eni masi. Ne delite ga na kroglice; upoštevajte načrt do priprave pekača.' : 'Hladne kroglice se postopoma ogrejejo in lažje oblikujejo. Posodo pustite zaprto, kroglice pokrite; ne gnetite jih ali pritiskajte znova.'],
+      ['Segrevanje pečice', oven === 'homeStone' ? 'Kamen ali jeklo položite v hladno pečico pred segrevanjem. Če segrevate z žarom, pred peko preklopite na program Pizza ali zgornje/spodnje gretje brez ventilatorja. Uporabite le temperature, ki jih dovoljujeta pečica in podlaga.' : oven === 'ooni' ? 'Upoštevajte varna navodila proizvajalca pizza pečice in pred peko preverite podlago. Ne dotikajte se vroče notranjosti.' : 'Uporabite pekač in način pečice, primeren za svojo pečico. Praznega pekača ne postavljajte pod žar, razen če to dovoljuje proizvajalec.'],
+      ['Delovna površina', flourType === 'glutenFree' ? 'Uporabite certificirano brezglutensko ali riževo moko, ne pšeničnega zdroba. Potresite zmerno; presežek se lahko zažge ali izsuši testo.' : oven === 'homePan' || teglia ? 'Pekač pripravite in rahlo naoljite po receptu; ne dodajajte nepotrebne moke.' : 'Zdrob preprečuje lepljenje. Uporabite ga zmerno, saj se presežek na vročem kamnu ali jeklu lahko zažge. Moka za površino ni vključena v izračun recepta.'],
+      [teglia ? 'Ravnanje z maso' : 'Vzemite eno kroglico', teglia ? 'Testo nežno ločite s strgalom in ga prenesite kot eno maso. Preostalo testo naj ostane pokrito; pri lepljivem testu uporabite rahlo naoljene roke ali strgalo.' : `${flourType === 'glutenFree' ? 'Mehko kroglico nežno dvignite s strgalom ali rahlo naoljenimi rokami. Ne vlecite ali raztegujte je.' : 'Uporabite lopatico za testo ali rahlo pomokane roke. Testa ne vlecite in ne trgajte.'} Preostale kroglice naj ostanejo pokrite do uporabe.`],
+      [teglia ? 'Razporedite v pekaču' : 'Oblikujte pico', teglia ? 'Maso nežno razporedite v naoljenem pekaču. Če se krči, jo pokrijte in pustite kratek čas počivati; pri lepljivem testu uporabite rahlo naoljene prste ali strgalo.' : flourType === 'glutenFree' ? 'Brezglutensko testo nežno pritiskajte in oblikujte na brezglutenski ali riževi podlagi s strgalom ali naoljenimi prsti. Ne raztegujte ga kot pšenično testo in ne poskušajte oblikovati zračnega roba.' : romana ? 'Romano oblikujte tanko in ravno s pritiskanjem ali valjarjem. Če se testo upira, ga za kratek čas pokrijte; ne raztegujte ga na silo v zraku.' : ny ? 'New York pico oblikujte enakomerno debelo s tanjšo sredino in zmernim robom. Ne oblikujte visokega neapeljskega roba; ob upiranju testo za kratek čas pokrijte.' : `Testo nežno pritiskajte od sredine proti robu in ohranite plin v robu. ${flourType === 'manitoba' ? 'Manitobsko testo je lahko elastično; če se vrača, naj se sprosti.' : flourType === 'spelt' ? 'Pirino testo je občutljivejše; izogibajte se ponavljajočemu raztezanju.' : flourType === 'wholeWheat' ? 'Polnozrnato testo je lahko manj gladko in bolj lepljivo; oblikujte nežno.' : flourType === 'custom' ? 'Pritisk prilagodite dejanski elastičnosti in lepljivosti mešanice.' : 'Pustite približno 1–2 cm roba in ne uporabljajte valjarja.'}`],
+      ['Nadev', 'Omako razporedite v tankem sloju. Mocarelo dobro odcedite in enakomerno razporedite. Rob pustite brez nadeva; pri pici iz pekača nadev razporedite po površini po receptu.'],
+      ['Prenos v pečico', teglia || oven === 'homePan' ? 'Pico prenesite v pripravljen pekač oziroma jo pustite na pekaču; uporabite rokavice in se ne dotikajte vročega pekača.' : 'Preverite, ali se pica na loparju prosto premika. Lopar rahlo stresite in pico previdno prenesite na popolnoma segret kamen ali jeklo. Če se lepi, jo previdno sprostite z malo zdroba; vroče podlage se nikoli ne dotikajte z roko.'],
+      ['Peka', oven === 'homeStone' ? 'Opazujte barvo roba in dna ter upoštevajte obstoječi čas peke. Uporabite ustrezen program ali zgornje/spodnje gretje; žar na kratko vključite le, če je varno in potrebno.' : oven === 'ooni' ? 'Pico ves čas spremljajte, saj se v pizza pečici speče hitro. Obračajte jo po obstoječih navodilih in vzemite ven, ko sta rob in dno ustrezno zapečena.' : 'Opazujte vrh in dno v obstoječem časovnem razponu. Žar uporabite za zapečenje le, če je varno; pice ne puščajte brez nadzora.'],
+    ],
+  }[lang];
+  const tegliaHelpOrder = [0, 1, 2, 4, 4, 5, 7, 7];
+  const ordered = teglia ? tegliaHelpOrder.map((index) => copy[index]) : copy;
+  if (teglia) {
+    ordered[7] = {
+      hr: ['Završno rumenjenje', 'Grill uključite tek na kraju i samo ako je to sigurno za vašu pećnicu. Pratite gornju stranu tijesta i isključite ga čim postigne željenu boju.'],
+      en: ['Optional grill finish', 'Use the grill only at the end and only if safe for your oven. Watch the top closely and turn it off as soon as it reaches the desired color.'],
+      de: ['Optionales Grill-Finish', 'Verwenden Sie den Grill nur am Ende und nur, wenn dies für Ihren Ofen sicher ist. Beobachten Sie die Oberseite und schalten Sie ihn aus, sobald die gewünschte Bräunung erreicht ist.'],
+      sl: ['Zaključno zapečenje z žarom', 'Žar vključite šele na koncu in samo, če je to varno za vašo pečico. Opazujte zgornjo stran in ga izključite, ko doseže želeno barvo.'],
+    }[lang];
+  }
+  return ordered
+    .map(([title, body]) => ({ title, body }));
+}
+
 function formatBeginnerRoomRemaining(minutes: number): string {
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
@@ -5717,6 +5933,9 @@ function buildBeginnerTegliaHomeSteps(
   bakingTimeRange: string,
   trayDimensions: { width: number; length: number },
   flourType: FlourType,
+  sauceGrams = 0,
+  cheeseGrams = 0,
+  temperatureUnit: 'celsius' | 'fahrenheit' = 'celsius',
 ): DetailedPhase[] {
   const phaseBTitle = {
     hr: 'Prva fermentacija',
@@ -5758,7 +5977,7 @@ function buildBeginnerTegliaHomeSteps(
       oil: `Lagano nauljite tepsiju ${tray}.`,
       press: 'Istresite masu u tepsiju i nježno je utisnite prstima do rubova bez rastezanja u zraku.',
       relax: 'Ako se tijesto vraća prema sredini, ostavite ga kratko da se opusti i ponovno ga utisnite.',
-      top: 'Dodajte umak i nadjev.',
+      top: sauceGrams > 0 || cheeseGrams > 0 ? `Ravnomjerno rasporedite ${Math.round(sauceGrams)} g umaka i ${Math.round(cheeseGrams)} g dobro ocijeđene mozzarelle.` : 'Ravnomjerno dodajte umak i dobro ocijeđenu mozzarellu.',
       bake: `Ubacite tepsiju u pećnicu i pecite bez grilla ${bakingTimeRange} na ${ovenTemp} °C, dok se dno i rub dobro ne ispeku.`,
       grill: 'Na kraju uključite grill ako želite jače zapečenu gornju stranu.',
     },
@@ -5766,7 +5985,7 @@ function buildBeginnerTegliaHomeSteps(
       oil: `Lightly oil the ${tray} tray.`,
       press: 'Transfer the dough mass into the tray and gently press it to the edges with your fingertips, without stretching it in the air.',
       relax: 'If the dough springs back toward the center, let it relax briefly and press it out again.',
-      top: 'Add sauce and toppings.',
+      top: sauceGrams > 0 || cheeseGrams > 0 ? `Spread ${Math.round(sauceGrams)} g sauce and ${Math.round(cheeseGrams)} g well-drained mozzarella evenly over the dough.` : 'Spread the sauce and well-drained mozzarella evenly over the dough.',
       bake: `Put the tray in the oven and bake without the grill for ${bakingTimeRange} at ${ovenTemp} °C, until the bottom and rim are well baked.`,
       grill: 'Finally, switch on the grill if you want a more browned top.',
     },
@@ -5774,7 +5993,7 @@ function buildBeginnerTegliaHomeSteps(
       oil: `Ölen Sie das Blech ${tray} leicht ein.`,
       press: 'Geben Sie die Teigmasse in das Blech und drücken Sie sie mit den Fingerspitzen vorsichtig bis zu den Rändern, ohne sie in der Luft zu dehnen.',
       relax: 'Zieht sich der Teig zur Mitte zurück, lassen Sie ihn kurz entspannen und drücken Sie ihn erneut aus.',
-      top: 'Geben Sie Sauce und Belag darauf.',
+      top: sauceGrams > 0 || cheeseGrams > 0 ? `Verteilen Sie ${Math.round(sauceGrams)} g Sauce und ${Math.round(cheeseGrams)} g gut abgetropften Mozzarella gleichmäßig auf dem Teig.` : 'Verteilen Sie Sauce und gut abgetropften Mozzarella gleichmäßig auf dem Teig.',
       bake: `Schieben Sie das Blech in den Ofen und backen Sie ohne Grill ${bakingTimeRange} bei ${ovenTemp} °C, bis Boden und Rand gut gebacken sind.`,
       grill: 'Schalten Sie am Ende den Grill ein, wenn Sie eine stärker gebräunte Oberseite möchten.',
     },
@@ -5782,7 +6001,7 @@ function buildBeginnerTegliaHomeSteps(
       oil: `Pekač ${tray} rahlo naoljite.`,
       press: 'Maso testa prenesite v pekač in jo s konicami prstov nežno potisnite do robov, brez raztegovanja v zraku.',
       relax: 'Če se testo vrača proti sredini, ga pustite kratek čas počivati in ga ponovno potisnite.',
-      top: 'Dodajte omako in nadev.',
+      top: sauceGrams > 0 || cheeseGrams > 0 ? `Enakomerno razporedite ${Math.round(sauceGrams)} g omake in ${Math.round(cheeseGrams)} g dobro odcejene mocarele.` : 'Enakomerno razporedite omako in dobro odcejeno mocarelo.',
       bake: `Pekač postavite v pečico in pecite brez žara ${bakingTimeRange} pri ${ovenTemp} °C, dokler dno in rob nista dobro pečena.`,
       grill: 'Na koncu vklopite žar, če želite bolj zapečeno zgornjo stran.',
     },
@@ -5802,12 +6021,6 @@ function buildBeginnerTegliaHomeSteps(
       { title: tegliaPhaseC.title, steps: [] },
       activeBase[activeBase.length - 1],
     ];
-  const tegliaColdContinuation = {
-    hr: `Nastavite hladnu fermentaciju zatvorene posude u hladnjaku ${formatDuration(schedule.fridgeHours * 3600, lang)} prema izračunanom rasporedu.`,
-    en: `Continue cold fermentation of the closed container in the refrigerator for ${formatDuration(schedule.fridgeHours * 3600, lang)} according to the calculated schedule.`,
-    de: `Setzen Sie die kalte Fermentation des geschlossenen Behälters im Kühlschrank ${formatDuration(schedule.fridgeHours * 3600, lang)} nach dem berechneten Zeitplan fort.`,
-    sl: `Nadaljujte hladno fermentacijo zaprte posode v hladilniku ${formatDuration(schedule.fridgeHours * 3600, lang)} po izračunanem načrtu.`,
-  }[lang];
   const phasesWithoutEmptyB = phaseBPlan.durationMinutes === 0
     ? active.filter((_, index) => index !== 1)
     : active;
@@ -5817,22 +6030,49 @@ function buildBeginnerTegliaHomeSteps(
     if (index === 2) {
       return { ...phase, title: tegliaPhaseC.title, steps: tegliaPhaseC.steps, stepInfo: tegliaPhaseC.stepInfo, timers: [] };
     }
-    if (coldTitle.test(phase.title)) return { ...phase, steps: [tegliaColdContinuation], timers: [] };
+    if (coldTitle.test(phase.title)) {
+      const coldPhase = buildBeginnerColdPhaseD(schedule, lang, true);
+      return {
+        ...phase,
+        steps: [coldPhase.step],
+        stepInfo: [coldPhase.stepInfo],
+        fermentationInfo: undefined,
+        fermentationSignsInfo: undefined,
+        proofingInfo: undefined,
+        timers: [],
+      };
+    }
     if (index === 1) {
       return { ...phase, title: phaseBTitle, steps: buildBeginnerPhaseBSteps(phaseBPlan, lang, true, flourType), timers: getBeginnerPhaseBTimers(phaseBPlan) };
     }
     if (index !== lastIndex || phase.steps.length < 4) return phase;
-    const [preheat] = phase.steps;
+    const preheatAt = schedule.preheatAt ?? new Date(schedule.bakeAt.getTime() - getBeginnerPreheatMinutes(schedule.ovenType ?? 'homePan') * 60000);
+    const preheatMinutes = Math.round((schedule.bakeAt.getTime() - preheatAt.getTime()) / 60000);
+    const preheat = buildBeginnerTegliaPreheat(schedule, preheatAt, preheatMinutes, ovenTemp, lang, temperatureUnit);
     const roomFinalStart = refrigerated ? null : buildBeginnerRoomOnlyFinalStart(lang, true);
+    const finalStepInfo = buildBeginnerFinalPhaseInfo(lang, 'romana', flourType, schedule.ovenType ?? 'homePan', true);
+    if (roomFinalStart) finalStepInfo[0] = roomFinalStart.info;
+    const coldFinalStart = refrigerated ? buildBeginnerColdFinalStart(schedule, lang, true) : null;
+    if (coldFinalStart) finalStepInfo[0] = coldFinalStart.stepInfo;
     return {
       ...phase,
-      temperingInfo: refrigerated ? phase.temperingInfo : undefined,
-      ...(roomFinalStart ? { stepInfo: [undefined, roomFinalStart.info] } : {}),
+      stepInfo: finalStepInfo,
+      temperingInfo: undefined,
+      bakingInfo: undefined,
+      bakingCheckInfo: undefined,
+      ovenTimingInfo: undefined,
+      ovenProgramInfo: undefined,
+      containerOilInfo: undefined,
+      fermentationInfo: undefined,
+      fermentationSignsInfo: undefined,
+      proofingInfo: undefined,
+      degassingInfo: undefined,
+      doughHandlingInfo: undefined,
       steps: [
-        preheat,
         refrigerated
-          ? schedule.roomAfterFridgeHours > 0 ? copy.out : copy.outNow
+          ? coldFinalStart!.step
           : roomFinalStart!.step,
+        preheat,
         pressSteps.oil,
         pressSteps.press,
         pressSteps.relax,
@@ -6257,18 +6497,17 @@ function buildBeginnerDirectHomeSteps(
   }[lang];
   const duration = (hours: number) => formatDuration(Math.round(hours * 60) * 60, lang);
   const replaceYeastLabel = (text: string) => labelSelectedYeast(text, lang, yeastType);
-  const shapeWindowHours = 0.25;
   const shapingSteps = ({
     hr: {
       surface: oven === 'homePan' ? 'Lagano nauljite tepsiju.' : 'Radnu površinu lagano pospite semolom.',
       ball: 'Nježno uzmite jednu kuglu tijesta bez istiskivanja zraka.',
       shape: pizzaStyle === 'romana'
-        ? `Tijekom zadnjih ${duration(shapeWindowHours)} oblikujte tanku i ravnu Romanu do ${diameter} cm; pritisnite prstima ili koristite valjak, bez agresivnog rastezanja u zraku.`
+        ? `Romanu oblikujte tanko i ravno do ${diameter} cm pritiskanjem prstima ili valjkom, bez agresivnog rastezanja u zraku.`
         : pizzaStyle === 'ny_style'
-          ? `Tijekom zadnjih ${duration(shapeWindowHours)} oblikujte veću kuglu s tankom sredinom i ujednačenom debljinom do ${diameter} cm; nemojte stvarati visok, napuhan rub. Kriška treba biti savitljiva.`
-          : `Tijekom zadnjih ${duration(shapeWindowHours)} prstima potiskujte zrak od sredine prema rubu, ostavite rub 1–2 cm i razvucite do ${diameter} cm; ne koristite valjak.`,
-      toppings: `Dodajte ${saucePerPizza} g umaka i ${cheesePerPizza} g mozzarelle; ostavite rub bez nadjeva.`,
-      launch: 'Stavite pizzu u pećnicu.',
+          ? `New York oblikujte ujednačene debljine s tanjom sredinom do ${diameter} cm; nemojte stvarati visok, napuhan rub. Kriška treba biti savitljiva.`
+          : `Prstima nježno potiskujte tijesto od sredine prema rubu, ostavite rub približno 1–2 cm i razvucite do ${diameter} cm; ne koristite valjak.`,
+      toppings: `Ravnomjerno rasporedite ${saucePerPizza} g umaka i ${cheesePerPizza} g dobro ocijeđene mozzarelle; ostavite rub bez nadjeva.`,
+      launch: oven === 'homePan' ? 'Pizzu pažljivo stavite na pripremljeni lim i lim stavite u pećnicu.' : oven === 'ooni' ? 'Provjerite da se pizza slobodno pomiče na lopati, zatim je pažljivo ubacite u zagrijanu pizza peć.' : 'Provjerite da se pizza slobodno pomiče na lopati, zatim je pažljivo prebacite na potpuno zagrijani kamen ili čelik.',
       bake: oven === 'homeStone'
         ? `Isključite grill, koristite Pizza program ili gornji i donji grijač bez ventilatora. Pecite ${bakingTimeRange} na ${ovenTemp} °C i završite grillom za boju.`
         : oven === 'ooni'
@@ -6279,12 +6518,12 @@ function buildBeginnerDirectHomeSteps(
       surface: oven === 'homePan' ? 'Lightly oil the baking tray.' : 'Lightly dust the work surface with semolina.',
       ball: 'Gently lift one dough ball without pressing out its gas.',
       shape: pizzaStyle === 'romana'
-        ? `During the final ${duration(shapeWindowHours)}, press or roll the Romana thin and flat to ${diameter} cm; do not stretch it aggressively in the air.`
+        ? `Shape Romana thin and flat to ${diameter} cm by pressing or rolling; do not stretch it aggressively in the air.`
         : pizzaStyle === 'ny_style'
-          ? `During the final ${duration(shapeWindowHours)}, shape the larger dough ball with a thin center and even thickness to ${diameter} cm; do not create a tall, puffy rim. The slice should fold easily.`
-          : `During the final ${duration(shapeWindowHours)}, press air from the center toward the edge, leave a 1–2 cm rim, and stretch to ${diameter} cm; do not use a rolling pin.`,
-      toppings: `Add ${saucePerPizza} g sauce and ${cheesePerPizza} g mozzarella, leaving the rim clear.`,
-      launch: 'Put the pizza in the oven.',
+          ? `Shape New York pizza to an even thickness with a thinner center to ${diameter} cm; do not create a tall, puffy rim. The slice should fold easily.`
+          : `Gently press the dough from the center toward the edge, leave a rim about 1–2 cm wide, and stretch to ${diameter} cm; do not use a rolling pin.`,
+      toppings: `Spread ${saucePerPizza} g sauce and ${cheesePerPizza} g well-drained mozzarella evenly, leaving the rim clear.`,
+      launch: oven === 'homePan' ? 'Place the pizza carefully on the prepared tray and put the tray in the oven.' : oven === 'ooni' ? 'Check that the pizza moves freely on the peel, then launch it carefully into the preheated pizza oven.' : 'Check that the pizza moves freely on the peel, then transfer it carefully to the fully heated stone or steel.',
       bake: oven === 'homeStone'
         ? `Turn off the grill and use the Pizza program or top and bottom heat without a fan. Bake ${bakingTimeRange} at ${ovenTemp} °C; finish under the grill for color.`
         : oven === 'ooni'
@@ -6295,12 +6534,12 @@ function buildBeginnerDirectHomeSteps(
       surface: oven === 'homePan' ? 'Fetten Sie das Backblech leicht ein.' : 'Bestäuben Sie die Arbeitsfläche leicht mit Semola.',
       ball: 'Heben Sie eine Teigkugel vorsichtig an, ohne das Gas herauszudrücken.',
       shape: pizzaStyle === 'romana'
-        ? `Formen Sie die Romana in den letzten ${duration(shapeWindowHours)} dünn und flach auf ${diameter} cm; drücken oder rollen Sie sie, ohne sie aggressiv in der Luft zu dehnen.`
+        ? `Formen Sie die Romana dünn und flach auf ${diameter} cm, indem Sie sie drücken oder rollen; nicht aggressiv in der Luft dehnen.`
         : pizzaStyle === 'ny_style'
-          ? `Formen Sie den größeren Teigballen in den letzten ${duration(shapeWindowHours)} mit dünner Mitte und gleichmäßiger Dicke auf ${diameter} cm; formen Sie keinen hohen, aufgeblähten Rand. Das Stück soll faltbar sein.`
-          : `Drücken Sie in den letzten ${duration(shapeWindowHours)} die Luft von der Mitte zum Rand, lassen Sie 1–2 cm Rand und ziehen Sie den Teig auf ${diameter} cm; kein Nudelholz.`,
-      toppings: `Geben Sie ${saucePerPizza} g Sauce und ${cheesePerPizza} g Mozzarella darauf; lassen Sie den Rand frei.`,
-      launch: 'Schieben Sie die Pizza in den Ofen.',
+          ? `Formen Sie New York gleichmäßig dick mit dünnerer Mitte auf ${diameter} cm; keinen hohen, aufgeblähten Rand formen. Das Stück soll faltbar sein.`
+          : `Drücken Sie den Teig vorsichtig von der Mitte zum Rand, lassen Sie etwa 1–2 cm Rand und ziehen Sie ihn auf ${diameter} cm; kein Nudelholz.`,
+      toppings: `Verteilen Sie ${saucePerPizza} g Sauce und ${cheesePerPizza} g gut abgetropften Mozzarella gleichmäßig; lassen Sie den Rand frei.`,
+      launch: oven === 'homePan' ? 'Legen Sie die Pizza vorsichtig auf das vorbereitete Blech und schieben Sie das Blech in den Ofen.' : oven === 'ooni' ? 'Prüfen Sie, ob sich die Pizza frei auf dem Schieber bewegt, und schieben Sie sie vorsichtig in den vorgeheizten Pizzaofen.' : 'Prüfen Sie, ob sich die Pizza frei auf dem Schieber bewegt, und legen Sie sie vorsichtig auf den vollständig aufgeheizten Stein oder Stahl.',
       bake: oven === 'homeStone'
         ? `Schalten Sie den Grill aus und verwenden Sie das Pizza-Programm oder Ober-/Unterhitze ohne Umluft. Backen Sie ${bakingTimeRange} bei ${ovenTemp} °C und bräunen Sie am Ende mit dem Grill.`
         : oven === 'ooni'
@@ -6311,12 +6550,12 @@ function buildBeginnerDirectHomeSteps(
       surface: oven === 'homePan' ? 'Pekač rahlo naoljite.' : 'Delovno površino rahlo posujte z zdrobom.',
       ball: 'Nežno dvignite eno kroglico, ne da bi iztisnili plin.',
       shape: pizzaStyle === 'romana'
-        ? `V zadnjih ${duration(shapeWindowHours)} Romana oblikujte tanko in ravno do ${diameter} cm; pritiskajte ali uporabite valjar, brez agresivnega raztezanja v zraku.`
+        ? `Romano oblikujte tanko in ravno do ${diameter} cm s pritiskanjem ali valjarjem; ne raztegujte je agresivno v zraku.`
         : pizzaStyle === 'ny_style'
-          ? `V zadnjih ${duration(shapeWindowHours)} večjo kepico oblikujte s tanko sredino in enakomerno debelino do ${diameter} cm; ne oblikujte visokega, napihnjenega roba. Rezina naj se zlahka prepogne.`
-          : `V zadnjih ${duration(shapeWindowHours)} potisnite zrak od sredine proti robu, pustite rob 1–2 cm in testo raztegnite do ${diameter} cm; ne uporabljajte valjarja.`,
-      toppings: `Dodajte ${saucePerPizza} g omake in ${cheesePerPizza} g mocarele; rob pustite prost.`,
-      launch: 'Pico postavite v pečico.',
+          ? `New York oblikujte enakomerno debelo s tanjšo sredino do ${diameter} cm; ne oblikujte visokega, napihnjenega roba. Rezina naj se zlahka prepogne.`
+          : `Testo nežno pritiskajte od sredine proti robu, pustite približno 1–2 cm roba in ga raztegnite do ${diameter} cm; ne uporabljajte valjarja.`,
+      toppings: `Enakomerno razporedite ${saucePerPizza} g omake in ${cheesePerPizza} g dobro odcejene mocarele; rob pustite prost.`,
+      launch: oven === 'homePan' ? 'Pico previdno položite na pripravljen pekač in ga postavite v pečico.' : oven === 'ooni' ? 'Preverite, ali se pica prosto premika na loparju, nato jo previdno vstavite v segreto pizza pečico.' : 'Preverite, ali se pica prosto premika na loparju, nato jo previdno prenesite na popolnoma segret kamen ali jeklo.',
       bake: oven === 'homeStone'
         ? `Izklopite žar in uporabite program Pizza ali zgornje/spodnje gretje brez ventilatorja. Pecite ${bakingTimeRange} pri ${ovenTemp} °C; na koncu zapečite z žarom.`
         : oven === 'ooni'
@@ -6324,6 +6563,28 @@ function buildBeginnerDirectHomeSteps(
           : `Pecite ${bakingTimeRange} pri ${ovenTemp} °C; preverite dno in po potrebi na kratko zaključite pod zgornjim žarom.`,
     },
   }[lang]);
+  const glutenFreeShape = {
+    hr: pizzaStyle === 'romana' ? `Bezglutensko tijesto nježno pritisnite ili razvaljajte do ${diameter} cm.` : pizzaStyle === 'ny_style' ? `Bezglutensko tijesto nježno utisnite u ujednačen oblik do ${diameter} cm.` : `Bezglutensko tijesto nježno pritisnite do ${diameter} cm; nemojte ga rastezati kao pšenično tijesto.`,
+    en: pizzaStyle === 'romana' ? `Gently press or roll the gluten-free dough to ${diameter} cm.` : pizzaStyle === 'ny_style' ? `Gently press the gluten-free dough into an even shape to ${diameter} cm.` : `Gently press the gluten-free dough to ${diameter} cm; do not stretch it like wheat dough.`,
+    de: pizzaStyle === 'romana' ? `Drücken oder rollen Sie den glutenfreien Teig vorsichtig auf ${diameter} cm.` : pizzaStyle === 'ny_style' ? `Drücken Sie den glutenfreien Teig vorsichtig gleichmäßig auf ${diameter} cm.` : `Drücken Sie den glutenfreien Teig vorsichtig auf ${diameter} cm; dehnen Sie ihn nicht wie Weizenteig.`,
+    sl: pizzaStyle === 'romana' ? `Brezglutensko testo nežno pritisnite ali razvaljajte do ${diameter} cm.` : pizzaStyle === 'ny_style' ? `Brezglutensko testo nežno pritisnite v enakomerno obliko do ${diameter} cm.` : `Brezglutensko testo nežno pritisnite do ${diameter} cm; ne raztegujte ga kot pšenično testo.`,
+  }[lang];
+  const flourShapeNotes: Partial<Record<FlourType, Record<Lang, string>>> = {
+    manitoba: { hr: 'Ako se tijesto vraća, kratko ga pokrijte i pustite da se opusti; nemojte ga siliti.', en: 'If the dough springs back, cover it briefly to relax; do not force it.', de: 'Deckt sich der Teig, kurz abdecken und entspannen lassen; nicht erzwingen.', sl: 'Če se testo krči, ga za kratek čas pokrijte; ne silite ga.' },
+    spelt: { hr: 'Pirovo tijesto oblikujte nježno i izbjegavajte ponavljano rastezanje.', en: 'Handle spelt dough gently and avoid repeated stretching.', de: 'Dinkelteig vorsichtig behandeln und wiederholtes Dehnen vermeiden.', sl: 'Pirino testo oblikujte nežno in se izogibajte ponavljajočemu raztezanju.' },
+    wholeWheat: { hr: 'Manje nepravilnosti i ljepljivosti su normalne; nemojte pretjerano zatezati.', en: 'Minor irregularities and stickiness are normal; do not over-tighten.', de: 'Kleine Unregelmäßigkeiten und Klebrigkeit sind normal; nicht übermäßig straffen.', sl: 'Manjše nepravilnosti in lepljivost so običajne; testa ne zategujte preveč.' },
+    custom: { hr: 'Jačinu oblikovanja prilagodite stvarnoj elastičnosti i ljepljivosti mješavine.', en: 'Adjust shaping pressure to the blend’s actual elasticity and stickiness.', de: 'Passen Sie den Formdruck an Elastizität und Klebrigkeit der Mischung an.', sl: 'Pritisk prilagodite dejanski elastičnosti in lepljivosti mešanice.' },
+  };
+  const flourShapeNote = flourShapeNotes[flourType]?.[lang];
+  const finalShapeStep = flourType === 'glutenFree'
+    ? glutenFreeShape
+    : `${shapingSteps.shape}${flourShapeNote ? ` ${flourShapeNote}` : ''}`;
+  const finalDoughBallStep = flourType === 'glutenFree'
+    ? ({ hr: 'Nježno podignite mekanu kuglicu strugačem ili lagano nauljenim rukama, bez pritiskanja.', en: 'Gently lift the soft dough ball with a scraper or lightly oiled hands without pressing it.', de: 'Heben Sie die weiche Teigkugel vorsichtig mit einem Schaber oder leicht geölten Händen an, ohne sie zu drücken.', sl: 'Mehko kroglico nežno dvignite s strgalom ali rahlo naoljenimi rokami, ne da bi jo pritiskali.' }[lang])
+    : shapingSteps.ball;
+  const finalWorkSurfaceStep = isGlutenFree
+    ? ({ hr: 'Radnu površinu lagano pospite certificiranim bezglutenskim brašnom ili rižinim brašnom.', en: 'Lightly dust the work surface with certified gluten-free flour or rice flour.', de: 'Bestäuben Sie die Arbeitsfläche leicht mit zertifiziert glutenfreiem Mehl oder Reismehl.', sl: 'Delovno površino rahlo posujte s certificirano brezglutensko ali riževo moko.' }[lang])
+    : shapingSteps.surface;
 
   const neapolitanPhaseC = buildNeapolitanDirectPhaseC(lang, totalDoughLabel, ballWeightLabel, pizzas, schedule.fridgeHours > 0, flourType, getBeginnerRoomOnlyEnd(schedule, preheatAt));
   const tipo00ColdFermentationStep = {
@@ -6365,25 +6626,47 @@ function buildBeginnerDirectHomeSteps(
       };
     }
     if (index === 3 && schedule.fridgeHours > 0) {
-      return { ...phase, steps: [neapolitanPhaseC ? tipo00ColdFermentationStep : labels.fridge(duration(schedule.fridgeHours))], timers: [] };
+      const coldPhase = buildBeginnerColdPhaseD(schedule, lang, false);
+      return {
+        ...phase,
+        steps: [coldPhase.step],
+        stepInfo: [coldPhase.stepInfo],
+        fermentationInfo: undefined,
+        fermentationSignsInfo: undefined,
+        proofingInfo: undefined,
+        timers: [],
+      };
     }
     const finalPhaseIndex = schedule.fridgeHours > 0 ? 4 : 3;
     if (index === finalPhaseIndex) {
       const finalRestHours = schedule.roomAfterFridgeHours;
       const roomFinalStart = schedule.fridgeHours > 0 ? null : buildBeginnerRoomOnlyFinalStart(lang, false);
+      const coldFinalStart = schedule.fridgeHours > 0 ? buildBeginnerColdFinalStart(schedule, lang, false) : null;
+      const finalStepInfo = buildBeginnerFinalPhaseInfo(lang, pizzaStyle, flourType, oven);
+      if (roomFinalStart) finalStepInfo[0] = roomFinalStart.info;
+      if (coldFinalStart) finalStepInfo[0] = coldFinalStart.stepInfo;
       return {
         ...phase,
-        ...(roomFinalStart ? { stepInfo: [roomFinalStart.info] } : {}),
+        stepInfo: finalStepInfo,
+        temperingInfo: undefined,
+        bakingInfo: undefined,
+        bakingCheckInfo: undefined,
+        ovenTimingInfo: undefined,
+        ovenProgramInfo: undefined,
+        containerOilInfo: undefined,
+        fermentationInfo: undefined,
+        fermentationSignsInfo: undefined,
+        proofingInfo: undefined,
+        degassingInfo: undefined,
+        doughHandlingInfo: undefined,
         steps: [
           schedule.fridgeHours > 0
-            ? finalRestHours > 0
-              ? labels.takeOut(duration(finalRestHours))
-              : labels.takeOutNow
+            ? coldFinalStart!.step
             : roomFinalStart!.step,
           labels.preheat(preheatMinutes, formatBeginnerClockTime(preheatAt, lang)),
-          isGlutenFree ? ({ hr: 'Radnu površinu obilno pospite bezglutenskim ili rižinim brašnom.', en: 'Generously dust the work surface with gluten-free or rice flour.', de: 'Bestäuben Sie die Arbeitsfläche großzügig mit glutenfreiem oder Reismehl.', sl: 'Delovno površino obilno posujte z brezglutensko ali riževo moko.' }[lang]) : shapingSteps.surface,
-          shapingSteps.ball,
-          shapingSteps.shape,
+          finalWorkSurfaceStep,
+          finalDoughBallStep,
+          finalShapeStep,
           shapingSteps.toppings,
           shapingSteps.launch,
           shapingSteps.bake,

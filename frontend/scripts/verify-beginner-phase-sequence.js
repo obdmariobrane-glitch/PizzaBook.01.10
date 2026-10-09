@@ -15,6 +15,12 @@ const requestedFunctions = new Set([
   'buildBeginnerDirectHomeSteps',
   'buildBeginnerTegliaHomeSteps',
   'buildBeginnerTegliaPhaseC',
+  'getBeginnerFridgeOutAt',
+  'formatBeginnerScheduledTime',
+  'buildBeginnerColdPhaseD',
+  'buildBeginnerColdFinalStart',
+  'buildBeginnerTegliaPreheat',
+  'buildBeginnerFinalPhaseInfo',
   'getBeginnerRoomOnlyEnd',
   'formatBeginnerRoomRemaining',
   'getBeginnerRoomEndLabel',
@@ -53,6 +59,7 @@ function formatDuration(seconds) {
 }
 function getBeginnerPreheatMinutes(oven) { return oven === 'homeStone' ? 60 : 20; }
 function formatBeginnerClockTime(at) { return at.toISOString().slice(11, 16); }
+function formatTemperature(value) { return String(value) + '°C'; }
 function labelSelectedYeast(text) { return text; }
 ${functionSources.join('\n')}
 module.exports = { buildBeginnerDirectHomeSteps, buildBeginnerTegliaHomeSteps, getBeginnerOvenTimers };
@@ -72,13 +79,18 @@ const languages = ['hr', 'en', 'de', 'sl'];
 const styles = ['neapolitan', 'ny_style', 'romana'];
 const flours = ['caputo00', 'manitoba', 'custom', 'spelt', 'wholeWheat'];
 
-function schedule(fridgeHours, roomBeforeFridgeHours = 2, roomAfterFridgeHours = 1) {
+function schedule(fridgeHours, roomBeforeFridgeHours = 2, roomAfterFridgeHours = 1, oven = 'homeStone') {
+  const bakeAt = new Date('2027-04-12T18:00:00');
+  const startAt = new Date(bakeAt.getTime() - (roomBeforeFridgeHours + fridgeHours + roomAfterFridgeHours) * 3600000);
+  const preheatMinutes = oven === 'homeStone' ? 60 : 20;
   return {
     fridgeHours,
     roomBeforeFridgeHours,
     roomAfterFridgeHours,
-    bakeAt: new Date('2027-04-12T18:00:00'),
-    preheatAt: new Date('2027-04-12T17:00:00'),
+    startAt,
+    bakeAt,
+    preheatAt: new Date(bakeAt.getTime() - preheatMinutes * 60000),
+    ovenType: oven,
   };
 }
 
@@ -284,6 +296,103 @@ assert.deepEqual(
   ['preheat'],
   'Teglia has a defined preheat duration but its bake instruction is doneness-led, not time-led',
 );
+
+for (const lang of languages) {
+  for (const style of styles) {
+    for (const flour of [...flours, 'glutenFree']) {
+      for (const oven of ['homePan', 'homeStone', 'ooni']) {
+        const coldSchedule = schedule(8, 2, 3, oven);
+        const originalBakeAt = coldSchedule.bakeAt.getTime();
+        const cold = buildBeginnerDirectHomeSteps(
+          roundPhases(flour, style), coldSchedule, phaseBPlanFor(flour, 2), 22, 4, 300,
+          oven, '4–5 min', lang, 'fresh', style, 30, 70, 100, flour, '1250 g', '250 g', 5,
+        );
+        const coldPhaseD = cold[3];
+        const coldPhaseE = cold[4];
+        assert.match(coldPhaseD.steps[0], /8 hours/);
+        assert.match(coldPhaseD.steps[0], /15:00/);
+        assert.equal(coldPhaseD.stepInfo.length, coldPhaseD.steps.length);
+        assert.equal(coldPhaseE.steps.length, 8);
+        assert.equal(coldPhaseE.stepInfo.length, coldPhaseE.steps.length);
+        assert.match(coldPhaseE.steps[0], /15:00/);
+        assert.match(coldPhaseE.steps[1], oven === 'homeStone' ? /17:00/ : /17:40/);
+        assert.equal(coldSchedule.bakeAt.getTime(), originalBakeAt);
+        if (flour === 'glutenFree') assert.match(coldPhaseE.steps[2], /rice flour|Reismehl|rižinim|riževo/);
+        assert.match(coldPhaseE.steps[5], /70 g|100 g/);
+
+        const roomSchedule = schedule(0, 2, 3, oven);
+        const roomBakeAt = roomSchedule.bakeAt.getTime();
+        const room = buildBeginnerDirectHomeSteps(
+          roundPhases(flour, style), roomSchedule, phaseBPlanFor(flour, 2), 22, 4, 300,
+          oven, '4–5 min', lang, 'fresh', style, 30, 70, 100, flour, '1250 g', '250 g', 5,
+        );
+        assert.equal(room.length, 4);
+        assert.equal(room.at(-1).steps.length, 8);
+        assert.equal(room.at(-1).stepInfo.length, 8);
+        assert.equal(roomSchedule.bakeAt.getTime(), roomBakeAt);
+        assert.match(room.at(-1).steps[0], /sobnoj temperaturi|room temperature|Raumtemperatur|sobni temperaturi/i);
+        assert.doesNotMatch(room.at(-1).steps[0], /fridge|Kühlschrank|hladnjaka|hladilnika/i);
+
+        const noFridgeOutAlarmSchedule = schedule(8, 2, 0, oven);
+        const noFridgeOutAlarm = buildBeginnerDirectHomeSteps(
+          roundPhases('caputo00', style), noFridgeOutAlarmSchedule, phaseBPlanFor('caputo00', 2), 22, 4, 300,
+          oven, '4–5 min', lang, 'fresh', style, 30, 70, 100, 'caputo00', '1250 g', '250 g', 5,
+        );
+        assert.ok(!noFridgeOutAlarm[3].steps[0].includes('Alarm'));
+      }
+    }
+  }
+
+  for (const flour of [...flours, 'glutenFree']) {
+    for (const oven of ['homePan', 'homeStone', 'ooni']) {
+      const coldSchedule = schedule(48, 2, 3, oven);
+      const teglia = buildBeginnerTegliaHomeSteps(
+        roundPhases(flour, 'romana'), coldSchedule, phaseBPlanFor(flour, 2, 'teglia'), 22,
+        lang, 300, '4–5 min', { width: 30, length: 40 }, flour, 120, 180,
+      );
+      const phaseD = teglia[3];
+      const phaseE = teglia[4];
+      assert.match(phaseD.steps[0], /48 hours/);
+      assert.match(phaseD.steps[0], /15:00/);
+      assert.equal(phaseD.stepInfo.length, phaseD.steps.length);
+      assert.equal(phaseE.steps.length, 8);
+      assert.equal(phaseE.stepInfo.length, phaseE.steps.length);
+      assert.match(phaseE.steps[0], /15:00/);
+      assert.match(phaseE.steps[5], /120 g/);
+      assert.match(phaseE.steps[5], /180 g/);
+      assert.doesNotMatch(`${phaseD.steps.join(' ')} ${phaseE.steps.join(' ')}`, /dough balls|Teigkugeln|kroglice|kuglice/i);
+      assert.match(phaseE.steps[1], oven === 'homeStone' ? /300°C/ : /300°C/);
+
+      const roomSchedule = schedule(0, 2, 3, oven);
+      const roomTeglia = buildBeginnerTegliaHomeSteps(
+        roundPhases(flour, 'romana'), roomSchedule, phaseBPlanFor(flour, 2, 'teglia'), 22,
+        lang, 300, '4–5 min', { width: 30, length: 40 }, flour, 120, 180,
+      );
+      assert.equal(roomTeglia.at(-1).steps.length, 8);
+      assert.equal(roomTeglia.at(-1).stepInfo.length, 8);
+      assert.match(roomTeglia.at(-1).steps[0], /sobnoj temperaturi|room temperature|Raumtemperatur|sobni temperaturi/i);
+      assert.doesNotMatch(roomTeglia.at(-1).steps[0], /fridge|Kühlschrank|hladnjaka|hladilnika/i);
+    }
+  }
+}
+
+{
+  const overnight = schedule(24, 2, 2, 'homeStone');
+  overnight.bakeAt = new Date('2027-04-13T01:00:00');
+  overnight.startAt = new Date(overnight.bakeAt.getTime() - 28 * 3600000);
+  overnight.preheatAt = new Date(overnight.bakeAt.getTime() - 60 * 60000);
+  const result = buildBeginnerDirectHomeSteps(
+    roundPhases('caputo00', 'neapolitan'), overnight, phaseBPlanFor('caputo00', 2), 22, 4, 300,
+    'homeStone', '4–5 min', 'hr', 'fresh', 'neapolitan', 30, 70, 100, 'caputo00', '1250 g', '250 g', 5,
+  );
+  assert.match(result[3].steps[0], /2027.*23:00/);
+  assert.match(result[4].steps[0], /23:00/);
+  assert.ok(!result[3].steps[0].includes('01:00'));
+}
+
+assert.match(source, /const customStepInfo = stepInfo\?\.\[i\]/);
+assert.match(source, /Alert\.alert\(customStepInfo\.title, formatText\(customStepInfo\.body\)\)/);
+
 const scheduledOoni = buildBeginnerDirectHomeSteps(
   roundPhases('caputo00', 'neapolitan'),
   schedule(1),
@@ -461,7 +570,9 @@ for (const lang of languages) {
     assert.equal(roomTimers[1].kind, 'preheat');
     const fridge = buildBeginnerDirectHomeSteps(roundPhases('caputo00', 'neapolitan'), schedule(8, 2, 3), phaseBPlanFor('caputo00', 2), 22, 4, 300, 'homeStone', '4–5 min', lang, 'fresh', 'neapolitan', 30, 70, 100, 'caputo00', '1250 g', '250 g', 5);
     assert.ok(!fridge[2].steps[5].includes(labels[lang]));
-    assert.equal(fridge.at(-1).stepInfo, undefined);
+    assert.equal(fridge.at(-1).stepInfo.length, 8);
+    assert.equal(fridge[3].stepInfo.length, 1);
+    assert.match(fridge[3].steps[0], /Alarm/);
     assert.equal(fridge.at(-1).timers[0].kind, 'preBake');
   }
 }

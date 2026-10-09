@@ -235,12 +235,13 @@ assert.match(uiSource, /beginnerHydrationFor\(pizzaStyle, flour\)/);
 
 // Teglia ROOM_ONLY recipe: no refrigerator, authoritative final window, 15 min shaping explained
 assert.match(uiSource, /function buildBeginnerTegliaHomeSteps/);
-assert.match(uiSource, /buildBeginnerTegliaHomeSteps\(beginnerDirectRecipeSteps, directHomeSchedule, beginnerPhaseBPlan!, roomTemp, lang, ovenTemp, bakingTimeRange, \{ width: trayWidth, length: trayLength \}, flour\)/);
+assert.match(uiSource, /buildBeginnerTegliaHomeSteps\(beginnerDirectRecipeSteps, directHomeSchedule, beginnerPhaseBPlan!, roomTemp, lang, ovenTemp, bakingTimeRange, \{ width: trayWidth, length: trayLength \}, flour, dims\.sauce, dims\.cheese, temperatureUnit\)/);
 assert.match(uiSource, /phases\.filter\(\(phase\) => !coldTitle\.test\(phase\.title\)\)/);
 
-// 15-minute semantics: Recipe states the full final window, not total minus 15
-assert.match(uiSource, /finalRestHours > 0\s*\?\s*labels\.takeOut\(duration\(finalRestHours\)\)\s*:\s*labels\.takeOutNow/);
-assert.match(uiSource, /take the dough balls out of the refrigerator \$\{hours\} before baking/i);
+// Fridge-out is a scheduled timestamp, not a new duration or alarm.
+assert.match(uiSource, /const coldFinalStart = refrigerated \? buildBeginnerColdFinalStart\(schedule, lang, true\) : null/);
+assert.match(uiSource, /coldFinalStart!\.step/);
+assert.match(uiSource, /buildBeginnerColdFinalStart\(schedule, lang, true\)/);
 
 // Small salt/yeast stay in grams in US mode; large quantities convert
 for (const small of ['0.13 g fresh yeast', '1.5 g dry yeast', '8 g salt']) {
