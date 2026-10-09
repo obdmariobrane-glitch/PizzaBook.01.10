@@ -3265,7 +3265,7 @@ export default function CalculatorHome() {
                     key={`detailed-direct-${pizzaStyle}-${mixing}-${index}`}
                     title={phase.title}
                     steps={beginnerDirectHomeSteps ? phase.steps : directHomeSchedule ? withoutDirectScheduleTiming(phase.steps) : phase.steps}
-                    stepInfo={beginnerDirectHomeSteps && index === 1 && beginnerPhaseBPlan ? buildBeginnerPhaseBStepInfo(beginnerPhaseBPlan, lang, isRomanTeglia) : undefined}
+                    stepInfo={beginnerDirectHomeSteps && index === 1 && beginnerPhaseBPlan ? buildBeginnerPhaseBStepInfo(beginnerPhaseBPlan, lang, isRomanTeglia, flour) : undefined}
                     waterInfo={isBeginner && index === 0 ? beginnerWaterInfo : phase.waterInfo}
                     waterInfoStepIndex={(isTargetNeapolitanHandPhaseA || isTargetNeapolitanGlutenFreeHandPhaseA || isTargetNeapolitanGlutenFreeMixerPhaseA || isTargetTegliaGlutenFreeHandPhaseA || isTargetTegliaGlutenFreeMixerPhaseA || isTargetNeapolitanCustomHandPhaseA || isTargetNeapolitanCustomMixerPhaseA || isTargetNeapolitanMixerPhaseA || isTargetNeapolitanManitobaHandPhaseA || isTargetNeapolitanManitobaMixerPhaseA || isTargetNeapolitanSpeltHandPhaseA || isTargetNeapolitanSpeltMixerPhaseA || isTargetNeapolitanWholeWheatHandPhaseA || isTargetNeapolitanWholeWheatMixerPhaseA || isTargetTegliaTipo00HandPhaseA || isTargetTegliaTipo00MixerPhaseA || isTargetTegliaManitobaHandPhaseA || isTargetTegliaManitobaMixerPhaseA || isTargetTegliaSpeltHandPhaseA || isTargetTegliaSpeltMixerPhaseA || isTargetTegliaWholeWheatHandPhaseA || isTargetTegliaWholeWheatMixerPhaseA || isTargetTegliaCustomHandPhaseA || isTargetTegliaCustomMixerPhaseA) && index === 0 ? 2 : undefined}
                     containerOilInfo={phase.containerOilInfo}
@@ -5291,8 +5291,11 @@ function buildBeginnerPhaseBSteps(
   plan: BeginnerPhaseBPlan,
   lang: Lang,
   isTeglia: boolean,
+  flourType: FlourType = 'caputo00',
 ): string[] {
   const duration = (minutes: number) => formatDuration(minutes * 60, lang);
+  const isCustomBlend = flourType === 'custom';
+  const foldBehavior = isCustomBlend ? 'custom' : plan.behavior;
   const copy = {
     hr: {
       transfer: 'Uljem lagano premažite fermentacijsku posudu i prebacite tijesto u nju.',
@@ -5302,9 +5305,9 @@ function buildBeginnerPhaseBSteps(
         ? `Pokrijte tijesto i ostavite ga da fermentira ${minutes}.`
         : `Pokrijte tijesto i ostavite ga da fermentira još ${minutes}.`,
       gfFerment: (minutes: string) => `Ostavite smjesu da fermentira ${minutes}.`,
-      fold: (index: number) => plan.behavior === 'gentle'
-        ? `Napravite ${index === 1 ? 'jedno vrlo nježno' : index === 2 ? 'još jedno vrlo nježno' : 'vrlo nježno'} preklapanje tijesta, bez snažnog rastezanja ili trganja.`
-        : index === 1 ? 'Napravi Stretch & Fold.' : 'Napravi drugi Stretch & Fold.',
+      fold: (index: number) => foldBehavior === 'gentle'
+        ? index === 1 ? 'Napravite prvi nježni Stretch & Fold.' : 'Napravite drugi nježni Stretch & Fold.'
+        : index === 1 ? 'Napravite prvi Stretch & Fold.' : 'Napravite drugi Stretch & Fold.',
       check: 'Provjerite tijesto prije nastavka.',
       next: 'Kad je prva fermentacija gotova, podijelite tijesto, oblikujte kuglice i stavite ih u hladnjak prema rasporedu.',
     },
@@ -5314,9 +5317,9 @@ function buildBeginnerPhaseBSteps(
       coverRest: (minutes: string) => `Cover the dough and let it rest for ${minutes}.`,
       ferment: (minutes: string) => `Cover the dough and let it ferment undisturbed for ${minutes}.`,
       gfFerment: (minutes: string) => `Leave the mixture to ferment for ${minutes}.`,
-      fold: (index: number) => plan.behavior === 'gentle'
-        ? `Perform ${index === 1 ? 'one very gentle' : 'another very gentle'} fold without strong stretching or tearing.`
-        : index === 1 ? 'Perform Stretch & Fold.' : 'Perform the second Stretch & Fold.',
+      fold: (index: number) => foldBehavior === 'gentle'
+        ? index === 1 ? 'Perform the first gentle Stretch & Fold.' : 'Perform the second gentle Stretch & Fold.'
+        : index === 1 ? 'Perform the first Stretch & Fold.' : 'Perform the second Stretch & Fold.',
       check: 'Check the dough before continuing.',
       next: 'When first fermentation is complete, divide the dough, form the balls, and refrigerate them according to the schedule.',
     },
@@ -5326,9 +5329,9 @@ function buildBeginnerPhaseBSteps(
       coverRest: (minutes: string) => `Decken Sie den Teig ab und lassen Sie ihn ${minutes} ruhen.`,
       ferment: (minutes: string) => `Decken Sie den Teig ab und lassen Sie ihn ${minutes} ungestört fermentieren.`,
       gfFerment: (minutes: string) => `Lassen Sie die Masse ${minutes} fermentieren.`,
-      fold: (index: number) => plan.behavior === 'gentle'
-        ? `Falten Sie den Teig ${index === 1 ? 'einmal sehr vorsichtig' : 'ein weiteres Mal sehr vorsichtig'}, ohne ihn stark zu dehnen oder zu zerreißen.`
-        : index === 1 ? 'Führen Sie ein Stretch & Fold durch.' : 'Führen Sie das zweite Stretch & Fold durch.',
+      fold: (index: number) => foldBehavior === 'gentle'
+        ? index === 1 ? 'Führen Sie das erste sanfte Stretch & Fold durch.' : 'Führen Sie das zweite sanfte Stretch & Fold durch.'
+        : index === 1 ? 'Führen Sie das erste Stretch & Fold durch.' : 'Führen Sie das zweite Stretch & Fold durch.',
       check: 'Prüfen Sie den Teig, bevor Sie fortfahren.',
       next: 'Wenn die erste Fermentation abgeschlossen ist, teilen Sie den Teig, formen Sie die Kugeln und stellen Sie sie nach Plan in den Kühlschrank.',
     },
@@ -5338,9 +5341,9 @@ function buildBeginnerPhaseBSteps(
       coverRest: (minutes: string) => `Testo pokrijte in ga pustite počivati ${minutes}.`,
       ferment: (minutes: string) => `Testo pokrijte in ga pustite nemoteno fermentirati ${minutes}.`,
       gfFerment: (minutes: string) => `Maso pustite fermentirati ${minutes}.`,
-      fold: (index: number) => plan.behavior === 'gentle'
-        ? `Testo ${index === 1 ? 'enkrat zelo nežno' : 'še enkrat zelo nežno'} prepognite, brez močnega raztezanja ali trganja.`
-        : index === 1 ? 'Naredite Stretch & Fold.' : 'Naredite drugi Stretch & Fold.',
+      fold: (index: number) => foldBehavior === 'gentle'
+        ? index === 1 ? 'Naredite prvi nežni Stretch & Fold.' : 'Naredite drugi nežni Stretch & Fold.'
+        : index === 1 ? 'Naredite prvi Stretch & Fold.' : 'Naredite drugi Stretch & Fold.',
       check: 'Pred nadaljevanjem preverite testo.',
       next: 'Ko je prva fermentacija končana, testo razdelite, oblikujte kroglice in jih po načrtu postavite v hladilnik.',
     },
@@ -5377,51 +5380,89 @@ function buildBeginnerPhaseBStepInfo(
   plan: BeginnerPhaseBPlan,
   lang: Lang,
   isTeglia: boolean,
+  flourType: FlourType = 'caputo00',
 ): Array<{ title: string; body: string } | undefined> {
+  const isCustomBlend = flourType === 'custom';
+  const foldBehavior = isCustomBlend ? 'custom' : plan.behavior;
   const copy = {
     hr: {
-      container: ['Kakvu posudu koristiti?', 'Koristite plastičnu posudu za hranu, staklenu zdjelu ili inox posudu. Najpraktičnija je posuda sa širokim otvorom.\n\nOdaberite posudu s dovoljno prostora da tijesto naraste, idealno 2–3 puta većeg kapaciteta od početnog volumena tijesta.\n\nNekoliko kapi ulja razmažite po dnu i stijenkama. Posudu pokrijte poklopcem ili folijom kako se tijesto ne bi osušilo.\n\nDržite je dalje od izravnog sunca i izvora topline.'],
-      first: ['Što je Stretch & Fold i kako se radi?', 'Stretch & Fold je tehnika rastezanja i preklapanja tijesta koja jača glutensku mrežu i poboljšava elastičnost.\n\nKako se radi?\n\n1. Lagano navlaži ruke ako se tijesto lijepi.\n2. Uhvati jednu stranu tijesta i nježno je rastegni prema gore.\n3. Preklopi rastegnuti dio preko sredine tijesta.\n4. Okreni posudu približno 90° i ponovi postupak.\n5. Nakon četiri preklapanja završio si jedan set.\n\nVažno: Nemoj snažno povlačiti ili trgati tijesto. Cilj je postupno ojačati njegovu strukturu.'],
-      rest: ['Zašto je odmor važan?', 'Tijekom odmora glutenska mreža se opušta, a fermentacija se nastavlja.\n\nTijesto će se nakon odmora obično lakše rastezati. Ostavite ga pokrivenog i nemojte ga nepotrebno dirati.'],
-      betweenFolds: ['Zašto je odmor između preklapanja važan?', 'Nakon preklapanja ostavite tijesto pokriveno kako bi se opustilo i nastavilo fermentirati.'],
-      final: ['Što se događa tijekom odmora?', 'Kvasac nastavlja proizvoditi plinove, a tijesto postupno razvija volumen i strukturu.\n\nNe mora se udvostručiti. Pratite vrijeme iz Planera i nemojte dodavati odmor izvan rasporeda.'],
-      second: ['Na što paziti kod drugog preklapanja?', 'Drugi Stretch & Fold radi se na isti način kao prvi.\n\nNježno rastegni i preklopi tijesto sa sve četiri strane.\n\nTijesto sada može pružati veći otpor jer je njegova struktura ojačala.\n\nAko osjetiš jak otpor ili primijetiš da se tijesto počinje trgati, nemoj ga rastezati na silu.\n\nCilj je dodatno ojačati tijesto, a ne istisnuti sav zrak iz njega.'],
-      check: ['Kako prepoznati promjene?', 'Tijesto bi trebalo biti glađe, elastičnije i bolje držati oblik nego odmah nakon miješenja.\n\nMogu se pojaviti mali mjehurići, ali nisu obavezni. Tijesto se ne mora udvostručiti.\n\nAko je još pomalo ljepljivo, to ne znači automatski da nešto nije u redu. Spremnost za pečenje procjenjuje se i kroz kasnije faze fermentacije.'],
+      container: ['Priprema posude', 'Nekoliko kapi ulja razmažite po dnu i stijenkama posude. Tako se tijesto neće lijepiti i lakše ćete ga izvaditi. Posudu pokrijte poklopcem ili folijom kako se površina tijesta ne bi osušila.'],
+      gfContainer: ['Priprema posude', 'Nekoliko kapi ulja razmažite po dnu i stijenkama posude. Tako se smjesa neće lijepiti i lakše ćete je izvaditi. Posudu pokrijte poklopcem ili folijom kako se površina smjese ne bi osušila.'],
+      first: ['Prvo preklapanje', 'Lagano navlažite ruke. Uhvatite jedan rub tijesta, pažljivo ga podignite i preklopite prema sredini. Ponovite sa svih strana. Nemojte rastezati tijesto do pucanja.'],
+      firstGentle: ['Prvo nježno preklapanje', 'Lagano navlažite ruke. Pažljivo podignite rub tijesta i nježno ga preklopite prema sredini. Ponovite sa svih strana bez snažnog rastezanja ili trganja.'],
+      firstCustom: ['Prvo preklapanje', 'Lagano navlažite ruke. Uhvatite jedan rub tijesta, pažljivo ga podignite i preklopite prema sredini. Ponovite sa svih strana. Ako mješavina sadrži više pira ili integralnog brašna, radite vrlo nježno. Nemojte rastezati tijesto do pucanja.'],
+      rest: ['Početni odmor', 'Tijekom odmora tijesto se opušta, a brašno nastavlja upijati vodu. Posudu držite na temperaturi prostorije koju ste odabrali u kalkulatoru.'],
+      betweenFolds: ['Odmor između preklapanja', 'Ovaj odmor omogućuje tijestu da se opusti nakon prvog preklapanja. Nemojte ga dodatno mijesiti niti pritiskati.'],
+      final: ['Završna fermentacija', 'Ostavite tijesto pokriveno i nemojte ga više obrađivati. Tijekom ovog razdoblja fermentacija se nastavlja, a tijesto postupno postaje podatnije.'],
+      second: ['Drugo preklapanje', 'Ponovite postupak iz prvog preklapanja. Cilj je ojačati strukturu tijesta bez nepotrebnog pritiskanja ili trganja.'],
+      secondGentle: ['Drugo nježno preklapanje', 'Ponovite nježno preklapanje. Ako tijesto pruža jak otpor ili se počinje trgati, nemojte ga forsirati.'],
+      secondCustom: ['Drugo preklapanje', 'Ponovite postupak iz prvog preklapanja. Ako je tijesto već dovoljno povezano i pruža jak otpor ili se počinje trgati, preskočite dodatno preklapanje.'],
+      check: ['Provjera tijesta', 'Tijesto bi trebalo biti nešto opuštenije, povezano i pokazivati znakove fermentacije, primjerice sitne mjehuriće. Ne mora se udvostručiti. Ako je vrlo mekano ili ljepljivo, rukujte njime pažljivo u sljedećoj fazi.'],
+      gfFinal: ['Fermentacija smjese', 'Ostavite smjesu pokrivenu i nemojte je više obrađivati. Tijekom ovog razdoblja fermentacija se nastavlja, a smjesa se postupno stabilizira.'],
     },
     en: {
-      container: ['What container should I use?', 'Use a food-safe plastic, glass, or stainless-steel container, preferably with a wide opening. Choose one with room for the dough to grow, ideally 2–3 times its starting volume. Oil the base and sides, cover it, and keep it away from direct sun and heat.'],
-      first: ['What is Stretch & Fold and how is it done?', 'Stretch & Fold is a technique of stretching and folding dough that strengthens the gluten network and improves elasticity.\n\nHow to do it:\n\n1. Lightly wet your hands if the dough sticks.\n2. Lift one side and gently stretch it upward.\n3. Fold the stretched part over the centre.\n4. Turn the container about 90° and repeat.\n5. Four folds complete one set.\n\nImportant: Do not pull hard or tear the dough. The aim is to strengthen its structure gradually.'],
-      rest: ['Why is the rest important?', 'The gluten network relaxes while fermentation continues. The dough usually stretches more easily afterwards. Keep it covered and do not disturb it unnecessarily.'],
-      betweenFolds: ['Why is the rest between folds important?', 'Keep the dough covered after the fold so it can relax and continue fermenting.'],
-      final: ['What happens during the rest?', 'Yeast continues producing gas while the dough develops volume and structure. It does not have to double. Follow the Planner time and do not add extra rest.'],
-      second: ['What should I watch for during the second fold?', 'The second Stretch & Fold is done the same way as the first.\n\nGently stretch and fold the dough from all four sides.\n\nThe dough may resist more now because its structure has strengthened.\n\nIf you feel strong resistance or notice tearing, do not stretch it by force.\n\nThe aim is to strengthen the dough further, not to remove all the air.'],
-      check: ['How do I recognize the changes?', 'The dough should be smoother, more elastic, and hold its shape better. Small bubbles may appear but are not required, and the dough does not have to double. Some stickiness does not automatically mean something is wrong.'],
+      container: ['Container preparation', 'Spread a few drops of oil over the bottom and sides of the container. This prevents sticking and makes the dough easier to remove. Cover the container with a lid or film so the dough surface does not dry out.'],
+      gfContainer: ['Container preparation', 'Spread a few drops of oil over the bottom and sides of the container. This prevents the mixture from sticking and makes it easier to remove. Cover the container with a lid or film so the mixture surface does not dry out.'],
+      first: ['First fold', 'Lightly wet your hands. Carefully lift one edge of the dough and fold it toward the centre. Repeat on all sides. Do not stretch the dough until it tears.'],
+      firstGentle: ['First gentle fold', 'Lightly wet your hands. Carefully lift an edge of the dough and gently fold it toward the centre. Repeat on all sides without strong stretching or tearing.'],
+      firstCustom: ['First fold', 'Lightly wet your hands. Carefully lift one edge of the dough and fold it toward the centre. Repeat on all sides. If the blend contains more spelt or whole-wheat flour, work very gently. Do not stretch the dough until it tears.'],
+      rest: ['Initial rest', 'During the rest the dough relaxes while the flour continues absorbing water. Keep the container at the room temperature selected in the calculator.'],
+      betweenFolds: ['Rest between folds', 'This rest allows the dough to relax after the first fold. Do not knead or press it further.'],
+      final: ['Final fermentation', 'Keep the dough covered and do not work it further. Fermentation continues during this period and the dough gradually becomes more supple.'],
+      second: ['Second fold', 'Repeat the first folding process. The aim is to strengthen the dough without unnecessary pressing or tearing.'],
+      secondGentle: ['Second gentle fold', 'Repeat the gentle fold. If the dough offers strong resistance or begins to tear, do not force it.'],
+      secondCustom: ['Second fold', 'Repeat the first folding process. If the dough is already sufficiently developed and offers strong resistance or begins to tear, skip the additional fold.'],
+      check: ['Dough readiness check', 'The dough should be somewhat more relaxed, cohesive, and show signs of fermentation such as small bubbles. It does not have to double. If it is very soft or sticky, handle it carefully in the next phase.'],
+      gfFinal: ['Mixture fermentation', 'Keep the mixture covered and do not work it further. Fermentation continues during this period and the mixture gradually stabilizes.'],
     },
     de: {
-      container: ['Welchen Behälter soll ich verwenden?', 'Verwenden Sie Kunststoff, Glas oder Edelstahl, möglichst mit weiter Öffnung. Wählen Sie idealerweise das 2–3-Fache des Anfangsvolumens. Ölen Sie Boden und Wände, decken Sie den Behälter ab und halten Sie ihn von Sonne und Wärme fern.'],
-      first: ['Was ist Stretch & Fold und wie wird es gemacht?', 'Stretch & Fold ist eine Technik aus Dehnen und Falten, die das Glutengerüst stärkt und die Elastizität verbessert.\n\nSo geht es:\n\n1. Bei klebrigem Teig die Hände leicht befeuchten.\n2. Eine Seite vorsichtig anheben und nach oben dehnen.\n3. Den gedehnten Teil über die Mitte legen.\n4. Den Behälter etwa 90° drehen und wiederholen.\n5. Vier Faltungen ergeben einen Satz.\n\nWichtig: Nicht kräftig ziehen und den Teig nicht zerreißen. Ziel ist, die Struktur schrittweise zu stärken.'],
-      rest: ['Warum ist die Ruhe wichtig?', 'Das Glutengerüst entspannt sich, während die Fermentation weitergeht. Danach lässt sich der Teig meist leichter dehnen. Abgedeckt lassen und nicht unnötig stören.'],
-      betweenFolds: ['Warum ist die Ruhe zwischen den Faltungen wichtig?', 'Lassen Sie den Teig nach dem Falten abgedeckt ruhen, damit er sich entspannt und weiter fermentiert.'],
-      final: ['Was geschieht während der Ruhe?', 'Die Hefe bildet weiter Gas, während Volumen und Struktur entstehen. Der Teig muss sich nicht verdoppeln. Folgen Sie der Planner-Zeit und verlängern Sie die Ruhe nicht.'],
-      second: ['Worauf sollte ich bei der zweiten Faltung achten?', 'Die zweite Stretch-&-Fold-Faltung erfolgt wie die erste.\n\nDen Teig vorsichtig von allen vier Seiten dehnen und falten.\n\nDer Teig kann jetzt mehr Widerstand leisten, weil seine Struktur stärker ist.\n\nBei starkem Widerstand oder wenn er zu reißen beginnt, nicht mit Gewalt dehnen.\n\nZiel ist, den Teig weiter zu stärken, nicht die gesamte Luft herauszudrücken.'],
-      check: ['Woran erkenne ich die Veränderung?', 'Der Teig sollte glatter, elastischer und formstabiler sein. Kleine Blasen sind möglich, aber nicht erforderlich; der Teig muss sich nicht verdoppeln. Etwas Klebrigkeit ist nicht automatisch ein Problem.'],
+      container: ['Behälter vorbereiten', 'Verteilen Sie einige Tropfen Öl auf Boden und Wänden des Behälters. So klebt der Teig nicht fest und lässt sich leichter herausnehmen. Decken Sie den Behälter mit einem Deckel oder einer Folie ab, damit die Teigoberfläche nicht austrocknet.'],
+      gfContainer: ['Behälter vorbereiten', 'Verteilen Sie einige Tropfen Öl auf Boden und Wänden des Behälters. So klebt die Masse nicht fest und lässt sich leichter herausnehmen. Decken Sie den Behälter mit einem Deckel oder einer Folie ab, damit die Oberfläche der Masse nicht austrocknet.'],
+      first: ['Erste Faltung', 'Befeuchten Sie Ihre Hände leicht. Heben Sie eine Teigkante vorsichtig an und falten Sie sie zur Mitte. Wiederholen Sie dies an allen Seiten. Dehnen Sie den Teig nicht bis zum Reißen.'],
+      firstGentle: ['Erste sanfte Faltung', 'Befeuchten Sie Ihre Hände leicht. Heben Sie eine Teigkante vorsichtig an und falten Sie sie sanft zur Mitte. Wiederholen Sie dies an allen Seiten, ohne stark zu dehnen oder zu reißen.'],
+      firstCustom: ['Erste Faltung', 'Befeuchten Sie Ihre Hände leicht. Heben Sie eine Teigkante vorsichtig an und falten Sie sie zur Mitte. Wiederholen Sie dies an allen Seiten. Wenn die Mischung mehr Dinkel- oder Vollkornmehl enthält, arbeiten Sie sehr vorsichtig. Dehnen Sie den Teig nicht bis zum Reißen.'],
+      rest: ['Erste Ruhezeit', 'Während der Ruhe entspannt sich der Teig, während das Mehl weiter Wasser aufnimmt. Lassen Sie den Behälter bei der im Rechner gewählten Raumtemperatur stehen.'],
+      betweenFolds: ['Ruhe zwischen den Faltungen', 'Diese Ruhezeit lässt den Teig nach der ersten Faltung entspannen. Kneten oder drücken Sie ihn nicht weiter.'],
+      final: ['Endgültige Fermentation', 'Lassen Sie den Teig abgedeckt und bearbeiten Sie ihn nicht weiter. Während dieser Zeit läuft die Fermentation weiter und der Teig wird allmählich geschmeidiger.'],
+      second: ['Zweite Faltung', 'Wiederholen Sie den Ablauf der ersten Faltung. Ziel ist, die Teigstruktur zu stärken, ohne unnötig zu drücken oder zu reißen.'],
+      secondGentle: ['Zweite sanfte Faltung', 'Wiederholen Sie die sanfte Faltung. Wenn der Teig starken Widerstand leistet oder zu reißen beginnt, erzwingen Sie nichts.'],
+      secondCustom: ['Zweite Faltung', 'Wiederholen Sie den Ablauf der ersten Faltung. Wenn der Teig bereits ausreichend entwickelt ist und starken Widerstand leistet oder zu reißen beginnt, lassen Sie die zusätzliche Faltung aus.'],
+      check: ['Teig prüfen', 'Der Teig sollte etwas entspannter und verbunden sein und Anzeichen der Fermentation, zum Beispiel kleine Blasen, zeigen. Er muss sich nicht verdoppeln. Wenn er sehr weich oder klebrig ist, behandeln Sie ihn in der nächsten Phase vorsichtig.'],
+      gfFinal: ['Fermentation der Masse', 'Lassen Sie die Masse abgedeckt und bearbeiten Sie sie nicht weiter. Während dieser Zeit läuft die Fermentation weiter und die Masse stabilisiert sich allmählich.'],
     },
     sl: {
-      container: ['Kakšno posodo uporabiti?', 'Uporabite plastično, stekleno ali inox posodo s široko odprtino. Idealno naj ima 2–3-krat večjo prostornino od začetne. Naoljite dno in stranice, posodo pokrijte ter jo hranite stran od sonca in toplote.'],
-      first: ['Kaj je Stretch & Fold in kako ga naredimo?', 'Stretch & Fold je tehnika raztezanja in prepogibanja testa, ki okrepi glutensko mrežo in izboljša elastičnost.\n\nKako ga naredimo:\n\n1. Če se testo lepi, rahlo navlažite roke.\n2. Dvignite eno stran in jo nežno raztegnite navzgor.\n3. Raztegnjeni del prepognite čez sredino.\n4. Posodo obrnite za približno 90° in ponovite.\n5. Štirje pregibi so en set.\n\nPomembno: Ne vlecite močno in testa ne trgajte. Cilj je postopoma okrepiti njegovo strukturo.'],
-      rest: ['Zakaj je počitek pomemben?', 'Glutenska mreža se sprosti, fermentacija pa se nadaljuje. Testo se bo po počitku običajno lažje raztezalo. Naj bo pokrito in ga ne motite.'],
-      betweenFolds: ['Zakaj je počitek med pregibi pomemben?', 'Po prepogibanju naj testo pokrito počiva, da se sprosti in nadaljuje fermentacijo.'],
-      final: ['Kaj se dogaja med počitkom?', 'Kvas še naprej tvori pline, testo pa razvija prostornino in strukturo. Ni se mu treba podvojiti. Upoštevajte čas v Planerju in ne dodajajte počitka.'],
-      second: ['Na kaj paziti pri drugem pregibu?', 'Drugi Stretch & Fold naredimo enako kot prvega.\n\nTesto nežno raztegnite in prepognite z vseh štirih strani.\n\nTesto je lahko zdaj bolj uporno, ker se je njegova struktura okrepila.\n\nČe začutite močan upor ali opazite, da se testo trga, ga ne raztezajte na silo.\n\nCilj je testo dodatno okrepiti, ne pa iztisniti vsega zraka.'],
-      check: ['Kako prepoznati spremembe?', 'Testo naj bo bolj gladko, elastično in naj bolje drži obliko. Mehurčki niso obvezni in testo se ni treba podvojiti. Rahla lepljivost še ne pomeni težave.'],
+      container: ['Priprava posode', 'Po dnu in stenah posode razmažite nekaj kapljic olja. Tako se testo ne bo prijemalo in ga boste lažje vzeli iz posode. Posodo pokrijte s pokrovom ali folijo, da se površina testa ne izsuši.'],
+      gfContainer: ['Priprava posode', 'Po dnu in stenah posode razmažite nekaj kapljic olja. Tako se masa ne bo prijemala in jo boste lažje vzeli iz posode. Posodo pokrijte s pokrovom ali folijo, da se površina mase ne izsuši.'],
+      first: ['Prvi pregib', 'Rahlo navlažite roke. Previdno dvignite rob testa in ga prepognite proti sredini. Ponovite na vseh straneh. Testa ne raztegujte do trganja.'],
+      firstGentle: ['Prvi nežni pregib', 'Rahlo navlažite roke. Previdno dvignite rob testa in ga nežno prepognite proti sredini. Ponovite na vseh straneh brez močnega raztezanja ali trganja.'],
+      firstCustom: ['Prvi pregib', 'Rahlo navlažite roke. Previdno dvignite rob testa in ga prepognite proti sredini. Ponovite na vseh straneh. Če mešanica vsebuje več pira ali polnozrnate moke, delajte zelo nežno. Testa ne raztegujte do trganja.'],
+      rest: ['Začetni počitek', 'Med počitkom se testo sprosti, moka pa še naprej vpija vodo. Posodo hranite pri sobni temperaturi, ki ste jo izbrali v kalkulatorju.'],
+      betweenFolds: ['Počitek med pregibi', 'Ta počitek omogoči, da se testo po prvem pregibu sprosti. Testa ne gnetite in ne pritiskajte nanj.'],
+      final: ['Končna fermentacija', 'Testo pustite pokrito in ga ne obdelujte več. V tem obdobju se fermentacija nadaljuje, testo pa postopoma postaja bolj prožno.'],
+      second: ['Drugi pregib', 'Ponovite postopek prvega pregiba. Cilj je okrepiti strukturo testa brez nepotrebnega pritiskanja ali trganja.'],
+      secondGentle: ['Drugi nežni pregib', 'Ponovite nežni pregib. Če testo močno upira ali se začne trgati, ga ne silite.'],
+      secondCustom: ['Drugi pregib', 'Ponovite postopek prvega pregiba. Če je testo že dovolj povezano in se močno upira ali se začne trgati, dodatni pregib izpustite.'],
+      check: ['Preverjanje testa', 'Testo naj bo nekoliko bolj sproščeno in povezano ter naj kaže znake fermentacije, na primer majhne mehurčke. Ni se mu treba podvojiti. Če je zelo mehko ali lepljivo, z njim v naslednji fazi ravnajte previdno.'],
+      gfFinal: ['Fermentacija mase', 'Maso pustite pokrito in je ne obdelujte več. V tem obdobju se fermentacija nadaljuje, masa pa se postopoma stabilizira.'],
     },
   }[lang];
-  const result: Array<{ title: string; body: string } | undefined> = [{ title: copy.container[0], body: copy.container[1] }];
+  const result: Array<{ title: string; body: string } | undefined> = [{
+    title: (plan.behavior === 'glutenFree' ? copy.gfContainer : copy.container)[0],
+    body: (plan.behavior === 'glutenFree' ? copy.gfContainer : copy.container)[1],
+  }];
+  if (plan.behavior === 'glutenFree') {
+    result.push({ title: copy.gfFinal[0], body: copy.gfFinal[1] });
+    return result;
+  }
   if (plan.foldCount === 0) result.push({ title: copy.final[0], body: copy.final[1] });
   else {
     if (plan.folds[0].offsetMinutes > 0) result.push({ title: copy.rest[0], body: copy.rest[1] });
     plan.folds.forEach((fold, index) => {
-      result.push({ title: index === 0 ? copy.first[0] : copy.second[0], body: index === 0 ? copy.first[1] : copy.second[1] });
+      const first = index === 0;
+      const info = first
+        ? foldBehavior === 'gentle' ? copy.firstGentle : foldBehavior === 'custom' ? copy.firstCustom : copy.first
+        : foldBehavior === 'gentle' ? copy.secondGentle : foldBehavior === 'custom' ? copy.secondCustom : copy.second;
+      result.push({ title: info[0], body: info[1] });
       if (plan.folds[index + 1]) result.push({ title: copy.betweenFolds[0], body: copy.betweenFolds[1] });
     });
     if (plan.finalRestMinutes > 0) result.push({ title: copy.final[0], body: copy.final[1] });
@@ -5520,7 +5561,7 @@ function buildBeginnerTegliaHomeSteps(
     const index = phaseBPlan.durationMinutes === 0 && activeIndex >= 1 ? activeIndex + 1 : activeIndex;
     if (coldTitle.test(phase.title)) return { ...phase, timers: [] };
     if (index === 1) {
-      return { ...phase, title: phaseBTitle, steps: buildBeginnerPhaseBSteps(phaseBPlan, lang, true), timers: [] };
+      return { ...phase, title: phaseBTitle, steps: buildBeginnerPhaseBSteps(phaseBPlan, lang, true, flourType), timers: [] };
     }
     if (index !== lastIndex || phase.steps.length < 4) return phase;
     const [preheat] = phase.steps;
@@ -5748,7 +5789,7 @@ function buildBeginnerDirectHomeSteps(
       };
     }
     if (index === 1) {
-      return { ...phase, title: phaseBTitle, steps: buildBeginnerPhaseBSteps(phaseBPlan, lang, false), timers: [] };
+      return { ...phase, title: phaseBTitle, steps: buildBeginnerPhaseBSteps(phaseBPlan, lang, false, flourType), timers: [] };
     }
     if (index === 2) {
       return {

@@ -106,7 +106,7 @@ assert.equal(foldText(oneHourSteps).length, 1);
 assert.equal(JSON.stringify(oneHourSteps.slice(0, 4)), JSON.stringify([
   'Uljem lagano premažite fermentacijsku posudu i prebacite tijesto u nju.',
   'Pokrijte tijesto i ostavite ga da odmori 20 minutes.',
-  'Napravi Stretch & Fold.',
+  'Napravite prvi Stretch & Fold.',
   'Pokrijte tijesto i ostavite ga da fermentira još 40 minutes.',
 ]));
 const twoHourSteps = renderPhaseB(twoHours, 'hr', false);
@@ -115,8 +115,12 @@ assert.equal(twoHourSteps[1], 'Pokrijte tijesto i ostavite ga da odmori 20 minut
 assert.equal(twoHourSteps[3], 'Pokrijte tijesto i ostavite ga da odmori 30 minutes.');
 assert.equal(twoHourSteps[5], 'Pokrijte tijesto i ostavite ga da fermentira još 70 minutes.');
 const twoHourInfo = renderPhaseBInfo(twoHours, 'hr', false);
-assert.equal(twoHourInfo[1].title, 'Zašto je odmor važan?');
-assert.equal(twoHourInfo[3].title, 'Zašto je odmor između preklapanja važan?');
+assert.equal(twoHourInfo[1].title, 'Početni odmor');
+assert.equal(twoHourInfo[3].title, 'Odmor između preklapanja');
+assert.equal(twoHourInfo[2].title, 'Prvo preklapanje');
+assert.equal(twoHourInfo[4].title, 'Drugo preklapanje');
+assert.equal(twoHourInfo[5].title, 'Završna fermentacija');
+assert.equal(twoHourInfo[6].title, 'Provjera tijesta');
 for (const [lang, expected] of [
   ['hr', 'Lagano nauljite fermentacijsku posudu, prebacite smjesu u nju i pokrijte je.'],
   ['en', 'Lightly oil the fermentation container, transfer the mixture into it, and cover it.'],
@@ -129,6 +133,10 @@ for (const [lang, expected] of [
     assert.equal(foldText(glutenFreeSteps).length, 0);
   }
 }
+assert.equal(renderPhaseB(plan(120, 'gentle'), 'hr', false, 'spelt')[2], 'Napravite prvi nježni Stretch & Fold.');
+assert.equal(renderPhaseB(plan(120, 'gentle'), 'hr', false, 'spelt')[4], 'Napravite drugi nježni Stretch & Fold.');
+assert.equal(renderPhaseB(plan(120, 'standard'), 'hr', false, 'custom')[2], 'Napravite prvi Stretch & Fold.');
+assert.equal(renderPhaseBInfo(plan(120, 'standard'), 'hr', false, 'custom')[2].body.includes('Ako mješavina sadrži više pira'), true);
 
 assert.match(uiSource, /calculateBeginnerPhaseBPlan\(\{/);
 assert.match(uiSource, /durationMinutes: directHomeSchedule\.roomBeforeFridgeHours \* 60/);
@@ -139,7 +147,7 @@ assert.match(uiSource, /title: phaseBTitle/);
 assert.match(uiSource, /if \(components\.includes\('spelt'\)\) return 'spelt'/);
 assert.match(uiSource, /if \(components\.includes\('wholeWheat'\)\) return 'wholeWheat'/);
 assert.match(uiSource, /flourBehavior: flour === 'glutenFree'/);
-assert.match(uiSource, /Führen Sie ein Stretch & Fold durch\./);
+assert.match(uiSource, /Führen Sie das erste Stretch & Fold durch\./);
 assert.match(uiSource, /Führen Sie das zweite Stretch & Fold durch\./);
 assert.match(uiSource, /betweenFolds:/);
 assert.doesNotMatch(uiSource, /Miješajte i fermentirajte tijesto \$\{hours\}/);
