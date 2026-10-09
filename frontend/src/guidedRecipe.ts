@@ -1,4 +1,4 @@
-export type GuidedActionId = 'mix' | 'fold1' | 'fold2' | 'fridgeIn' | 'fridgeInCombined' | 'balling' | 'portioning' | 'doughRest' | 'trayPrepare' | 'fridgeOut' | 'preheat' | 'shape' | 'bake';
+export type GuidedActionId = 'mix' | 'fold1' | 'fold2' | 'fridgeIn' | 'fridgeInCombined' | 'balling' | 'portioning' | 'doughRest' | 'trayPrepare' | 'fridgeOut' | 'roomFermentationEnd' | 'preheat' | 'shape' | 'bake';
 
 export type GuidedScheduleEvent = {
   id: GuidedActionId;

@@ -15,6 +15,11 @@ const requestedFunctions = new Set([
   'buildBeginnerDirectHomeSteps',
   'buildBeginnerTegliaHomeSteps',
   'buildBeginnerTegliaPhaseC',
+  'getBeginnerRoomOnlyEnd',
+  'formatBeginnerRoomRemaining',
+  'getBeginnerRoomEndLabel',
+  'buildBeginnerRoomOnlyPhaseCEnd',
+  'buildBeginnerRoomOnlyFinalStart',
   'getBeginnerPhaseBTimers',
   'getBeginnerPhaseCTimers',
   'addSequentialBeginnerPhaseLetters',
@@ -407,6 +412,53 @@ for (const lang of languages) {
     assert.match(phase.title, new RegExp(`^${prefix} ${String.fromCharCode(65 + index)}: `));
     assert.ok(phase.steps.every((step) => !/\b0 (?:hours?|minutes?|Stunden|Minuten|ur|minuta)\b/i.test(step)));
   });
+}
+
+// Room-only Phase C -> final phase transition
+{
+  const bakeAt = new Date('2027-04-12T18:00:00');
+  const clock = (at) => at.toISOString().slice(11, 16);
+  const labels = { hr: 'Završetak sobne fermentacije', en: 'End of room-temperature fermentation', de: 'Ende der Raumtemperatur-Fermentation', sl: 'Konec fermentacije pri sobni temperaturi' };
+  const cases = [
+    { oven: 'ooni', preheatAt: new Date('2027-04-12T17:40:00'), duration: '2 h 40 min', endAt: new Date('2027-04-12T17:40:00') },
+    { oven: 'homeStone', preheatAt: new Date('2027-04-12T17:00:00'), duration: '2 h', endAt: new Date('2027-04-12T17:00:00') },
+  ];
+  for (const lang of languages) {
+    for (const { oven, preheatAt, duration, endAt } of cases) {
+      const roomOnly = { fridgeHours: 0, roomBeforeFridgeHours: 2, roomAfterFridgeHours: 3, bakeAt, preheatAt };
+      for (const flour of [...flours, 'glutenFree']) {
+        for (const style of styles) {
+          const result = buildBeginnerDirectHomeSteps(roundPhases(flour, style), roomOnly, phaseBPlanFor(flour, 2), 22, 4, 300, oven, '4–5 min', lang, 'fresh', style, 30, 70, 100, flour, '1250 g', '250 g', 5);
+          const phaseC = result[2];
+          assert.equal(phaseC.steps.length, 6);
+          assert.equal(phaseC.stepInfo.length, 6);
+          assert.ok(phaseC.steps[5].includes(duration), phaseC.steps[5]);
+          assert.ok(phaseC.steps[5].endsWith(`\n${labels[lang]} — ${clock(endAt)}`), phaseC.steps[5]);
+          assert.equal((phaseC.steps[5].match(/—/g) || []).length, 1);
+          assert.ok(!/6 h|6 hours/.test(phaseC.steps[5]));
+          assert.ok(phaseC.stepInfo[5].body.length > 0);
+          const finalPhase = result.at(-1);
+          assert.ok(finalPhase.stepInfo[0].body.length > 0);
+          assert.ok(!/temper(?:ing|iert|iranje)|temperira/i.test(finalPhase.steps[0]), finalPhase.steps[0]);
+          assert.equal(finalPhase.steps.length, 8);
+        }
+        const teglia = buildBeginnerTegliaHomeSteps(roundPhases(flour, 'romana'), roomOnly, phaseBPlanFor(flour, 2, 'teglia'), 22, lang, 300, '4–5 min', { width: 30, length: 40 }, flour);
+        const tegliaC = teglia.find((phase) => /(?:Phase|Faza) C\b/.test(phase.title));
+        assert.ok(tegliaC.steps[5].includes(duration), tegliaC.steps[5]);
+        assert.ok(tegliaC.steps[5].endsWith(`${labels[lang]} — ${clock(endAt)}`));
+        assert.ok(!/ball|kugel|kugl|kuglic/i.test(`${tegliaC.steps[5]} ${tegliaC.stepInfo[5].body}`));
+        assert.ok(teglia.at(-1).stepInfo[1].body.length > 0);
+        assert.ok(!/ball|kugel|kugl|kuglic/i.test(teglia.at(-1).steps[1]));
+      }
+    }
+    // Zero-length interval: no alarm line, existing step text retained.
+    const noGap = buildBeginnerDirectHomeSteps(roundPhases('caputo00', 'neapolitan'), schedule(0, 2, 1), phaseBPlanFor('caputo00', 2), 22, 4, 300, 'homeStone', '4–5 min', lang, 'fresh', 'neapolitan', 30, 70, 100, 'caputo00', '1250 g', '250 g', 5);
+    assert.ok(!noGap[2].steps[5].includes(labels[lang]));
+    // Fridge mode keeps its own Phase C step and final-phase tempering wording.
+    const fridge = buildBeginnerDirectHomeSteps(roundPhases('caputo00', 'neapolitan'), schedule(8, 2, 3), phaseBPlanFor('caputo00', 2), 22, 4, 300, 'homeStone', '4–5 min', lang, 'fresh', 'neapolitan', 30, 70, 100, 'caputo00', '1250 g', '250 g', 5);
+    assert.ok(!fridge[2].steps[5].includes(labels[lang]));
+    assert.equal(fridge.at(-1).stepInfo, undefined);
+  }
 }
 
 console.log('Beginner phase sequence and timer verification passed for HR/EN/DE/SL, styles, flour paths, and room/cold schedule variants.');

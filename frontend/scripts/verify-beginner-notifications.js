@@ -7,7 +7,7 @@ const path = require('node:path');
 const appSource = fs.readFileSync(path.join(__dirname, '..', 'app', '(tabs)', 'index.tsx'), 'utf8');
 const translations = fs.readFileSync(path.join(__dirname, '..', 'src', 'i18n', 'translations.ts'), 'utf8');
 
-const eventIds = ['mix', 'fold1', 'fold1Gentle', 'fold2', 'fold2Gentle', 'fridgeIn', 'fridgeInCombined', 'balling', 'portioning', 'trayPrepare', 'fridgeOut', 'preheat', 'shape', 'bake'];
+const eventIds = ['mix', 'fold1', 'fold1Gentle', 'fold2', 'fold2Gentle', 'fridgeIn', 'fridgeInCombined', 'balling', 'portioning', 'trayPrepare', 'fridgeOut', 'roomFermentationEnd', 'preheat', 'shape', 'bake'];
 for (const id of eventIds) {
   assert.ok(
     (translations.match(new RegExp(`\\b${id}:\\s*\\{`, 'g')) || []).length >= 4,
@@ -24,6 +24,9 @@ assert.match(appSource, /if \(fridgeHours > 0\) \{\s*steps\.push\(\{/);
 assert.match(appSource, /id: isRomanTeglia \? 'trayPrepare' : isGlutenFree \? 'portioning' : 'balling'/);
 assert.match(appSource, /if \(roomAfterFridgeHours > 0\) \{\s*steps\.push\(\{\s*id: 'fridgeOut'/);
 assert.match(appSource, /id: 'preheat'/);
+assert.equal((appSource.match(/id: 'roomFermentationEnd'/g) || []).length, 1);
+assert.match(appSource, /getBeginnerRoomOnlyEnd\(directHomeSchedule, preheatAt\)/);
+assert.equal((translations.match(/timelineRoomFermentationEnd:/g) || []).length, 4);
 assert.match(appSource, /id: 'shape'/);
 assert.match(appSource, /id: 'bake'/);
 

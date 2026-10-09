@@ -1068,6 +1068,15 @@ export default function CalculatorHome() {
     }
     const preheatAt = directHomeSchedule.preheatAt ?? new Date(bakeAt.getTime() - getBeginnerPreheatMinutes(oven) * 60000);
     const preheatMinutes = Math.round((bakeAt.getTime() - preheatAt.getTime()) / 60000);
+    const roomOnlyEnd = getBeginnerRoomOnlyEnd(directHomeSchedule, preheatAt);
+    if (roomOnlyEnd) {
+      steps.push({
+        id: 'roomFermentationEnd',
+        label: t.beginnerCalc.timelineRoomFermentationEnd,
+        at: roomOnlyEnd.endAt,
+        actionable: true,
+      });
+    }
     steps.push({
       id: 'preheat',
       label: `${t.beginnerCalc.preheat} · ${formatDuration(preheatMinutes * 60, lang)} · ${formatTemperature(ovenTemp, temperatureUnit)}`,
@@ -5604,6 +5613,97 @@ function buildBeginnerPhaseBStepInfo(
   return result;
 }
 
+type BeginnerRoomOnlyEnd = { endAt: Date; minutes: number };
+
+// Room-only: Phase C ends at fridgeAt (or bakeAt - roomAfterFridgeHours); the final phase starts with its first scheduled event.
+function getBeginnerRoomOnlyEnd(schedule: HomePizzaPlanSchedule, preheatAt: Date): BeginnerRoomOnlyEnd | null {
+  if (schedule.fridgeHours > 0) return null;
+  const phaseCEnd = schedule.fridgeAt ?? new Date(schedule.bakeAt.getTime() - schedule.roomAfterFridgeHours * 3600000);
+  const shapeStart = new Date(schedule.bakeAt.getTime() - 15 * 60000);
+  const endAt = preheatAt.getTime() < shapeStart.getTime() ? preheatAt : shapeStart;
+  const minutes = Math.round((endAt.getTime() - phaseCEnd.getTime()) / 60000);
+  return Number.isFinite(minutes) && minutes >= 1 ? { endAt, minutes } : null;
+}
+
+function formatBeginnerRoomRemaining(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) return `${rest} min`;
+  return rest === 0 ? `${hours} h` : `${hours} h ${rest} min`;
+}
+
+function getBeginnerRoomEndLabel(lang: Lang): string {
+  return {
+    hr: 'Završetak sobne fermentacije',
+    en: 'End of room-temperature fermentation',
+    de: 'Ende der Raumtemperatur-Fermentation',
+    sl: 'Konec fermentacije pri sobni temperaturi',
+  }[lang];
+}
+
+function buildBeginnerRoomOnlyPhaseCEnd(lang: Lang, teglia: boolean, roomEnd: BeginnerRoomOnlyEnd | null) {
+  const body = {
+    round: {
+      hr: 'Kuglice držite pokrivene kako se površina ne bi osušila. Trajanje fermentacije izračunato je prema odabranim postavkama. Kada fermentacija završi, nastavite prema završnoj fazi.',
+      en: 'Keep the dough balls covered so the surface does not dry out. The fermentation time is calculated from your selected settings. When fermentation is complete, continue with the final phase.',
+      de: 'Halten Sie die Teigkugeln abgedeckt, damit die Oberfläche nicht austrocknet. Die Fermentationsdauer wurde anhand Ihrer gewählten Einstellungen berechnet. Wenn die Fermentation abgeschlossen ist, fahren Sie mit der Endphase fort.',
+      sl: 'Kroglice naj ostanejo pokrite, da se površina ne izsuši. Trajanje fermentacije je izračunano glede na izbrane nastavitve. Ko je fermentacija končana, nadaljujte z zaključno fazo.',
+    },
+    teglia: {
+      hr: 'Tijesto držite u zatvorenoj fermentacijskoj posudi kako se površina ne bi osušila. Tijesto ostaje u jednoj masi. Kada fermentacija završi, nastavite prema završnoj fazi.',
+      en: 'Keep the dough in the closed fermentation container so the surface does not dry out. The dough stays as one mass. When fermentation is complete, continue with the final phase.',
+      de: 'Halten Sie den Teig im geschlossenen Gärbehälter, damit die Oberfläche nicht austrocknet. Der Teig bleibt eine einzelne Masse. Wenn die Fermentation abgeschlossen ist, fahren Sie mit der Endphase fort.',
+      sl: 'Testo naj ostane v zaprti fermentacijski posodi, da se površina ne izsuši. Testo ostane v eni masi. Ko je fermentacija končana, nadaljujte z zaključno fazo.',
+    },
+  }[teglia ? 'teglia' : 'round'][lang];
+  if (!roomEnd) return { step: null, help: body };
+  const duration = formatBeginnerRoomRemaining(roomEnd.minutes);
+  const step = teglia
+    ? {
+      hr: `Ostavite zatvorenu fermentacijsku posudu s tijestom na sobnoj temperaturi još ${duration}, prema izračunatom rasporedu.`,
+      en: `Keep the closed fermentation container with the dough at room temperature for another ${duration}, according to the calculated schedule.`,
+      de: `Lassen Sie den geschlossenen Gärbehälter mit dem Teig noch ${duration} bei Raumtemperatur stehen, nach dem berechneten Zeitplan.`,
+      sl: `Zaprto fermentacijsko posodo s testom pustite še ${duration} pri sobni temperaturi, po izračunanem načrtu.`,
+    }[lang]
+    : {
+      hr: `Ostavite zatvorenu kutiju s kuglicama na sobnoj temperaturi još ${duration}, prema izračunatom rasporedu.`,
+      en: `Keep the closed box with the dough balls at room temperature for another ${duration}, according to the calculated schedule.`,
+      de: `Lassen Sie die geschlossene Box mit den Teigkugeln noch ${duration} bei Raumtemperatur stehen, nach dem berechneten Zeitplan.`,
+      sl: `Zaprto posodo s kroglicami pustite še ${duration} pri sobni temperaturi, po izračunanem načrtu.`,
+    }[lang];
+  return { step: `${step}\n${getBeginnerRoomEndLabel(lang)} — ${formatBeginnerClockTime(roomEnd.endAt, lang)}`, help: body };
+}
+
+function buildBeginnerRoomOnlyFinalStart(lang: Lang, teglia: boolean) {
+  const step = teglia
+    ? {
+      hr: 'Nastavite držati tijesto pokriveno na sobnoj temperaturi do početka pripreme za razvlačenje u tepsiji.',
+      en: 'Keep the dough covered at room temperature until it is time to prepare it for the tray.',
+      de: 'Halten Sie den Teig bei Raumtemperatur abgedeckt, bis die Vorbereitung für das Blech beginnt.',
+      sl: 'Testo naj ostane pokrito pri sobni temperaturi do začetka priprave za pekač.',
+    }[lang]
+    : {
+      hr: 'Nastavite držati kuglice pokrivene na sobnoj temperaturi do početka oblikovanja pizze.',
+      en: 'Keep the dough balls covered at room temperature until it is time to shape the pizza.',
+      de: 'Halten Sie die Teigkugeln bei Raumtemperatur abgedeckt, bis es Zeit ist, die Pizza zu formen.',
+      sl: 'Kroglice naj ostanejo pokrite pri sobni temperaturi do začetka oblikovanja pice.',
+    }[lang];
+  const info = teglia
+    ? {
+      hr: ['Bez ponovnog temperiranja', 'Tijesto je već na sobnoj temperaturi i ostaje u jednoj masi do predviđene pripreme za tepsiju. Nije potrebno ponovno temperiranje.'],
+      en: ['No re-tempering needed', 'The dough is already at room temperature and stays as one mass until the scheduled tray preparation. No re-tempering is needed.'],
+      de: ['Kein erneutes Temperieren', 'Der Teig hat bereits Raumtemperatur und bleibt bis zur geplanten Blechvorbereitung eine einzelne Masse. Ein erneutes Temperieren ist nicht nötig.'],
+      sl: ['Ponovno temperiranje ni potrebno', 'Testo je že pri sobni temperaturi in ostane v eni masi do načrtovane priprave za pekač. Ponovno temperiranje ni potrebno.'],
+    }[lang]
+    : {
+      hr: ['Bez ponovnog temperiranja', 'Kuglice su već na sobnoj temperaturi. Nije potrebno ponovno temperiranje. Nemojte ih dodatno mijesiti ili oblikovati dok ne dođe vrijeme za pripremu pizze.'],
+      en: ['No re-tempering needed', 'The dough balls are already at room temperature. No re-tempering is needed. Do not knead or shape them further until it is time to prepare the pizza.'],
+      de: ['Kein erneutes Temperieren', 'Die Teigkugeln haben bereits Raumtemperatur. Ein erneutes Temperieren ist nicht nötig. Kneten oder formen Sie sie nicht weiter, bis es Zeit ist, die Pizza vorzubereiten.'],
+      sl: ['Ponovno temperiranje ni potrebno', 'Kroglice so že pri sobni temperaturi. Ponovno temperiranje ni potrebno. Ne gnetite jih in ne oblikujte dodatno, dokler ni čas za pripravo pice.'],
+    }[lang];
+  return { step, info: { title: info[0], body: info[1] } };
+}
+
 function buildBeginnerTegliaHomeSteps(
   phases: DetailedPhase[],
   schedule: HomePizzaPlanSchedule,
@@ -5685,7 +5785,11 @@ function buildBeginnerTegliaHomeSteps(
     },
   }[lang];
   const coldTitle = /cold fermentation|kalte fermentation|hladna fermentacija/i;
-  const tegliaPhaseC = buildBeginnerTegliaPhaseC(lang, refrigerated, flourType);
+  const teglaRoomEnd = getBeginnerRoomOnlyEnd(
+    schedule,
+    schedule.preheatAt ?? new Date(schedule.bakeAt.getTime() - getBeginnerPreheatMinutes(schedule.ovenType ?? 'homePan') * 60000),
+  );
+  const tegliaPhaseC = buildBeginnerTegliaPhaseC(lang, refrigerated, flourType, teglaRoomEnd);
   const activeBase = refrigerated ? phases : phases.filter((phase) => !coldTitle.test(phase.title));
   const hasPhaseC = activeBase.some((phase) => /(?:Phase|Faza) C\b/i.test(phase.title));
   const active = refrigerated || hasPhaseC || activeBase.length < 1
@@ -5716,14 +5820,16 @@ function buildBeginnerTegliaHomeSteps(
     }
     if (index !== lastIndex || phase.steps.length < 4) return phase;
     const [preheat] = phase.steps;
+    const roomFinalStart = refrigerated ? null : buildBeginnerRoomOnlyFinalStart(lang, true);
     return {
       ...phase,
       temperingInfo: refrigerated ? phase.temperingInfo : undefined,
+      ...(roomFinalStart ? { stepInfo: [undefined, roomFinalStart.info] } : {}),
       steps: [
         preheat,
         refrigerated
           ? schedule.roomAfterFridgeHours > 0 ? copy.out : copy.outNow
-          : schedule.roomAfterFridgeHours > 0 ? copy.room : copy.roomNow,
+          : roomFinalStart!.step,
         pressSteps.oil,
         pressSteps.press,
         pressSteps.relax,
@@ -5741,6 +5847,7 @@ function buildBeginnerTegliaPhaseC(
   lang: Lang,
   refrigerated: boolean,
   flourType: FlourType,
+  roomEnd: BeginnerRoomOnlyEnd | null = null,
 ) {
   const copy = {
     hr: {
@@ -5820,6 +5927,11 @@ function buildBeginnerTegliaPhaseC(
       ],
     },
   }[lang];
+  if (!refrigerated) {
+    const roomPhaseCEnd = buildBeginnerRoomOnlyPhaseCEnd(lang, true, roomEnd);
+    if (roomPhaseCEnd.step) copy.steps[5] = roomPhaseCEnd.step;
+    copy.info[5][1] = roomPhaseCEnd.help;
+  }
   return { title: copy.title, steps: copy.steps, stepInfo: copy.info.map(([title, body]) => ({ title, body })) };
 }
 
@@ -5830,6 +5942,7 @@ function buildNeapolitanDirectPhaseC(
   pizzas: number,
   refrigerated: boolean,
   flourType: FlourType,
+  roomEnd: BeginnerRoomOnlyEnd | null = null,
 ) {
   const croatianPieceForm = pizzas >= 5 ? 'jednakih komada' : 'jednaka komada';
   const copy = {
@@ -6010,6 +6123,11 @@ function buildNeapolitanDirectPhaseC(
   }
   copy.steps[3] = flourStep4[lang];
   copy.info[3][1] = flourStep4Help;
+  if (!refrigerated) {
+    const roomPhaseCEnd = buildBeginnerRoomOnlyPhaseCEnd(lang, false, roomEnd);
+    if (roomPhaseCEnd.step) copy.steps[5] = roomPhaseCEnd.step;
+    copy.info[5][1] = roomPhaseCEnd.help;
+  }
   return {
     title: copy.title,
     steps: copy.steps,
@@ -6204,7 +6322,7 @@ function buildBeginnerDirectHomeSteps(
     },
   }[lang]);
 
-  const neapolitanPhaseC = buildNeapolitanDirectPhaseC(lang, totalDoughLabel, ballWeightLabel, pizzas, schedule.fridgeHours > 0, flourType);
+  const neapolitanPhaseC = buildNeapolitanDirectPhaseC(lang, totalDoughLabel, ballWeightLabel, pizzas, schedule.fridgeHours > 0, flourType, getBeginnerRoomOnlyEnd(schedule, preheatAt));
   const tipo00ColdFermentationStep = {
     hr: `Nastavite hladnu fermentaciju zatvorene kutije u hladnjaku ${formatDuration(schedule.fridgeHours * 3600, lang)} prema izračunanom rasporedu.`,
     en: `Continue cold fermentation of the closed box in the refrigerator for ${formatDuration(schedule.fridgeHours * 3600, lang)} according to the calculated schedule.`,
@@ -6249,16 +6367,16 @@ function buildBeginnerDirectHomeSteps(
     const finalPhaseIndex = schedule.fridgeHours > 0 ? 4 : 3;
     if (index === finalPhaseIndex) {
       const finalRestHours = schedule.roomAfterFridgeHours;
+      const roomFinalStart = schedule.fridgeHours > 0 ? null : buildBeginnerRoomOnlyFinalStart(lang, false);
       return {
         ...phase,
+        ...(roomFinalStart ? { stepInfo: [roomFinalStart.info] } : {}),
         steps: [
           schedule.fridgeHours > 0
             ? finalRestHours > 0
               ? labels.takeOut(duration(finalRestHours))
               : labels.takeOutNow
-            : finalRestHours > 0
-            ? labels.roomOnlyRestStart(duration(finalRestHours))
-              : labels.roomOnlyNow,
+            : roomFinalStart!.step,
           labels.preheat(preheatMinutes, formatBeginnerClockTime(preheatAt, lang)),
           isGlutenFree ? ({ hr: 'Radnu površinu obilno pospite bezglutenskim ili rižinim brašnom.', en: 'Generously dust the work surface with gluten-free or rice flour.', de: 'Bestäuben Sie die Arbeitsfläche großzügig mit glutenfreiem oder Reismehl.', sl: 'Delovno površino obilno posujte z brezglutensko ali riževo moko.' }[lang]) : shapingSteps.surface,
           shapingSteps.ball,
