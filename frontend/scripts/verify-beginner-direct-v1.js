@@ -43,7 +43,7 @@ for (const hours of [1, 2, 3, 4, 6, 9, 12, 24, 48]) {
       if (fridgeRoom.status !== 'unsupported') {
         assert.ok(fridgeRoom.fridgeHours >= 3);
         assert.equal(fridgeRoom.phaseCMinutes, 5);
-        assert.ok(fridgeRoom.thermalUncertainty);
+        assert.equal(fridgeRoom.thermalUncertainty, undefined);
       }
 
       for (const mode of ['roomOnly', 'fridgeRoom']) {
@@ -162,7 +162,7 @@ assert.ok(roomOnlyFallbackPlan);
 assert.equal(roomOnlyFallbackPlan.selectedEvaluation.candidate.mode, 'roomOnly');
 assert.equal(roomOnlyFallbackPlan.schedule.fridgeHours, 0);
 
-const fridgeOnlyPlan = calculator.createDirectHomePizzaPlan({
+const roomOnlyPlan = calculator.createDirectHomePizzaPlan({
   style: 'ny_style',
   pizzas: 1,
   ballWeight: 250,
@@ -176,9 +176,9 @@ const fridgeOnlyPlan = calculator.createDirectHomePizzaPlan({
   mixing: 'home',
   beginnerScheduleMode: 'roomOnly',
 }, { source: 'w', w: 280 }, 62, 'dry', now, true);
-assert.ok(fridgeOnlyPlan);
-assert.equal(fridgeOnlyPlan.selectedEvaluation.candidate.mode, 'fridgeRoom');
-assert.ok(fridgeOnlyPlan.schedule.fridgeHours >= 3);
+assert.ok(roomOnlyPlan);
+assert.equal(roomOnlyPlan.selectedEvaluation.candidate.mode, 'roomOnly');
+assert.equal(roomOnlyPlan.schedule.fridgeHours, 0);
 
 const noFeasiblePlan = calculator.createDirectHomePizzaPlan({
   style: 'neapolitan',

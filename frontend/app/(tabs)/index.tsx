@@ -132,6 +132,29 @@ function localizeBeginnerScheduleNotice(notice: string, lang: Lang): string | nu
   return null;
 }
 
+function buildBeginnerOvenInfo(lang: Lang, oven: OvenType, ovenTemp: number, teglia: boolean): string {
+  const minutes = getBeginnerPreheatMinutes(oven);
+  const workflow = teglia
+    ? {
+      hr: 'Za Romanu Tegliu tijesto ostaje jedna masa i priprema se u tepsiji.',
+      en: 'For Romana Teglia, keep the dough as one mass and prepare it in the tray.',
+      de: 'Bei Romana Teglia bleibt der Teig eine Masse und wird im Blech vorbereitet.',
+      sl: 'Pri Romani Teglia testo ostane ena masa in ga pripravite v pekaču.',
+    }[lang]
+    : {
+      hr: 'Za okruglu pizzu tijesto oblikujte na radnoj površini prema receptu.',
+      en: 'For a round pizza, shape the dough on the work surface as described in the recipe.',
+      de: 'Für eine runde Pizza formen Sie den Teig wie im Rezept auf der Arbeitsfläche.',
+      sl: 'Za okroglo pico testo oblikujte na delovni površini po receptu.',
+    }[lang];
+  return {
+    hr: `Potrebno: odabrana pećnica, ciljna temperatura ${ovenTemp} °C i planirano predgrijavanje od ${minutes} minuta.\n\nPostupak: uključite pećnicu u vrijeme prikazano u receptu i postavite ciljnu temperaturu. Pripremite kamen, čelik ili tepsiju prema odabranoj pećnici. ${workflow}\n\nIspravno: pećnica je na ciljnoj temperaturi, a kamen, čelik ili tepsija su zagrijani prije pečenja.\n\nČeste pogreške: uključivanje pećnice prekasno, promjena programa nakon početka zagrijavanja ili stavljanje tijesta na hladnu podlogu. Ako se to dogodi, slijedite prikazano vrijeme predgrijavanja i provjerite da je odabrana podloga spremna prije oblikovanja ili pečenja.`,
+    en: `Needed: the selected oven, the target temperature of ${ovenTemp} °C, and the planned ${minutes}-minute preheat.\n\nSteps: turn the oven on at the time shown in the recipe and set the target temperature. Prepare the stone, steel, or tray for the selected oven. ${workflow}\n\nCorrect result: the oven has reached the target temperature and the stone, steel, or tray is heated before baking.\n\nCommon mistakes: turning the oven on late, changing the program after preheating starts, or placing dough on a cold surface. If this happens, follow the displayed preheat time and confirm that the selected surface is ready before shaping or baking.`,
+    de: `Benötigt werden: der ausgewählte Ofen, die Zieltemperatur von ${ovenTemp} °C und die geplante Vorheizzeit von ${minutes} Minuten.\n\nVorgehen: Schalten Sie den Ofen zur im Rezept angezeigten Zeit ein und stellen Sie die Zieltemperatur ein. Bereiten Sie Stein, Stahl oder Blech für den ausgewählten Ofen vor. ${workflow}\n\nRichtig ist es, wenn der Ofen die Zieltemperatur erreicht hat und Stein, Stahl oder Blech vor dem Backen aufgeheizt sind.\n\nHäufige Fehler sind zu spätes Einschalten, ein Programmwechsel nach Beginn des Vorheizens oder Teig auf einer kalten Oberfläche. Folgen Sie in diesem Fall der angezeigten Vorheizzeit und prüfen Sie die Oberfläche vor dem Formen oder Backen.`,
+    sl: `Potrebujete izbrano pečico, ciljno temperaturo ${ovenTemp} °C in načrtovano ${minutes}-minutno segrevanje.\n\nPostopek: pečico vklopite ob času, prikazanem v receptu, in nastavite ciljno temperaturo. Pripravite kamen, jeklo ali pekač za izbrano pečico. ${workflow}\n\nPravilno je, ko pečica doseže ciljno temperaturo, kamen, jeklo ali pekač pa so pred peko segreti.\n\nPogoste napake so prepozno vklapljanje, menjava programa po začetku segrevanja ali polaganje testa na hladno površino. Če se to zgodi, upoštevajte prikazan čas segrevanja in preverite, ali je podlaga pripravljena, preden testo oblikujete ali pečete.`,
+  }[lang];
+}
+
 function labelSelectedYeast(text: string, lang: Lang, yeastType: 'fresh' | 'dry'): string {
   const labels = {
     hr: yeastType === 'dry' ? 'suhog kvasca' : 'svježeg kvasca',
@@ -2236,17 +2259,6 @@ export default function CalculatorHome() {
         <Icon name="calendar-outline" size={17} color={COLORS.brand} />
         <Text style={styles.expandText}>{t.beginnerCalc.setBakeTime}</Text>
       </Pressable>
-      {beginnerDirectHome && directHomeSchedule?.thermalUncertainty ? (
-        <Text style={styles.hint}>
-          {lang === 'hr'
-            ? 'Napomena: Tijesto se postupno hladi i zagrijava; raspored ne modelira temperaturu sredine tijesta.'
-            : lang === 'de'
-              ? 'Hinweis: Der Teig kühlt und erwärmt sich allmählich; der Zeitplan modelliert nicht die Kerntemperatur.'
-              : lang === 'sl'
-                ? 'Opomba: Testo se postopoma hladi in segreva; načrt ne modelira temperature v sredici testa.'
-                : 'Note: Dough cools and warms gradually; the schedule does not model core temperature.'}
-        </Text>
-      ) : null}
       {beginnerDirectHome ? (directHomeSchedule?.limitations ?? [])
         .map((limitation) => localizeBeginnerScheduleNotice(limitation, lang))
         .filter((limitation): limitation is string => !!limitation)
@@ -3106,7 +3118,19 @@ export default function CalculatorHome() {
         </View>
 
         <View ref={(node) => { beginnerSectionRefs.current.oven = node; }} style={styles.card} onLayout={(event) => recordBeginnerSection('oven', event.nativeEvent.layout.y)}>
-          <Text style={styles.cardTitle}>{isBeginner ? t.beginnerCalc.stepOven : `6 · ${t.calc.baking}`}</Text>
+          <View style={styles.labelWithInfo}>
+            <Text style={styles.cardTitle}>{isBeginner ? t.beginnerCalc.stepOven : `6 · ${t.calc.baking}`}</Text>
+            {isBeginner ? (
+              <Pressable
+                testID="beginner-oven-info"
+                onPress={() => Alert.alert(t.beginnerCalc.stepOven, buildBeginnerOvenInfo(lang, oven, ovenTemp, isRomanTeglia))}
+                hitSlop={8}
+                style={styles.infoBtn}
+              >
+                <Icon name="information-circle-outline" size={18} color={COLORS.brand} />
+              </Pressable>
+            ) : null}
+          </View>
           <View style={styles.ovenRow}>
             {isRomanTeglia ? (
               <OvenCard active={oven === 'homePan'} onPress={() => step(() => selectOven('homePan', 250))} imageSrc={require('../../assets/images/oven-home-pan.png')} title={t.calc.homePan} testID="oven-homePan" />

@@ -224,7 +224,6 @@ export interface HomePizzaPlanSchedule {
   phaseAMinutes?: number;
   phaseBMinutes?: number;
   phaseCMinutes?: number;
-  thermalUncertainty?: string;
   limitations?: string[];
 }
 
@@ -391,7 +390,6 @@ export interface BeginnerDirectScheduleCandidate extends DirectHomeFermentationC
   phaseCMinutes: number;
   doughReadyAt?: Date;
   fridgeAt?: Date;
-  thermalUncertainty?: string;
   limitations: string[];
   startAt: Date;
   ballingAt: Date;
@@ -437,9 +435,6 @@ function createBeginnerDirectScheduleCandidate(
   }
 
   const roomBeforeFridgeHours = (BEGINNER_DIRECT_PHASE_A_MINUTES + phaseBMinutes + BEGINNER_DIRECT_PHASE_C_MINUTES) / 60;
-  const thermalUncertainty = mode === 'fridgeRoom'
-    ? 'Thermal uncertainty: dough cools and warms gradually; this schedule does not model core temperature.'
-    : undefined;
   const totalHours = roomBeforeFridgeHours + fridgeHours + roomAfterFridgeHours;
   const startAt = new Date(bakeAt.getTime() - totalHours * 3600000);
   const ballingAt = new Date(startAt.getTime() + (BEGINNER_DIRECT_PHASE_A_MINUTES + phaseBMinutes) * 60000);
@@ -466,7 +461,6 @@ function createBeginnerDirectScheduleCandidate(
     ballingAt,
     fridgeAt,
     doughReadyAt,
-    thermalUncertainty,
   } as BeginnerDirectScheduleCandidate;
 }
 
@@ -1237,7 +1231,6 @@ export function createDirectHomePizzaPlan(
       phaseAMinutes: selectedCandidate.phaseAMinutes,
       phaseBMinutes: selectedCandidate.phaseBMinutes,
       phaseCMinutes: selectedCandidate.phaseCMinutes,
-      thermalUncertainty: selectedCandidate.thermalUncertainty,
       limitations: selectedCandidate.limitations,
     };
     if (!isBeginnerDirectWindowWithinLimits(getHomeScheduleDurationHours(schedule))) return null;
