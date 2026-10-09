@@ -117,7 +117,18 @@ assert.equal(twoHourSteps[5], 'Pokrijte tijesto i ostavite ga da fermentira još
 const twoHourInfo = renderPhaseBInfo(twoHours, 'hr', false);
 assert.equal(twoHourInfo[1].title, 'Zašto je odmor važan?');
 assert.equal(twoHourInfo[3].title, 'Zašto je odmor između preklapanja važan?');
-assert.equal(foldText(renderPhaseB(plan(120, 'glutenFree'), 'hr', false)).length, 0);
+for (const [lang, expected] of [
+  ['hr', 'Lagano nauljite fermentacijsku posudu, prebacite smjesu u nju i pokrijte je.'],
+  ['en', 'Lightly oil the fermentation container, transfer the mixture into it, and cover it.'],
+  ['de', 'Ölen Sie den Gärbehälter leicht ein, geben Sie die Masse hinein und decken Sie sie ab.'],
+  ['sl', 'Fermentacijsko posodo rahlo naoljite, prenesite maso vanjo in jo pokrijte.'],
+]) {
+  for (const isTeglia of [false, true]) {
+    const glutenFreeSteps = renderPhaseB(plan(120, 'glutenFree', isTeglia ? 'teglia' : 'round'), lang, isTeglia);
+    assert.equal(glutenFreeSteps[0], expected);
+    assert.equal(foldText(glutenFreeSteps).length, 0);
+  }
+}
 
 assert.match(uiSource, /calculateBeginnerPhaseBPlan\(\{/);
 assert.match(uiSource, /durationMinutes: directHomeSchedule\.roomBeforeFridgeHours \* 60/);

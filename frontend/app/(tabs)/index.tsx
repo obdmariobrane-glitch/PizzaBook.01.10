@@ -5296,7 +5296,7 @@ function buildBeginnerPhaseBSteps(
   const copy = {
     hr: {
       transfer: 'Uljem lagano premažite fermentacijsku posudu i prebacite tijesto u nju.',
-      transferGf: 'Prebacite smjesu u fermentacijsku posudu i pokrijte je.',
+      transferGf: 'Lagano nauljite fermentacijsku posudu, prebacite smjesu u nju i pokrijte je.',
       coverRest: (minutes: string) => `Pokrijte tijesto i ostavite ga da odmori ${minutes}.`,
       ferment: (minutes: string) => plan.foldCount === 0
         ? `Pokrijte tijesto i ostavite ga da fermentira ${minutes}.`
@@ -5310,7 +5310,7 @@ function buildBeginnerPhaseBSteps(
     },
     en: {
       transfer: 'Lightly oil the fermentation container and transfer the dough into it.',
-      transferGf: 'Transfer the mixture to the fermentation container and cover it.',
+      transferGf: 'Lightly oil the fermentation container, transfer the mixture into it, and cover it.',
       coverRest: (minutes: string) => `Cover the dough and let it rest for ${minutes}.`,
       ferment: (minutes: string) => `Cover the dough and let it ferment undisturbed for ${minutes}.`,
       gfFerment: (minutes: string) => `Leave the mixture to ferment for ${minutes}.`,
@@ -5322,7 +5322,7 @@ function buildBeginnerPhaseBSteps(
     },
     de: {
       transfer: 'Ölen Sie den Gärbehälter leicht ein und geben Sie den Teig hinein.',
-      transferGf: 'Geben Sie die Masse in den Gärbehälter und decken Sie sie ab.',
+      transferGf: 'Ölen Sie den Gärbehälter leicht ein, geben Sie die Masse hinein und decken Sie sie ab.',
       coverRest: (minutes: string) => `Decken Sie den Teig ab und lassen Sie ihn ${minutes} ruhen.`,
       ferment: (minutes: string) => `Decken Sie den Teig ab und lassen Sie ihn ${minutes} ungestört fermentieren.`,
       gfFerment: (minutes: string) => `Lassen Sie die Masse ${minutes} fermentieren.`,
@@ -5334,7 +5334,7 @@ function buildBeginnerPhaseBSteps(
     },
     sl: {
       transfer: 'Fermentacijsko posodo rahlo naoljite in vanjo prenesite testo.',
-      transferGf: 'Maso prenesite v fermentacijsko posodo in jo pokrijte.',
+      transferGf: 'Fermentacijsko posodo rahlo naoljite, prenesite maso vanjo in jo pokrijte.',
       coverRest: (minutes: string) => `Testo pokrijte in ga pustite počivati ${minutes}.`,
       ferment: (minutes: string) => `Testo pokrijte in ga pustite nemoteno fermentirati ${minutes}.`,
       gfFerment: (minutes: string) => `Maso pustite fermentirati ${minutes}.`,
