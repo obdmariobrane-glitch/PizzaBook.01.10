@@ -5575,7 +5575,7 @@ function buildBeginnerTegliaHomeSteps(
     const index = phaseBPlan.durationMinutes === 0 && activeIndex >= 1 ? activeIndex + 1 : activeIndex;
     if (coldTitle.test(phase.title)) return { ...phase, timers: [] };
     if (index === 1) {
-      return { ...phase, title: phaseBTitle, steps: buildBeginnerPhaseBSteps(phaseBPlan, lang, true, flourType), timers: [] };
+      return { ...phase, title: phaseBTitle, steps: buildBeginnerPhaseBSteps(phaseBPlan, lang, true, flourType), timers: getBeginnerPhaseBTimers(phaseBPlan) };
     }
     if (index !== lastIndex || phase.steps.length < 4) return phase;
     const [preheat] = phase.steps;
@@ -5797,13 +5797,11 @@ function buildBeginnerDirectHomeSteps(
       return {
         ...phase,
         steps,
-        timers: schedule.phaseAMinutes
-          ? [{ id: 'beginner-phase-a', seconds: schedule.phaseAMinutes * 60, kind: 'rt' as const }]
-          : phase.timers,
+        timers: phase.timers,
       };
     }
     if (index === 1) {
-      return { ...phase, title: phaseBTitle, steps: buildBeginnerPhaseBSteps(phaseBPlan, lang, false, flourType), timers: [] };
+      return { ...phase, title: phaseBTitle, steps: buildBeginnerPhaseBSteps(phaseBPlan, lang, false, flourType), timers: getBeginnerPhaseBTimers(phaseBPlan) };
     }
     if (index === 2) {
       return {
@@ -5811,9 +5809,7 @@ function buildBeginnerDirectHomeSteps(
         steps: pizzaStyle === 'neapolitan' && steps.length > 0
           ? [...steps.slice(0, -1), ballingInstruction, ballingContainerInstruction]
           : steps,
-        timers: schedule.phaseCMinutes
-          ? [{ id: 'beginner-phase-c', seconds: schedule.phaseCMinutes * 60, kind: 'rt' as const }]
-          : [],
+        timers: [],
       };
     }
     if (index === 3 && schedule.fridgeHours > 0) {
@@ -5880,6 +5876,32 @@ function getDirectPhaseTimers(phaseKey: string, roomHours: number, fridgeHours: 
     return [{ id: 'ballsRtHours', seconds: roomHours * 3600, kind: 'ballsRt' }];
   }
   if (phaseKey.endsWith('-D') && fridgeHours === 0) return [];
+  return timers;
+}
+
+function getBeginnerPhaseBTimers(plan: BeginnerPhaseBPlan): BaseTimer[] {
+  if (plan.durationMinutes <= 0) return [];
+  if (plan.behavior === 'glutenFree') {
+    return [{ id: 'beginner-phase-b-fermentation', seconds: plan.durationMinutes * 60, kind: 'rt' }];
+  }
+
+  const timers: BaseTimer[] = [];
+  if (plan.folds[0]?.offsetMinutes > 0) {
+    timers.push({ id: 'beginner-phase-b-rest-initial', seconds: plan.folds[0].offsetMinutes * 60, kind: 'rt' });
+  }
+  plan.folds.forEach((fold, index) => {
+    const nextFold = plan.folds[index + 1];
+    if (nextFold) {
+      timers.push({
+        id: `beginner-phase-b-rest-between-${fold.index}`,
+        seconds: (nextFold.offsetMinutes - fold.offsetMinutes) * 60,
+        kind: 'rt',
+      });
+    }
+  });
+  if (plan.finalRestMinutes > 0) {
+    timers.push({ id: 'beginner-phase-b-rest-final', seconds: plan.finalRestMinutes * 60, kind: 'rt' });
+  }
   return timers;
 }
 

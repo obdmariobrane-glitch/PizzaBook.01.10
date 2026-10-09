@@ -13,6 +13,7 @@ const requestedFunctions = new Set([
   'buildBeginnerPhaseBSteps',
   'buildBeginnerDirectHomeSteps',
   'buildBeginnerTegliaHomeSteps',
+  'getBeginnerPhaseBTimers',
   'addSequentialBeginnerPhaseLetters',
   'getBeginnerOvenTimers',
 ]);
@@ -157,7 +158,20 @@ for (const lang of languages) {
               assert.ok(!phaseC.steps.some((step) => /refrigerat|fridge|kühlschrank|hladilnik/i.test(step)));
             }
             assert.ok(result.every((phase) => (phase.timers ?? []).every((timer) => timer.seconds > 0)));
-            assert.deepEqual(Array.from(phaseB.timers, (timer) => timer.id), []);
+            assert.deepEqual(
+              Array.from(phaseB.timers, (timer) => timer.id),
+              roomBeforeFridgeHours === 0
+                ? []
+                : flour === 'glutenFree'
+                ? ['beginner-phase-b-fermentation']
+                : ['beginner-phase-b-rest-initial', 'beginner-phase-b-rest-between-1', 'beginner-phase-b-rest-final'],
+            );
+            if (roomBeforeFridgeHours === 2) {
+              assert.deepEqual(
+                Array.from(phaseB.timers, (timer) => timer.seconds),
+                flour === 'glutenFree' ? [7200] : [1200, 1800, 4200],
+              );
+            }
             if (style === 'neapolitan') {
               assert.deepEqual(
                 Array.from(result.at(-1).timers, (timer) => timer.id),
@@ -212,7 +226,7 @@ for (const lang of languages) {
       'glutenFree',
     );
     const phaseB = result[1];
-    assert.deepEqual(Array.from(phaseB.timers, (timer) => timer.id), []);
+    assert.deepEqual(Array.from(phaseB.timers, (timer) => timer.id), ['beginner-phase-b-fermentation']);
     assert.ok(phaseB.steps.some((step) => /120|2 hours|2 Stunden|2 ur|2 sati/i.test(step)));
     assert.ok(!phaseB.steps.some((step) => /stretch & fold|fold|preklapan|prepogn/i.test(step)));
     assert.ok(!phaseB.steps.some((step) => /gentle folds during this scheduled phase/i.test(step)));
