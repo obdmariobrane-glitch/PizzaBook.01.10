@@ -5282,7 +5282,9 @@ function buildBeginnerPhaseBSteps(
       transfer: 'Uljem lagano premažite fermentacijsku posudu i prebacite tijesto u nju.',
       transferGf: 'Prebacite smjesu u fermentacijsku posudu i pokrijte je.',
       coverRest: (minutes: string) => `Pokrijte tijesto i ostavite ga da odmori ${minutes}.`,
-      ferment: (minutes: string) => `Pokrijte tijesto i ostavite ga da fermentira još ${minutes}.`,
+      ferment: (minutes: string) => plan.foldCount === 0
+        ? `Pokrijte tijesto i ostavite ga da fermentira ${minutes}.`
+        : `Pokrijte tijesto i ostavite ga da fermentira još ${minutes}.`,
       gfFerment: (minutes: string) => `Ostavite smjesu da fermentira ${minutes}.`,
       fold: (index: number) => plan.behavior === 'gentle'
         ? `Napravite ${index === 1 ? 'jedno vrlo nježno' : index === 2 ? 'još jedno vrlo nježno' : 'vrlo nježno'} preklapanje tijesta, bez snažnog rastezanja ili trganja.`
@@ -5310,7 +5312,7 @@ function buildBeginnerPhaseBSteps(
       gfFerment: (minutes: string) => `Lassen Sie die Masse ${minutes} fermentieren.`,
       fold: (index: number) => plan.behavior === 'gentle'
         ? `Falten Sie den Teig ${index === 1 ? 'einmal sehr vorsichtig' : 'ein weiteres Mal sehr vorsichtig'}, ohne ihn stark zu dehnen oder zu zerreißen.`
-        : index === 1 ? 'Machen Sie Stretch & Fold.' : 'Machen Sie den zweiten Stretch & Fold.',
+        : index === 1 ? 'Führen Sie ein Stretch & Fold durch.' : 'Führen Sie das zweite Stretch & Fold durch.',
       check: 'Prüfen Sie den Teig, bevor Sie fortfahren.',
       next: 'Wenn die erste Fermentation abgeschlossen ist, teilen Sie den Teig, formen Sie die Kugeln und stellen Sie sie nach Plan in den Kühlschrank.',
     },
@@ -5365,6 +5367,7 @@ function buildBeginnerPhaseBStepInfo(
       container: ['Kakvu posudu koristiti?', 'Koristite plastičnu posudu za hranu, staklenu zdjelu ili inox posudu. Najpraktičnija je posuda sa širokim otvorom.\n\nOdaberite posudu s dovoljno prostora da tijesto naraste, idealno 2–3 puta većeg kapaciteta od početnog volumena tijesta.\n\nNekoliko kapi ulja razmažite po dnu i stijenkama. Posudu pokrijte poklopcem ili folijom kako se tijesto ne bi osušilo.\n\nDržite je dalje od izravnog sunca i izvora topline.'],
       first: ['Što je Stretch & Fold i kako se radi?', 'Stretch & Fold je tehnika rastezanja i preklapanja tijesta koja jača glutensku mrežu i poboljšava elastičnost.\n\nKako se radi?\n\n1. Lagano navlaži ruke ako se tijesto lijepi.\n2. Uhvati jednu stranu tijesta i nježno je rastegni prema gore.\n3. Preklopi rastegnuti dio preko sredine tijesta.\n4. Okreni posudu približno 90° i ponovi postupak.\n5. Nakon četiri preklapanja završio si jedan set.\n\nVažno: Nemoj snažno povlačiti ili trgati tijesto. Cilj je postupno ojačati njegovu strukturu.'],
       rest: ['Zašto je odmor važan?', 'Tijekom odmora glutenska mreža se opušta, a fermentacija se nastavlja.\n\nTijesto će se nakon odmora obično lakše rastezati. Ostavite ga pokrivenog i nemojte ga nepotrebno dirati.'],
+      betweenFolds: ['Zašto je odmor između preklapanja važan?', 'Nakon preklapanja ostavite tijesto pokriveno kako bi se opustilo i nastavilo fermentirati.'],
       final: ['Što se događa tijekom odmora?', 'Kvasac nastavlja proizvoditi plinove, a tijesto postupno razvija volumen i strukturu.\n\nNe mora se udvostručiti. Pratite vrijeme iz Planera i nemojte dodavati odmor izvan rasporeda.'],
       second: ['Na što paziti kod drugog preklapanja?', 'Drugi Stretch & Fold radi se na isti način kao prvi.\n\nNježno rastegni i preklopi tijesto sa sve četiri strane.\n\nTijesto sada može pružati veći otpor jer je njegova struktura ojačala.\n\nAko osjetiš jak otpor ili primijetiš da se tijesto počinje trgati, nemoj ga rastezati na silu.\n\nCilj je dodatno ojačati tijesto, a ne istisnuti sav zrak iz njega.'],
       check: ['Kako prepoznati promjene?', 'Tijesto bi trebalo biti glađe, elastičnije i bolje držati oblik nego odmah nakon miješenja.\n\nMogu se pojaviti mali mjehurići, ali nisu obavezni. Tijesto se ne mora udvostručiti.\n\nAko je još pomalo ljepljivo, to ne znači automatski da nešto nije u redu. Spremnost za pečenje procjenjuje se i kroz kasnije faze fermentacije.'],
@@ -5373,6 +5376,7 @@ function buildBeginnerPhaseBStepInfo(
       container: ['What container should I use?', 'Use a food-safe plastic, glass, or stainless-steel container, preferably with a wide opening. Choose one with room for the dough to grow, ideally 2–3 times its starting volume. Oil the base and sides, cover it, and keep it away from direct sun and heat.'],
       first: ['What is Stretch & Fold and how is it done?', 'Stretch & Fold is a technique of stretching and folding dough that strengthens the gluten network and improves elasticity.\n\nHow to do it:\n\n1. Lightly wet your hands if the dough sticks.\n2. Lift one side and gently stretch it upward.\n3. Fold the stretched part over the centre.\n4. Turn the container about 90° and repeat.\n5. Four folds complete one set.\n\nImportant: Do not pull hard or tear the dough. The aim is to strengthen its structure gradually.'],
       rest: ['Why is the rest important?', 'The gluten network relaxes while fermentation continues. The dough usually stretches more easily afterwards. Keep it covered and do not disturb it unnecessarily.'],
+      betweenFolds: ['Why is the rest between folds important?', 'Keep the dough covered after the fold so it can relax and continue fermenting.'],
       final: ['What happens during the rest?', 'Yeast continues producing gas while the dough develops volume and structure. It does not have to double. Follow the Planner time and do not add extra rest.'],
       second: ['What should I watch for during the second fold?', 'The second Stretch & Fold is done the same way as the first.\n\nGently stretch and fold the dough from all four sides.\n\nThe dough may resist more now because its structure has strengthened.\n\nIf you feel strong resistance or notice tearing, do not stretch it by force.\n\nThe aim is to strengthen the dough further, not to remove all the air.'],
       check: ['How do I recognize the changes?', 'The dough should be smoother, more elastic, and hold its shape better. Small bubbles may appear but are not required, and the dough does not have to double. Some stickiness does not automatically mean something is wrong.'],
@@ -5381,6 +5385,7 @@ function buildBeginnerPhaseBStepInfo(
       container: ['Welchen Behälter soll ich verwenden?', 'Verwenden Sie Kunststoff, Glas oder Edelstahl, möglichst mit weiter Öffnung. Wählen Sie idealerweise das 2–3-Fache des Anfangsvolumens. Ölen Sie Boden und Wände, decken Sie den Behälter ab und halten Sie ihn von Sonne und Wärme fern.'],
       first: ['Was ist Stretch & Fold und wie wird es gemacht?', 'Stretch & Fold ist eine Technik aus Dehnen und Falten, die das Glutengerüst stärkt und die Elastizität verbessert.\n\nSo geht es:\n\n1. Bei klebrigem Teig die Hände leicht befeuchten.\n2. Eine Seite vorsichtig anheben und nach oben dehnen.\n3. Den gedehnten Teil über die Mitte legen.\n4. Den Behälter etwa 90° drehen und wiederholen.\n5. Vier Faltungen ergeben einen Satz.\n\nWichtig: Nicht kräftig ziehen und den Teig nicht zerreißen. Ziel ist, die Struktur schrittweise zu stärken.'],
       rest: ['Warum ist die Ruhe wichtig?', 'Das Glutengerüst entspannt sich, während die Fermentation weitergeht. Danach lässt sich der Teig meist leichter dehnen. Abgedeckt lassen und nicht unnötig stören.'],
+      betweenFolds: ['Warum ist die Ruhe zwischen den Faltungen wichtig?', 'Lassen Sie den Teig nach dem Falten abgedeckt ruhen, damit er sich entspannt und weiter fermentiert.'],
       final: ['Was geschieht während der Ruhe?', 'Die Hefe bildet weiter Gas, während Volumen und Struktur entstehen. Der Teig muss sich nicht verdoppeln. Folgen Sie der Planner-Zeit und verlängern Sie die Ruhe nicht.'],
       second: ['Worauf sollte ich bei der zweiten Faltung achten?', 'Die zweite Stretch-&-Fold-Faltung erfolgt wie die erste.\n\nDen Teig vorsichtig von allen vier Seiten dehnen und falten.\n\nDer Teig kann jetzt mehr Widerstand leisten, weil seine Struktur stärker ist.\n\nBei starkem Widerstand oder wenn er zu reißen beginnt, nicht mit Gewalt dehnen.\n\nZiel ist, den Teig weiter zu stärken, nicht die gesamte Luft herauszudrücken.'],
       check: ['Woran erkenne ich die Veränderung?', 'Der Teig sollte glatter, elastischer und formstabiler sein. Kleine Blasen sind möglich, aber nicht erforderlich; der Teig muss sich nicht verdoppeln. Etwas Klebrigkeit ist nicht automatisch ein Problem.'],
@@ -5389,6 +5394,7 @@ function buildBeginnerPhaseBStepInfo(
       container: ['Kakšno posodo uporabiti?', 'Uporabite plastično, stekleno ali inox posodo s široko odprtino. Idealno naj ima 2–3-krat večjo prostornino od začetne. Naoljite dno in stranice, posodo pokrijte ter jo hranite stran od sonca in toplote.'],
       first: ['Kaj je Stretch & Fold in kako ga naredimo?', 'Stretch & Fold je tehnika raztezanja in prepogibanja testa, ki okrepi glutensko mrežo in izboljša elastičnost.\n\nKako ga naredimo:\n\n1. Če se testo lepi, rahlo navlažite roke.\n2. Dvignite eno stran in jo nežno raztegnite navzgor.\n3. Raztegnjeni del prepognite čez sredino.\n4. Posodo obrnite za približno 90° in ponovite.\n5. Štirje pregibi so en set.\n\nPomembno: Ne vlecite močno in testa ne trgajte. Cilj je postopoma okrepiti njegovo strukturo.'],
       rest: ['Zakaj je počitek pomemben?', 'Glutenska mreža se sprosti, fermentacija pa se nadaljuje. Testo se bo po počitku običajno lažje raztezalo. Naj bo pokrito in ga ne motite.'],
+      betweenFolds: ['Zakaj je počitek med pregibi pomemben?', 'Po prepogibanju naj testo pokrito počiva, da se sprosti in nadaljuje fermentacijo.'],
       final: ['Kaj se dogaja med počitkom?', 'Kvas še naprej tvori pline, testo pa razvija prostornino in strukturo. Ni se mu treba podvojiti. Upoštevajte čas v Planerju in ne dodajajte počitka.'],
       second: ['Na kaj paziti pri drugem pregibu?', 'Drugi Stretch & Fold naredimo enako kot prvega.\n\nTesto nežno raztegnite in prepognite z vseh štirih strani.\n\nTesto je lahko zdaj bolj uporno, ker se je njegova struktura okrepila.\n\nČe začutite močan upor ali opazite, da se testo trga, ga ne raztezajte na silo.\n\nCilj je testo dodatno okrepiti, ne pa iztisniti vsega zraka.'],
       check: ['Kako prepoznati spremembe?', 'Testo naj bo bolj gladko, elastično in naj bolje drži obliko. Mehurčki niso obvezni in testo se ni treba podvojiti. Rahla lepljivost še ne pomeni težave.'],
@@ -5400,7 +5406,7 @@ function buildBeginnerPhaseBStepInfo(
     if (plan.folds[0].offsetMinutes > 0) result.push({ title: copy.rest[0], body: copy.rest[1] });
     plan.folds.forEach((fold, index) => {
       result.push({ title: index === 0 ? copy.first[0] : copy.second[0], body: index === 0 ? copy.first[1] : copy.second[1] });
-      if (plan.folds[index + 1]) result.push({ title: copy.rest[0], body: copy.rest[1] });
+      if (plan.folds[index + 1]) result.push({ title: copy.betweenFolds[0], body: copy.betweenFolds[1] });
     });
     if (plan.finalRestMinutes > 0) result.push({ title: copy.final[0], body: copy.final[1] });
   }

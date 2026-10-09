@@ -73,7 +73,12 @@ const phaseBRendererSource = sourceFile.statements
   .find((statement) => ts.isFunctionDeclaration(statement)
     && statement.name?.text === 'buildBeginnerPhaseBSteps')
   ?.getText(sourceFile);
+const phaseBInfoSource = sourceFile.statements
+  .find((statement) => ts.isFunctionDeclaration(statement)
+    && statement.name?.text === 'buildBeginnerPhaseBStepInfo')
+  ?.getText(sourceFile);
 assert.ok(phaseBRendererSource, 'Phase-B recipe renderer must be present');
+assert.ok(phaseBInfoSource, 'Phase-B help renderer must be present');
 const tegliaStart = uiSource.indexOf('function buildBeginnerTegliaHomeSteps(');
 const directStart = uiSource.indexOf('function buildBeginnerDirectHomeSteps(');
 const tegliaRendererSource = uiSource.slice(tegliaStart, directStart);
@@ -85,14 +90,17 @@ const rendererModule = { exports: {} };
 const rendererCompiled = ts.transpileModule(`
 function formatDuration(seconds) { return \`\${seconds / 60} minutes\`; }
 ${phaseBRendererSource}
-module.exports = { buildBeginnerPhaseBSteps };
+${phaseBInfoSource}
+module.exports = { buildBeginnerPhaseBSteps, buildBeginnerPhaseBStepInfo };
 `, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
 vm.runInNewContext(rendererCompiled, { module: rendererModule, exports: rendererModule.exports });
 const renderPhaseB = rendererModule.exports.buildBeginnerPhaseBSteps;
+const renderPhaseBInfo = rendererModule.exports.buildBeginnerPhaseBStepInfo;
 const foldText = (steps) => steps.filter((step) => /Stretch & Fold|fold|preklapanj|prepogn|rastegni|preklopi|Navlažite ruke/i.test(step));
 assert.equal(foldText(renderPhaseB(plan(30), 'hr', false)).length, 0);
+assert.equal(renderPhaseB(plan(30), 'hr', false)[1], 'Pokrijte tijesto i ostavite ga da fermentira 30 minutes.');
 const oneHourSteps = renderPhaseB(oneHour, 'hr', false);
 assert.equal(foldText(oneHourSteps).length, 1);
 assert.equal(JSON.stringify(oneHourSteps.slice(0, 4)), JSON.stringify([
@@ -105,6 +113,10 @@ const twoHourSteps = renderPhaseB(twoHours, 'hr', false);
 assert.equal(foldText(twoHourSteps).length, 2);
 assert.equal(twoHourSteps[1], 'Pokrijte tijesto i ostavite ga da odmori 20 minutes.');
 assert.equal(twoHourSteps[3], 'Pokrijte tijesto i ostavite ga da odmori 30 minutes.');
+assert.equal(twoHourSteps[5], 'Pokrijte tijesto i ostavite ga da fermentira još 70 minutes.');
+const twoHourInfo = renderPhaseBInfo(twoHours, 'hr', false);
+assert.equal(twoHourInfo[1].title, 'Zašto je odmor važan?');
+assert.equal(twoHourInfo[3].title, 'Zašto je odmor između preklapanja važan?');
 assert.equal(foldText(renderPhaseB(plan(120, 'glutenFree'), 'hr', false)).length, 0);
 
 assert.match(uiSource, /calculateBeginnerPhaseBPlan\(\{/);
@@ -116,6 +128,9 @@ assert.match(uiSource, /title: phaseBTitle/);
 assert.match(uiSource, /if \(components\.includes\('spelt'\)\) return 'spelt'/);
 assert.match(uiSource, /if \(components\.includes\('wholeWheat'\)\) return 'wholeWheat'/);
 assert.match(uiSource, /flourBehavior: flour === 'glutenFree'/);
+assert.match(uiSource, /Führen Sie ein Stretch & Fold durch\./);
+assert.match(uiSource, /Führen Sie das zweite Stretch & Fold durch\./);
+assert.match(uiSource, /betweenFolds:/);
 assert.doesNotMatch(uiSource, /Miješajte i fermentirajte tijesto \$\{hours\}/);
 assert.doesNotMatch(uiSource, /trikrat zelo nežno prepognite/);
 assert.doesNotMatch(uiSource, /dva nježna preklapanja/);
