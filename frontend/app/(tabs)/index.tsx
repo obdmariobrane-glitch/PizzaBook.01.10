@@ -5878,6 +5878,20 @@ function buildNeapolitanDirectPhaseC(
       sl: 'Porcijo nežno zberite s strgalom ali rahlo naoljenimi rokami. Stik zaprite, kolikor je mogoče, vendar ne poskušajte razviti glutena, ustvariti površinske napetosti ali zmesi raztegovati kot pšenično testo. Če je lepljiva, uporabite strgalo in čim manj dodatnega dela.',
     }[lang],
   }[flourType === 'custom' ? 'caputo00' : flourType] ?? copy.info[3][1];
+  if (flourType === 'glutenFree') {
+    copy.steps[0] = {
+      hr: 'Lagano pospite čistu radnu površinu bezglutenskim ili rižinim brašnom. Brašno za radnu površinu nije uključeno u izračun recepta.',
+      en: 'Lightly dust a clean work surface with gluten-free flour or certified gluten-free rice flour. Flour used for the work surface is not included in the recipe calculation.',
+      de: 'Bestäuben Sie eine saubere Arbeitsfläche leicht mit glutenfreiem Mehl oder zertifiziert glutenfreiem Reismehl. Das Mehl für die Arbeitsfläche ist nicht in der Rezeptberechnung enthalten.',
+      sl: 'Čisto delovno površino rahlo posujte z brezglutensko moko ali certificirano brezglutensko riževo moko. Moka za delovno površino ni vključena v izračun recepta.',
+    }[lang];
+    copy.info[0][1] = {
+      hr: 'Pripremite čistu i suhu radnu površinu, strugač za tijesto i kuhinjsku vagu. Upotrijebite bezglutensko brašno ili certificirano bezglutensko rižino brašno i pospite malu količinu u tanak sloj. Izbjegavajte obično pšenično brašno i višak brašna jer mogu otežati zatvaranje kuglica.',
+      en: 'Prepare a clean, dry work surface, a dough scraper, and a kitchen scale. Use gluten-free flour or certified gluten-free rice flour and spread a small amount into a thin layer. Avoid regular wheat flour and excess flour because they can make sealing the dough balls difficult.',
+      de: 'Bereiten Sie eine saubere, trockene Arbeitsfläche, einen Teigschaber und eine Küchenwaage vor. Verwenden Sie glutenfreies Mehl oder zertifiziert glutenfreies Reismehl und verteilen Sie wenig davon dünn. Vermeiden Sie normales Weizenmehl und zu viel Mehl, da dies das Verschließen der Teigkugeln erschweren kann.',
+      sl: 'Pripravite čisto in suho delovno površino, strgalo za testo in kuhinjsko tehtnico. Uporabite brezglutensko moko ali certificirano brezglutensko riževo moko ter majhno količino razporedite v tanek sloj. Izogibajte se navadni pšenični moki in preveliki količini moke, saj lahko otežita zapiranje kroglic.',
+    }[lang];
+  }
   copy.steps[3] = flourStep4[lang];
   copy.info[3][1] = flourStep4Help;
   return {

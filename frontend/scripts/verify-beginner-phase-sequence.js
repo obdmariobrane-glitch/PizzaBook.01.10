@@ -161,6 +161,8 @@ for (const lang of languages) {
               assert.match(phaseC.title, /Podjela|Dividing|Teilen|Delitev/i);
               assert.match(phaseC.steps[2], /1250|250|5/);
               if (flour === 'glutenFree') {
+                assert.match(phaseC.steps[0], /bezglutenskim ili rižinim|gluten-free flour or certified gluten-free rice|glutenfreiem Mehl oder zertifiziert glutenfreiem Reismehl|brezglutensko moko ali certificirano brezglutensko riževo moko/i);
+                assert.doesNotMatch(phaseC.steps[0], /regular wheat|običn|normales Weizen|navadn.*pšenič/i);
                 assert.match(phaseC.steps[3], /mekanu kuglicu|soft dough ball|weichen Teigkugel|mehko kroglico/i);
                 assert.match(phaseC.stepInfo[3].body, /ne pokušavajte razviti gluten|do not try to develop gluten|versuchen Sie nicht, Gluten|ne poskušajte razviti glutena/i);
               }
