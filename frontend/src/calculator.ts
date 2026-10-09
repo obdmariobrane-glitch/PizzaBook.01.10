@@ -1134,11 +1134,10 @@ export function createDirectHomePizzaPlan(
   const availableHours = getAvailableFermentationHours(input.bakeAt, now);
   if (availableHours <= 0) return null;
 
-  const isBeginnerTipo00Target = conservativeUnknownFlour
-    && input.style === 'neapolitan'
-    && input.flourType === 'caputo00'
+  const isBeginnerDirectScheduleTarget = conservativeUnknownFlour
+    && (input.style === 'neapolitan' || input.style === 'romana' || input.style === 'ny_style')
     && (input.mixing === 'hand' || input.mixing === 'home');
-  if (isBeginnerTipo00Target) {
+  if (isBeginnerDirectScheduleTarget) {
     const scheduleCandidates = generateBeginnerDirectScheduleCandidates(availableHours, input.roomTemp, input.bakeAt);
     const evaluationInput: HomeDoughToleranceInput = {
       flour,
@@ -1178,7 +1177,7 @@ export function createDirectHomePizzaPlan(
     const recommended = annotatedCandidateEvaluations.find((evaluation) => evaluation.recommended)
       ?? annotatedCandidateEvaluations.find((evaluation) => evaluation.selectable)
       ?? null;
-    const selectedEvaluation = requested?.selectable ? requested : recommended;
+    const selectedEvaluation = requested ?? recommended;
     if (!selectedEvaluation) return null;
     const selectedCandidate = selectedEvaluation.candidate as BeginnerDirectScheduleCandidate;
     const schedule: HomePizzaPlanSchedule = {
