@@ -5717,6 +5717,106 @@ function buildBeginnerTegliaHomeSteps(
   return addSequentialBeginnerPhaseLetters(adapted, lang);
 }
 
+function buildNeapolitanTipo00PhaseC(
+  lang: Lang,
+  totalDoughLabel: string,
+  ballWeightLabel: string,
+  pizzas: number,
+  refrigerated: boolean,
+) {
+  const copy = {
+    hr: {
+      title: 'Faza C: Podjela i oblikovanje kuglica',
+      steps: [
+        'Lagano pospite čistu radnu površinu brašnom. Brašno za radnu površinu nije uključeno u izračun recepta.',
+        'Nježno izvadite tijesto iz posude uz minimalno istiskivanje plina.',
+        `Podijelite ukupno ${totalDoughLabel} tijesta na ${pizzas} jednakih komada od približno ${ballWeightLabel}.`,
+        'Svaki komad nježno oblikujte u kuglicu. Podvucite rubove prema donjoj strani i zatvorite spoj kako biste stvorili blagu površinsku napetost bez trganja tijesta.',
+        'Stavite kuglice u fermentacijsku kutiju sa spojem prema dolje. Ostavite dovoljno razmaka između njih i zatvorite kutiju.',
+        refrigerated
+          ? 'Premjestite zatvorenu fermentacijsku kutiju u hladnjak u vrijeme određeno izračunatim rasporedom.'
+          : 'Ostavite zatvorenu kutiju s kuglicama na sobnoj temperaturi i nastavite fermentaciju prema izračunatom rasporedu.',
+      ],
+      info: [
+        ['Priprema radne površine', 'Pripremite čistu i suhu radnu površinu, strugač za tijesto i kuhinjsku vagu. Pospite malu količinu brašna i razmažite je u tanak sloj. Izbjegavajte višak brašna jer može otežati zatvaranje kuglica.'],
+        ['Vađenje tijesta', 'Strugačem nježno odvojite tijesto od stijenki posude. Nagnite posudu i pustite da tijesto polako klizne van, podupirući ga rukama ili strugačem. Nemojte ga vući, udarati ni agresivno rastezati; gubitak male količine plina je normalan.'],
+        ['Podjela tijesta', 'Strugačem odrežite jedan dio, stavite ga na kuhinjsku vagu i provjerite težinu. Po potrebi nježno dodajte ili uklonite male komade, pa ponovite za sve porcije. Slične težine daju ujednačene veličine pizza i ravnomjernije pečenje.'],
+        ['Oblikovanje kuglica', 'Stavite porciju na lagano pobrašnjenu površinu. Rubove nježno podvucite ispod, zatvorite spoj i okrenite kuglicu spojem prema dolje. Lagano je povucite prema sebi da stvorite blagu površinsku napetost. Stanite kada je površina relativno glatka i kuglica drži oblik. Ako je ljepljiva, koristite strugač i minimalno brašna; ako se trga, prestanite zatezati. Izbjegavajte snažan pritisak, degaziranje i predugo oblikovanje.'],
+        ['Fermentacijska kutija', 'Upotrijebite čistu posudu prikladnu za kontakt s hranom. Kuglice stavite spojem prema dolje i ostavite dovoljno prostora za širenje. Zatvorite poklopac kako se tijesto ne bi osušilo; po potrebi koristite pojedinačne pokrivene posude.'],
+        ['Nastavak fermentacije', refrigerated ? 'Provjerite izračunato vrijeme premještanja u hladnjak i zatvoren poklopac. Kutiju stavite na stabilnu policu hladnjaka, slijedite izračunato vrijeme vađenja i završite planirano temperiranje. Hladnoća usporava fermentaciju, ali je ne zaustavlja potpuno.' : 'Držite kutiju na stabilnom mjestu, dalje od izravnog sunca, radijatora i drugih izvora topline. Slijedite izračunati raspored i nemojte nepotrebno produljivati fermentaciju. Viša sobna temperatura općenito ubrzava fermentaciju.'],
+      ],
+    },
+    en: {
+      title: 'Phase C: Dividing and Shaping Dough Balls',
+      steps: [
+        'Lightly flour a clean work surface. Flour used for the work surface is not included in the recipe calculation.',
+        'Gently remove the dough from the container while minimizing degassing.',
+        `Divide the total ${totalDoughLabel} of dough into ${pizzas} equal pieces of approximately ${ballWeightLabel} each.`,
+        'Gently shape each piece into a dough ball. Tuck the edges underneath and close the seam to create light surface tension without tearing the dough.',
+        'Place the dough balls seam-side down in a fermentation box. Leave enough space between them and close the box.',
+        refrigerated
+          ? 'Transfer the closed fermentation box to the refrigerator at the time set by the calculated schedule.'
+          : 'Keep the closed box with the dough balls at room temperature and continue fermentation according to the calculated schedule.',
+      ],
+      info: [
+        ['Prepare the work surface', 'Prepare a clean, dry work surface, a dough scraper, and a kitchen scale. Sprinkle a small amount of flour and spread it into a thin layer. Avoid excess flour because it can make sealing the dough balls difficult.'],
+        ['Remove the dough', 'Gently loosen the dough from the container with a scraper. Tilt the container and let the dough slide out slowly, supporting it with your hands or scraper. Do not pull, punch, or stretch it aggressively; some gas loss is normal.'],
+        ['Divide the dough', 'Cut one portion with the dough scraper, place it on the kitchen scale, and check its weight. Gently add or remove small pieces if needed, then repeat for all portions. Similar weights produce consistent pizza sizes and more even baking.'],
+        ['Shape the dough balls', 'Place a portion on the lightly floured surface. Gently fold the edges underneath, close the seam, and turn the ball seam-side down. Pull it lightly toward yourself to create gentle surface tension. Stop when the surface is relatively smooth and the ball holds its shape. If sticky, use the scraper and minimal flour; if it tears, stop tightening. Avoid heavy pressure, degassing, and overworking.'],
+        ['Fermentation container', 'Use a clean, food-safe container. Place the dough balls seam-side down and leave enough room for expansion. Close the lid to prevent drying; use individual covered containers if necessary.'],
+        ['Continue fermentation', refrigerated ? 'Check the calculated fridge-in time and make sure the lid is closed. Place the box on a stable refrigerator shelf, follow the calculated fridge-out time, and complete the scheduled final tempering. Refrigeration slows fermentation but does not stop it completely.' : 'Keep the container in a stable location away from direct sunlight, radiators, and other heat sources. Follow the calculated schedule and do not extend fermentation unnecessarily. Warmer room temperatures generally accelerate fermentation.'],
+      ],
+    },
+    de: {
+      title: 'Phase C: Teilen und Formen der Teigkugeln',
+      steps: [
+        'Bestäuben Sie eine saubere Arbeitsfläche leicht mit Mehl. Das Mehl für die Arbeitsfläche ist nicht in der Rezeptberechnung enthalten.',
+        'Nehmen Sie den Teig vorsichtig aus dem Behälter und drücken Sie dabei möglichst wenig Gas heraus.',
+        `Teilen Sie insgesamt ${totalDoughLabel} Teig in ${pizzas} gleich große Stücke von jeweils ungefähr ${ballWeightLabel}.`,
+        'Formen Sie jedes Stück vorsichtig zu einer Teigkugel. Schlagen Sie die Ränder nach unten ein und schließen Sie die Naht, um leichte Oberflächenspannung zu erzeugen, ohne den Teig zu reißen.',
+        'Legen Sie die Teigkugeln mit der Naht nach unten in eine Gärbox. Lassen Sie ausreichend Abstand zwischen ihnen und schließen Sie die Box.',
+        refrigerated
+          ? 'Stellen Sie die geschlossene Gärbox zum im berechneten Zeitplan festgelegten Zeitpunkt in den Kühlschrank.'
+          : 'Lassen Sie die geschlossene Box mit den Teigkugeln bei Raumtemperatur stehen und setzen Sie die Fermentation nach dem berechneten Zeitplan fort.',
+      ],
+      info: [
+        ['Arbeitsfläche vorbereiten', 'Bereiten Sie eine saubere, trockene Arbeitsfläche, einen Teigschaber und eine Küchenwaage vor. Streuen Sie wenig Mehl darüber und verteilen Sie es dünn. Zu viel Mehl kann das Verschließen der Teigkugeln erschweren.'],
+        ['Teig herausnehmen', 'Lösen Sie den Teig vorsichtig mit einem Teigschaber von den Wänden. Neigen Sie den Behälter und lassen Sie den Teig langsam herausgleiten, während Sie ihn mit Händen oder Schaber stützen. Ziehen, schlagen oder dehnen Sie ihn nicht aggressiv; etwas Gasverlust ist normal.'],
+        ['Teig teilen', 'Schneiden Sie mit dem Teigschaber eine Portion ab, legen Sie sie auf die Küchenwaage und prüfen Sie ihr Gewicht. Fügen Sie bei Bedarf vorsichtig kleine Stücke hinzu oder entfernen Sie sie, und wiederholen Sie dies für alle Portionen. Ähnliche Gewichte sorgen für gleichmäßige Pizzagrößen und gleichmäßigeres Backen.'],
+        ['Teigkugeln formen', 'Legen Sie eine Portion auf die leicht bemehlte Fläche. Schlagen Sie die Ränder vorsichtig nach unten ein, schließen Sie die Naht und drehen Sie die Kugel mit der Naht nach unten. Ziehen Sie sie leicht zu sich, um sanfte Oberflächenspannung zu erzeugen. Hören Sie auf, wenn die Oberfläche relativ glatt ist und die Kugel ihre Form hält. Bei Klebrigkeit Schaber und wenig Mehl verwenden; bei Rissen nicht weiter straffen. Vermeiden Sie starken Druck, Entgasen und Überarbeiten.'],
+        ['Gärbehälter', 'Verwenden Sie einen sauberen, lebensmittelechten Behälter. Legen Sie die Teigkugeln mit der Naht nach unten hinein und lassen Sie ausreichend Platz zum Aufgehen. Schließen Sie den Deckel gegen Austrocknen; bei Bedarf können einzelne abgedeckte Behälter verwendet werden.'],
+        ['Fermentation fortsetzen', refrigerated ? 'Prüfen Sie den berechneten Zeitpunkt zum Einräumen in den Kühlschrank und schließen Sie den Deckel. Stellen Sie die Box auf eine stabile Kühlschrankablage, beachten Sie den Zeitpunkt zum Herausnehmen und führen Sie das geplante Temperieren durch. Kälte verlangsamt die Fermentation, stoppt sie aber nicht vollständig.' : 'Stellen Sie den Behälter an einen stabilen Ort, fern von direkter Sonne, Heizkörpern und anderen Wärmequellen. Befolgen Sie den berechneten Zeitplan und verlängern Sie die Fermentation nicht unnötig. Höhere Raumtemperaturen beschleunigen die Fermentation im Allgemeinen.'],
+      ],
+    },
+    sl: {
+      title: 'Faza C: Delitev in oblikovanje kroglic',
+      steps: [
+        'Čisto delovno površino rahlo posujte z moko. Moka za delovno površino ni vključena v izračun recepta.',
+        'Testo nežno vzemite iz posode in pri tem čim manj iztisnite plin.',
+        `Skupno ${totalDoughLabel} testa razdelite na ${pizzas} enakih kosov po približno ${ballWeightLabel}.`,
+        'Vsak kos nežno oblikujte v kroglico. Robove spodvijte na spodnjo stran in zaprite stik, da ustvarite rahlo površinsko napetost brez trganja testa.',
+        'Kroglice položite v fermentacijsko posodo s stikom navzdol. Med njimi pustite dovolj prostora in posodo zaprite.',
+        refrigerated
+          ? 'Zaprto fermentacijsko posodo ob času, določenem z izračunanim načrtom, prestavite v hladilnik.'
+          : 'Zaprto posodo s kroglicami pustite pri sobni temperaturi in nadaljujte fermentacijo po izračunanem načrtu.',
+      ],
+      info: [
+        ['Priprava delovne površine', 'Pripravite čisto in suho delovno površino, strgalo za testo in kuhinjsko tehtnico. Potresite majhno količino moke in jo razporedite v tanek sloj. Preveč moke lahko oteži zapiranje kroglic.'],
+        ['Odstranitev testa', 'Testo s strgalom nežno ločite od sten posode. Posodo nagnite in pustite, da testo počasi zdrsne ven, pri tem pa ga podprite z rokami ali strgalom. Ne vlecite, udarjajte ali agresivno raztegujte; nekaj izgube plina je normalne.'],
+        ['Delitev testa', 'S strgalom odrežite en kos, ga položite na kuhinjsko tehtnico in preverite težo. Po potrebi nežno dodajte ali odstranite majhne koščke, nato ponovite za vse porcije. Podobne teže omogočajo enako velike pice in enakomernejšo peko.'],
+        ['Oblikovanje kroglic', 'Porcijo položite na rahlo pomokano površino. Robove nežno prepognite spodaj, zaprite stik in kroglico obrnite s stikom navzdol. Rahlo jo povlecite proti sebi, da ustvarite nežno površinsko napetost. Končajte, ko je površina razmeroma gladka in kroglica drži obliko. Če je lepljiva, uporabite strgalo in najmanj moke; če se trga, nehajte zategovati. Izogibajte se močnemu pritisku, degaziranju in predolgemu delu.'],
+        ['Fermentacijska posoda', 'Uporabite čisto posodo, primerno za stik z živili. Kroglice položite s stikom navzdol in pustite dovolj prostora za širjenje. Zaprite pokrov, da se testo ne izsuši; po potrebi uporabite posamezne pokrite posode.'],
+        ['Nadaljevanje fermentacije', refrigerated ? 'Preverite izračunani čas za prestavitev v hladilnik in poskrbite, da je pokrov zaprt. Posodo postavite na stabilno polico hladilnika, upoštevajte izračunani čas odvzema in dokončajte načrtovano temperiranje. Hlajenje fermentacijo upočasni, vendar je ne ustavi popolnoma.' : 'Posodo hranite na stabilnem mestu, stran od neposrednega sonca, radiatorjev in drugih virov toplote. Upoštevajte izračunani načrt in fermentacije ne podaljšujte po nepotrebnem. Višja sobna temperatura fermentacijo običajno pospeši.'],
+      ],
+    },
+  }[lang];
+  return {
+    title: copy.title,
+    steps: copy.steps,
+    stepInfo: copy.info.map(([title, body]) => ({ title, body })),
+  };
+}
+
 function buildBeginnerDirectHomeSteps(
   phases: DetailedPhase[],
   schedule: HomePizzaPlanSchedule,
@@ -5904,6 +6004,15 @@ function buildBeginnerDirectHomeSteps(
     },
   }[lang]);
 
+  const tipo00PhaseC = pizzaStyle === 'neapolitan' && flourType === 'caputo00'
+    ? buildNeapolitanTipo00PhaseC(lang, totalDoughLabel, ballWeightLabel, pizzas, schedule.fridgeHours > 0)
+    : undefined;
+  const tipo00ColdFermentationStep = {
+    hr: `Nastavite hladnu fermentaciju zatvorene kutije u hladnjaku ${formatDuration(schedule.fridgeHours * 3600, lang)} prema izračunanom rasporedu.`,
+    en: `Continue cold fermentation of the closed box in the refrigerator for ${formatDuration(schedule.fridgeHours * 3600, lang)} according to the calculated schedule.`,
+    de: `Setzen Sie die kalte Fermentation der geschlossenen Box im Kühlschrank ${formatDuration(schedule.fridgeHours * 3600, lang)} nach dem berechneten Zeitplan fort.`,
+    sl: `Nadaljujte hladno fermentacijo zaprte posode v hladilniku ${formatDuration(schedule.fridgeHours * 3600, lang)} po izračunanem načrtu.`,
+  }[lang];
   const activePhases = schedule.fridgeHours > 0
     ? phases
     : phases.filter((phase) => !/cold fermentation|kalte fermentation|hladna fermentacija/i.test(phase.title));
@@ -5926,14 +6035,18 @@ function buildBeginnerDirectHomeSteps(
     if (index === 2) {
       return {
         ...phase,
-        steps: steps.length > 1
-          ? [...steps.slice(0, 2), ballingInstruction, ballingContainerInstruction]
-          : steps,
+        ...(tipo00PhaseC
+          ? { title: tipo00PhaseC.title, steps: tipo00PhaseC.steps, stepInfo: tipo00PhaseC.stepInfo }
+          : {
+            steps: steps.length > 1
+              ? [...steps.slice(0, 2), ballingInstruction, ballingContainerInstruction]
+              : steps,
+          }),
         timers: [],
       };
     }
     if (index === 3 && schedule.fridgeHours > 0) {
-      return { ...phase, steps: [labels.fridge(duration(schedule.fridgeHours))], timers: [] };
+      return { ...phase, steps: [tipo00PhaseC ? tipo00ColdFermentationStep : labels.fridge(duration(schedule.fridgeHours))], timers: [] };
     }
     const finalPhaseIndex = schedule.fridgeHours > 0 ? 4 : 3;
     if (index === finalPhaseIndex) {

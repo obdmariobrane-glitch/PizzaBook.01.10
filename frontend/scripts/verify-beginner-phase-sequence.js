@@ -11,6 +11,7 @@ const source = fs.readFileSync(appPath, 'utf8');
 const sourceFile = ts.createSourceFile(appPath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const requestedFunctions = new Set([
   'buildBeginnerPhaseBSteps',
+  'buildNeapolitanTipo00PhaseC',
   'buildBeginnerDirectHomeSteps',
   'buildBeginnerTegliaHomeSteps',
   'getBeginnerPhaseBTimers',
@@ -154,12 +155,14 @@ for (const lang of languages) {
 
             assertSingleDisplayPrefix(result, lang);
             assert.deepEqual(Array.from(phaseA.timers, (timer) => timer.id), ['post-mix-rest']);
-            if (style !== 'romana_teglia') {
+            if (style === 'neapolitan' && flour === 'caputo00') {
+              assert.equal(phaseC.steps.length, 6, 'Neapolitan Tipo 00 Phase C should render six focused steps');
+              assert.equal(phaseC.stepInfo.length, 6);
+              assert.match(phaseC.title, /Podjela|Dividing|Teilen|Delitev/i);
+              assert.match(phaseC.steps[2], /1250|250|5/);
+            } else {
               assert.equal(phaseC.steps.length, 4, 'Round-style Phase C should combine division, ball count, and balling without duplicates');
               assert.match(phaseC.steps.at(-2), /površinsku napetost|surface tension|Oberflächenspannung|površinsko napetost/i);
-              assert.match(phaseC.steps.at(-2), /1250|250|5/);
-            } else {
-              assert.deepEqual(phaseC.steps, phases[2].steps, 'Phase C should remain the single round-style division/balling phase');
             }
             if (fridgeHours === 0) {
               assert.ok(!phaseC.steps.some((step) => /refrigerat|fridge|kühlschrank|hladilnik/i.test(step)));
