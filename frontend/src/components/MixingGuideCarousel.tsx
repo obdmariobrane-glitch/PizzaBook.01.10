@@ -44,8 +44,15 @@ const ROMANA_TONDA_BAKING_IMAGES = [
   require('../../assets/images/phase_e_romana_tonda_04_thin_round_shape.png'),
   require('../../assets/images/phase_e_romana_tonda_05_add_toppings.png'),
 ];
+const NEW_YORK_BAKING_IMAGES = [
+  require('../../assets/images/phase_e_new_york_01_prepare_dough.png'),
+  require('../../assets/images/phase_e_new_york_02_press_center.png'),
+  require('../../assets/images/phase_e_new_york_03_stretch_dough.png'),
+  require('../../assets/images/phase_e_new_york_04_final_shape.png'),
+  require('../../assets/images/phase_e_new_york_05_add_toppings.png'),
+];
 
-export type MixingGuideKind = 'hand' | 'mixer' | 'stretchFold' | 'balling' | 'baking' | 'bakingRomanaTonda';
+export type MixingGuideKind = 'hand' | 'mixer' | 'stretchFold' | 'balling' | 'baking' | 'bakingRomanaTonda' | 'bakingNewYork';
 
 export default function MixingGuideCarousel({
   lang,
@@ -66,6 +73,8 @@ export default function MixingGuideCarousel({
         ? NAPOLETANA_BAKING_IMAGES
         : kind === 'bakingRomanaTonda'
           ? ROMANA_TONDA_BAKING_IMAGES
+          : kind === 'bakingNewYork'
+            ? NEW_YORK_BAKING_IMAGES
         : MIXER_IMAGES;
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -89,6 +98,8 @@ export default function MixingGuideCarousel({
             ? 'phase-e-napoletana-carousel'
             : kind === 'bakingRomanaTonda'
               ? 'phase-e-romana-tonda-carousel'
+              : kind === 'bakingNewYork'
+                ? 'phase-e-new-york-carousel'
           : 'phase-a-mixer-carousel'}
     >
       <View
@@ -113,6 +124,8 @@ export default function MixingGuideCarousel({
                   ? 'phase-e-napoletana-carousel-pager'
                   : kind === 'bakingRomanaTonda'
                     ? 'phase-e-romana-tonda-carousel-pager'
+                    : kind === 'bakingNewYork'
+                      ? 'phase-e-new-york-carousel-pager'
                 : 'phase-a-mixer-carousel-pager'}
           >
             {images.map((source, index) => (
@@ -141,7 +154,9 @@ export default function MixingGuideCarousel({
               ? 'phase-e-napoletana-carousel-indicator'
                   : kind === 'bakingRomanaTonda'
                     ? 'phase-e-romana-tonda-carousel-indicator'
-              : 'phase-a-mixer-carousel-indicator'}
+                    : kind === 'bakingNewYork'
+                      ? 'phase-e-new-york-carousel-indicator'
+                  : 'phase-a-mixer-carousel-indicator'}
       >
         {images.map((_, index) => (
           <View
