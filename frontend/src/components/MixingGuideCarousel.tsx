@@ -51,8 +51,15 @@ const NEW_YORK_BAKING_IMAGES = [
   require('../../assets/images/phase_e_new_york_04_final_shape.png'),
   require('../../assets/images/phase_e_new_york_05_add_toppings.png'),
 ];
+const ROMANA_TEGLIA_BAKING_IMAGES = [
+  require('../../assets/images/phase_e_romana_teglia_01_dough_mass.png'),
+  require('../../assets/images/phase_e_romana_teglia_02_press_in_tray.png'),
+  require('../../assets/images/phase_e_romana_teglia_03_stretch_in_tray.png'),
+  require('../../assets/images/phase_e_romana_teglia_04_final_tray_shape.png'),
+  require('../../assets/images/phase_e_romana_teglia_05_add_toppings.png'),
+];
 
-export type MixingGuideKind = 'hand' | 'mixer' | 'stretchFold' | 'balling' | 'baking' | 'bakingRomanaTonda' | 'bakingNewYork';
+export type MixingGuideKind = 'hand' | 'mixer' | 'stretchFold' | 'balling' | 'baking' | 'bakingRomanaTonda' | 'bakingNewYork' | 'bakingRomanaTeglia';
 
 export default function MixingGuideCarousel({
   lang,
@@ -75,6 +82,8 @@ export default function MixingGuideCarousel({
           ? ROMANA_TONDA_BAKING_IMAGES
           : kind === 'bakingNewYork'
             ? NEW_YORK_BAKING_IMAGES
+            : kind === 'bakingRomanaTeglia'
+              ? ROMANA_TEGLIA_BAKING_IMAGES
         : MIXER_IMAGES;
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -100,6 +109,8 @@ export default function MixingGuideCarousel({
               ? 'phase-e-romana-tonda-carousel'
               : kind === 'bakingNewYork'
                 ? 'phase-e-new-york-carousel'
+                : kind === 'bakingRomanaTeglia'
+                  ? 'phase-e-romana-teglia-carousel'
           : 'phase-a-mixer-carousel'}
     >
       <View
@@ -126,6 +137,8 @@ export default function MixingGuideCarousel({
                     ? 'phase-e-romana-tonda-carousel-pager'
                     : kind === 'bakingNewYork'
                       ? 'phase-e-new-york-carousel-pager'
+                      : kind === 'bakingRomanaTeglia'
+                        ? 'phase-e-romana-teglia-carousel-pager'
                 : 'phase-a-mixer-carousel-pager'}
           >
             {images.map((source, index) => (
@@ -156,6 +169,8 @@ export default function MixingGuideCarousel({
                     ? 'phase-e-romana-tonda-carousel-indicator'
                     : kind === 'bakingNewYork'
                       ? 'phase-e-new-york-carousel-indicator'
+                      : kind === 'bakingRomanaTeglia'
+                        ? 'phase-e-romana-teglia-carousel-indicator'
                   : 'phase-a-mixer-carousel-indicator'}
       >
         {images.map((_, index) => (
