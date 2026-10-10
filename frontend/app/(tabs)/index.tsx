@@ -5900,6 +5900,42 @@ function buildBeginnerFinalPhaseInfo(
       ['Peka', oven === 'homeStone' ? 'Opazujte barvo roba in dna ter upoštevajte obstoječi čas peke. Uporabite ustrezen program ali zgornje/spodnje gretje; žar na kratko vključite le, če je varno in potrebno.' : oven === 'ooni' ? 'Pico ves čas spremljajte, saj se v pizza pečici speče hitro. Obračajte jo po obstoječih navodilih in vzemite ven, ko sta rob in dno ustrezno zapečena.' : 'Opazujte vrh in dno v obstoječem časovnem razponu. Žar uporabite za zapečenje le, če je varno; pice ne puščajte brez nadzora.'],
     ],
   }[lang];
+  if (round) {
+    const titles = {
+      hr: ['Zašto tijesto mora odstajati na sobnoj temperaturi?', 'Zašto je važno dobro zagrijati pećnicu?', 'Zašto koristiti semolu?', 'Kako izvaditi kuglicu bez oštećenja?', 'Kako dobiti prozračan rub?', 'Zašto je važna količina nadjeva?', 'Kako spriječiti lijepljenje pizze za lopatu?', 'Kako znati da je pizza pečena?'],
+      en: ['Why must the dough rest at room temperature?', 'Why is thorough oven preheating important?', 'Why use semolina?', 'How do you remove a dough ball without damaging it?', 'How do you get an airy rim?', 'Why does the topping quantity matter?', 'How do you prevent the pizza from sticking to the peel?', 'How do you know when the pizza is baked?'],
+      de: ['Warum muss der Teig bei Raumtemperatur ruhen?', 'Warum ist gründliches Vorheizen wichtig?', 'Warum Semola verwenden?', 'Wie nimmt man eine Teigkugel unbeschädigt heraus?', 'Wie bekommt man einen luftigen Rand?', 'Warum ist die Menge des Belags wichtig?', 'Wie verhindert man, dass die Pizza am Schieber klebt?', 'Woran erkennt man, dass die Pizza fertig gebacken ist?'],
+      sl: ['Zakaj mora testo počivati pri sobni temperaturi?', 'Zakaj je pomembno dobro segreti pečico?', 'Zakaj uporabiti zdrob?', 'Kako vzeti kroglico brez poškodb?', 'Kako dobiti zračen rob?', 'Zakaj je količina nadeva pomembna?', 'Kako preprečiti, da bi se pica prijela loparja?', 'Kako vemo, da je pica pečena?'],
+    }[lang];
+    copy.forEach((entry, index) => {
+      entry[0] = titles[index];
+    });
+    copy[3][1] = {
+      hr: 'Lagano pobrašnite ruke ili upotrijebite lopaticu za tijesto. Pažljivo odvojite kuglicu od dna i podignite je bez snažnog povlačenja. Izbjegavajte ponovno gnječenje jer biste istisnuli plin nastao tijekom fermentacije.',
+      en: 'Lightly flour your hands or use a dough spatula. Carefully loosen the dough ball from the bottom and lift it without pulling hard. Avoid kneading it again, because this would press out the gas formed during fermentation.',
+      de: 'Bemehlen Sie Ihre Hände leicht oder verwenden Sie einen Teigschieber. Lösen Sie die Teigkugel vorsichtig vom Boden und heben Sie sie ohne kräftiges Ziehen an. Kneten Sie sie nicht erneut, da sonst das während der Fermentation entstandene Gas entweicht.',
+      sl: 'Roke rahlo pomokajte ali uporabite lopatico za testo. Kroglico previdno ločite od dna in jo dvignite brez močnega vlečenja. Ne gnetite je znova, saj bi iztisnili plin, nastal med fermentacijo.',
+    }[lang];
+    copy[5][1] = {
+      hr: 'Previše umaka ili vlažne mozzarelle može natopiti sredinu tijesta i otežati pečenje. Mozzarellu unaprijed ocijedite i ravnomjerno rasporedite. Nakon dodavanja nadjeva nemojte dugo čekati prije pečenja.',
+      en: 'Too much sauce or wet mozzarella can soak the centre of the dough and make baking harder. Drain the mozzarella in advance and distribute it evenly. Do not wait long after topping before baking.',
+      de: 'Zu viel Sauce oder feuchter Mozzarella kann die Teigmitte durchweichen und das Backen erschweren. Lassen Sie den Mozzarella vorher abtropfen und verteilen Sie ihn gleichmäßig. Warten Sie nach dem Belegen nicht lange mit dem Backen.',
+      sl: 'Preveč omake ali mokra mocarela lahko namočita sredino testa in otežita peko. Mocarelo vnaprej odcedite in jo enakomerno razporedite. Po dodajanju nadeva ne čakajte dolgo pred peko.',
+    }[lang];
+    copy[6][1] = oven === 'homePan'
+      ? {
+        hr: 'Pizzu pažljivo prenesite na pripremljeni lim i ne dodirujte vruće površine. Koristite rukavice prema potrebi.',
+        en: 'Move the pizza carefully onto the prepared tray and avoid touching hot surfaces. Use oven gloves when needed.',
+        de: 'Legen Sie die Pizza vorsichtig auf das vorbereitete Blech und berühren Sie keine heißen Flächen. Verwenden Sie bei Bedarf Ofenhandschuhe.',
+        sl: 'Pico previdno prenesite na pripravljen pekač in se ne dotikajte vročih površin. Po potrebi uporabite rokavice.',
+      }[lang]
+      : {
+        hr: 'Prije prebacivanja lagano protresite lopatu. Pizza bi se trebala slobodno pomicati. Ako se zalijepila, pažljivo je odvojite uz vrlo malo semole i pazite na vruće površine.',
+        en: 'Before launching, gently shake the peel. The pizza should move freely. If it sticks, loosen it carefully with a very small amount of semolina and watch for hot surfaces.',
+        de: 'Schütteln Sie den Schieber vor dem Einschießen leicht. Die Pizza sollte sich frei bewegen. Wenn sie klebt, lösen Sie sie vorsichtig mit sehr wenig Semola und achten Sie auf heiße Flächen.',
+        sl: 'Pred prenosom lopar rahlo stresite. Pica se mora prosto premikati. Če se lepi, jo previdno sprostite z zelo malo zdroba in pazite na vroče površine.',
+      }[lang];
+  }
   const tegliaHelpOrder = [0, 1, 2, 4, 4, 5, 7, 7];
   const ordered = teglia ? tegliaHelpOrder.map((index) => copy[index]) : copy;
   if (teglia) {
@@ -6579,8 +6615,8 @@ function buildBeginnerDirectHomeSteps(
   const replaceYeastLabel = (text: string) => labelSelectedYeast(text, lang, yeastType);
   const shapingSteps = ({
     hr: {
-      surface: oven === 'homePan' ? 'Lagano nauljite tepsiju.' : 'Radnu površinu lagano pospite semolom.',
-      ball: 'Nježno uzmite jednu kuglu tijesta bez istiskivanja zraka.',
+      surface: oven === 'homePan' ? 'Lagano nauljite tepsiju.' : 'Neposredno prije oblikovanja lagano pospite radnu površinu semolom.',
+      ball: 'Nježno izvadite jednu kuglicu iz fermentacijske kutije, bez nepotrebnog istiskivanja zraka. Ostale kuglice ostavite pokrivene.',
       shape: pizzaStyle === 'romana'
         ? `Romanu oblikujte tanko i ravno do ${diameter} cm pritiskanjem prstima ili valjkom, bez agresivnog rastezanja u zraku.`
         : pizzaStyle === 'ny_style'
@@ -6595,8 +6631,8 @@ function buildBeginnerDirectHomeSteps(
           : `Pecite ${bakingTimeRange} na ${ovenTemp} °C; provjerite dno i po potrebi kratko završite gornjim grillom.`,
     },
     en: {
-      surface: oven === 'homePan' ? 'Lightly oil the baking tray.' : 'Lightly dust the work surface with semolina.',
-      ball: 'Gently lift one dough ball without pressing out its gas.',
+      surface: oven === 'homePan' ? 'Lightly oil the baking tray.' : 'Immediately before shaping, lightly dust the work surface with semolina.',
+      ball: 'Gently remove one dough ball from the fermentation box without unnecessarily pressing out its gas. Keep the remaining dough balls covered.',
       shape: pizzaStyle === 'romana'
         ? `Shape Romana thin and flat to ${diameter} cm by pressing or rolling; do not stretch it aggressively in the air.`
         : pizzaStyle === 'ny_style'
@@ -6611,8 +6647,8 @@ function buildBeginnerDirectHomeSteps(
           : `Bake ${bakingTimeRange} at ${ovenTemp} °C; check the base and finish briefly under the upper grill if needed.`,
     },
     de: {
-      surface: oven === 'homePan' ? 'Fetten Sie das Backblech leicht ein.' : 'Bestäuben Sie die Arbeitsfläche leicht mit Semola.',
-      ball: 'Heben Sie eine Teigkugel vorsichtig an, ohne das Gas herauszudrücken.',
+      surface: oven === 'homePan' ? 'Fetten Sie das Backblech leicht ein.' : 'Bestäuben Sie die Arbeitsfläche unmittelbar vor dem Formen leicht mit Semola.',
+      ball: 'Nehmen Sie eine Teigkugel vorsichtig aus der Gärbox, ohne unnötig Gas herauszudrücken. Lassen Sie die übrigen Teigkugeln abgedeckt.',
       shape: pizzaStyle === 'romana'
         ? `Formen Sie die Romana dünn und flach auf ${diameter} cm, indem Sie sie drücken oder rollen; nicht aggressiv in der Luft dehnen.`
         : pizzaStyle === 'ny_style'
@@ -6627,8 +6663,8 @@ function buildBeginnerDirectHomeSteps(
           : `Backen Sie ${bakingTimeRange} bei ${ovenTemp} °C; prüfen Sie den Boden und bräunen Sie bei Bedarf kurz unter dem oberen Grill.`,
     },
     sl: {
-      surface: oven === 'homePan' ? 'Pekač rahlo naoljite.' : 'Delovno površino rahlo posujte z zdrobom.',
-      ball: 'Nežno dvignite eno kroglico, ne da bi iztisnili plin.',
+      surface: oven === 'homePan' ? 'Pekač rahlo naoljite.' : 'Tik pred oblikovanjem delovno površino rahlo posujte z zdrobom.',
+      ball: 'Nežno vzemite eno kroglico iz fermentacijske posode, ne da bi po nepotrebnem iztisnili plin. Preostale kroglice naj ostanejo pokrite.',
       shape: pizzaStyle === 'romana'
         ? `Romano oblikujte tanko in ravno do ${diameter} cm s pritiskanjem ali valjarjem; ne raztegujte je agresivno v zraku.`
         : pizzaStyle === 'ny_style'
