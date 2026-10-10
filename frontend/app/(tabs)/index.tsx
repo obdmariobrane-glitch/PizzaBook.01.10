@@ -3506,7 +3506,9 @@ export default function CalculatorHome() {
                     doughTemperatureStyle={beginnerDirectHome ? (isRomanTeglia ? 'romanaTeglia' : pizzaStyle === 'romana' ? 'romanaTonda' : pizzaStyle === 'ny_style' ? 'newYork' : 'napolitana') : undefined}
                     phaseKey={`detailed-direct-${pizzaStyle}-${mixing}-${index}`}
                     timers={beginnerDirectHomeSteps ? phase.timers : directHomeSchedule ? [] : phase.timers}
-                    phaseGuide={isBeginner && flour !== 'glutenFree' && index === 0 && mixing === 'mixer'
+                    phaseGuide={isBeginner && flour === 'glutenFree' && !isRomanTeglia && index === (directRecipeFridgeHours > 0 ? 4 : 3)
+                      ? { kind: 'bakingGlutenFree', onPress: () => { setVisualGuideSlide(0); setMixingGuideKind('bakingGlutenFree'); } }
+                      : isBeginner && flour !== 'glutenFree' && index === 0 && mixing === 'mixer'
                       ? { kind: mixing, onPress: () => setMixingGuideKind(mixing) }
                       : isBeginner && flour !== 'glutenFree' && index === 1 && phase.steps.some((step) => /stretch\s*&?\s*fold|preklop|pregib|fold/i.test(step))
                         ? { kind: 'stretchFold', onPress: () => { setVisualGuideSlide(0); setMixingGuideKind('stretchFold'); } }
@@ -3841,6 +3843,8 @@ export default function CalculatorHome() {
                       ? ({ hr: 'FAZA C', en: 'PHASE C', de: 'PHASE C', sl: 'FAZA C' }[lang])
                     : mixingGuideKind === 'baking' || mixingGuideKind === 'bakingRomanaTonda' || mixingGuideKind === 'bakingNewYork' || mixingGuideKind === 'bakingRomanaTeglia'
                         ? ({ hr: 'FAZA E', en: 'PHASE E', de: 'PHASE E', sl: 'FAZA E' }[lang])
+                    : mixingGuideKind === 'bakingGlutenFree'
+                      ? ({ hr: 'FAZA E', en: 'PHASE E', de: 'PHASE E', sl: 'FAZA E' }[lang])
                       : ({ hr: 'FAZA A', en: 'PHASE A', de: 'PHASE A', sl: 'FAZA A' }[lang])}</Text>
                   <Text style={styles.visualGuideTitle}>{mixingGuideKind === 'stretchFold'
                     ? ({ hr: 'Preklapanje tijesta', en: 'Stretch & fold', de: 'Stretch & Fold', sl: 'Razteg in prepogib' }[lang])
@@ -3848,6 +3852,8 @@ export default function CalculatorHome() {
                       ? ({ hr: 'Podjela i oblikovanje kuglica', en: 'Dividing and shaping dough balls', de: 'Teilen und Formen von Teigkugeln', sl: 'Delitev in oblikovanje kroglic' }[lang])
                     : mixingGuideKind === 'baking' || mixingGuideKind === 'bakingRomanaTonda' || mixingGuideKind === 'bakingNewYork' || mixingGuideKind === 'bakingRomanaTeglia'
                         ? ({ hr: 'Temperiranje, oblikovanje i pečenje', en: 'Tempering, shaping and baking', de: 'Temperieren, Formen und Backen', sl: 'Temperiranje, oblikovanje in peka' }[lang])
+                    : mixingGuideKind === 'bakingGlutenFree'
+                      ? ({ hr: 'Temperiranje, oblikovanje i pečenje', en: 'Tempering, shaping and baking', de: 'Temperieren, Formen und Backen', sl: 'Temperiranje, oblikovanje in peka' }[lang])
                       : ({ hr: 'Priprema i zamjes', en: 'Preparation and mixing', de: 'Vorbereitung und Kneten', sl: 'Priprava in gnetenje' }[lang])}</Text>
                 </View>
                 <Pressable
@@ -3868,6 +3874,8 @@ export default function CalculatorHome() {
                         ? 'phase-e-new-york-visual-guide-close-icon'
                       : mixingGuideKind === 'bakingRomanaTeglia'
                         ? 'phase-e-romana-teglia-visual-guide-close-icon'
+                      : mixingGuideKind === 'bakingGlutenFree'
+                        ? 'phase-e-gluten-free-visual-guide-close-icon'
                       : 'phase-a-visual-guide-close-icon'}
                 >
                   <Icon name="close" size={21} color={COLORS.onSurface} />
@@ -3916,6 +3924,13 @@ export default function CalculatorHome() {
                   onSlideChange={setVisualGuideSlide}
                 />
               ) : null}
+              {mixingGuideKind === 'bakingGlutenFree' ? (
+                <MixingGuideCarousel
+                  lang={lang}
+                  kind="bakingGlutenFree"
+                  onSlideChange={setVisualGuideSlide}
+                />
+              ) : null}
               <View style={styles.visualGuideCopyBlock}>
                 <Text style={styles.visualGuideSectionTitle}>{({ hr: 'KAKO NAPRAVITI', en: 'HOW TO DO IT', de: 'SO GEHT’S', sl: 'KAKO NAREDITI' }[lang])}</Text>
                 <Text style={styles.visualGuideBody}>
@@ -3931,6 +3946,8 @@ export default function CalculatorHome() {
                       ? getNewYorkBakingGuideCopy(lang, visualGuideSlide).how
                     : mixingGuideKind === 'bakingRomanaTeglia'
                       ? getRomanaTegliaBakingGuideCopy(lang, visualGuideSlide).how
+                    : mixingGuideKind === 'bakingGlutenFree'
+                      ? getGlutenFreeBakingGuideCopy(lang, visualGuideSlide).how
                     : mixingGuideKind === 'mixer'
                     ? ({
                       hr: 'Počni sporije kako bi se brašno i voda spojili bez prskanja. Kad više nema suhih dijelova, nastavi prema uputama recepta.',
@@ -3961,6 +3978,8 @@ export default function CalculatorHome() {
                       ? getNewYorkBakingGuideCopy(lang, visualGuideSlide).look
                     : mixingGuideKind === 'bakingRomanaTeglia'
                       ? getRomanaTegliaBakingGuideCopy(lang, visualGuideSlide).look
+                    : mixingGuideKind === 'bakingGlutenFree'
+                      ? getGlutenFreeBakingGuideCopy(lang, visualGuideSlide).look
                     : ({
                     hr: 'Tijesto treba biti povezano i ujednačeno, bez suhih dijelova brašna.',
                     en: 'The dough should be cohesive and even, with no dry flour remaining.',
@@ -3986,6 +4005,8 @@ export default function CalculatorHome() {
                     ? 'phase-e-new-york-visual-guide-close'
                   : mixingGuideKind === 'bakingRomanaTeglia'
                     ? 'phase-e-romana-teglia-visual-guide-close'
+                  : mixingGuideKind === 'bakingGlutenFree'
+                    ? 'phase-e-gluten-free-visual-guide-close'
                   : 'phase-a-visual-guide-close'}
             >
               <Text style={styles.visualGuideCloseText}>{({ hr: 'ZATVORI', en: 'CLOSE', de: 'SCHLIESSEN', sl: 'ZAPRI' }[lang])}</Text>
@@ -7566,6 +7587,102 @@ function getRomanaTegliaBakingGuideCopy(lang: Lang, slide: number) {
       sl: {
         how: 'Na surovo testo razporedite omako in druge sestavine po količinah in vrstnem redu iz recepta. Testa ne obložite s preveč mokrim nadevom.',
         look: 'Surovo testo je v pravokotnem pekaču. Nadev je enakomerno razporejen brez večjega nabiranja tekočine. Pica še ni pečena.',
+      },
+    },
+  ];
+  return copy[Math.min(slide, copy.length - 1)][lang];
+}
+
+function getGlutenFreeBakingGuideCopy(lang: Lang, slide: number) {
+  const copy = [
+    {
+      hr: {
+        how: 'Nježno izvadite bezglutensko tijesto iz posude i položite ga na radnu površinu pripremljenu prema uputama recepta. Ako je tijesto ljepljivo, lagano navlažite ili nauljite ruke. Nemojte ga snažno mijesiti.',
+        look: 'Tijesto treba biti povezano i dovoljno mekano za oblikovanje. Površina može biti manje glatka nego kod pšeničnog tijesta, ali ne smije se raspadati.',
+      },
+      en: {
+        how: 'Gently remove the gluten-free dough from the container and place it on a work surface prepared according to the recipe. If it is sticky, lightly wet or oil your hands. Do not knead it firmly.',
+        look: 'The dough should be cohesive and soft enough to shape. The surface may be less smooth than wheat dough, but it should not fall apart.',
+      },
+      de: {
+        how: 'Nehmen Sie den glutenfreien Teig vorsichtig aus dem Behälter und legen Sie ihn auf eine nach Rezept vorbereitete Arbeitsfläche. Wenn der Teig klebt, befeuchten oder ölen Sie Ihre Hände leicht. Kneten Sie ihn nicht kräftig.',
+        look: 'Der Teig sollte verbunden und weich genug zum Formen sein. Die Oberfläche darf weniger glatt als bei Weizenteig sein, sollte aber nicht zerfallen.',
+      },
+      sl: {
+        how: 'Brezglutensko testo nežno vzemite iz posode in ga položite na delovno površino, pripravljeno po navodilih recepta. Če je lepljivo, si rahlo navlažite ali naoljite roke. Ne gnetite ga močno.',
+        look: 'Testo naj bo povezano in dovolj mehko za oblikovanje. Površina je lahko manj gladka kot pri pšeničnem testu, vendar ne sme razpadati.',
+      },
+    },
+    {
+      hr: {
+        how: 'Lagano navlaženim ili nauljenim prstima nježno pritišćite sredinu tijesta i postupno ga širite prema van. Nemojte snažno pritiskati niti pokušavati rastezati tijesto kao klasično pšenično tijesto.',
+        look: 'Tijesto se postupno širi u okrugli disk. Sredina postaje tanja, a rub ostaje nešto deblji, bez velikih pukotina.',
+      },
+      en: {
+        how: 'With lightly moistened or oiled fingers, gently press the center of the dough and gradually spread it outward. Do not press firmly or try to stretch it like conventional wheat dough.',
+        look: 'The dough gradually spreads into a round disc. The center becomes thinner while the rim remains somewhat thicker, without large cracks.',
+      },
+      de: {
+        how: 'Drücken Sie die Teigmitte vorsichtig mit leicht befeuchteten oder geölten Fingern und verteilen Sie den Teig nach und nach nach außen. Drücken Sie nicht kräftig und dehnen Sie ihn nicht wie herkömmlichen Weizenteig.',
+        look: 'Der Teig breitet sich allmählich zu einer runden Scheibe aus. Die Mitte wird dünner, während der Rand etwas dicker bleibt, ohne große Risse.',
+      },
+      sl: {
+        how: 'Z rahlo navlaženimi ali naoljenimi prsti nežno pritiskajte sredino testa in ga postopoma širite navzven. Ne pritiskajte močno in ga ne poskušajte raztegovati kot klasično pšenično testo.',
+        look: 'Testo se postopoma razširi v okrogel disk. Sredina postane tanjša, rob pa ostane nekoliko debelejši, brez večjih razpok.',
+      },
+    },
+    {
+      hr: {
+        how: 'Nastavite oblikovati tijesto laganim pritiskanjem prstima i dlanovima. Postupno povećavajte promjer, podupirući rubove kako se tijesto ne bi trgalo. Nemojte ga podizati i razvlačiti u zraku.',
+        look: 'Tijesto treba biti približno okruglo, ravnomjerne debljine i bez većih pukotina. Manje nepravilnosti na površini su normalne.',
+      },
+      en: {
+        how: 'Continue shaping the dough with gentle pressure from your fingers and palms. Gradually increase its diameter while supporting the edges so it does not tear. Do not lift and stretch it in the air.',
+        look: 'The dough should be approximately round, evenly thick, and free of major cracks. Minor surface irregularities are normal.',
+      },
+      de: {
+        how: 'Formen Sie den Teig weiter, indem Sie ihn vorsichtig mit Fingern und Handflächen drücken. Vergrößern Sie den Durchmesser schrittweise und stützen Sie den Rand, damit der Teig nicht reißt. Heben und dehnen Sie ihn nicht in der Luft.',
+        look: 'Der Teig sollte annähernd rund und gleichmäßig dick sein, ohne größere Risse. Kleine Unregelmäßigkeiten auf der Oberfläche sind normal.',
+      },
+      sl: {
+        how: 'Nadaljujte oblikovanje testa z rahlim pritiskanjem prstov in dlani. Postopoma povečujte premer in podpirajte robove, da se testo ne strga. Ne dvigujte ga in ne raztegujte v zraku.',
+        look: 'Testo naj bo približno okroglo, enakomerno debelo in brez večjih razpok. Manjše nepravilnosti na površini so normalne.',
+      },
+    },
+    {
+      hr: {
+        how: 'Dovršite oblikovanje do promjera navedenog u receptu. Nježno poravnajte sredinu i rubove. Ako se pojave male pukotine, pažljivo ih spojite laganim pritiskom prstiju.',
+        look: 'Oblikovana podloga treba biti okrugla, stabilna i dovoljno čvrsta da zadrži oblik. Sredina je ravnomjerno oblikovana, a rub ostaje cjelovit.',
+      },
+      en: {
+        how: 'Finish shaping to the diameter specified in the recipe. Gently even out the center and edges. If small cracks appear, carefully close them with light fingertip pressure.',
+        look: 'The shaped base should be round, stable, and firm enough to hold its shape. The center is even and the rim remains intact.',
+      },
+      de: {
+        how: 'Beenden Sie die Formung bis zum im Rezept angegebenen Durchmesser. Glätten Sie Mitte und Rand vorsichtig. Wenn kleine Risse entstehen, schließen Sie sie behutsam mit leichtem Fingerdruck.',
+        look: 'Der geformte Boden sollte rund und stabil sein und seine Form halten. Die Mitte ist gleichmäßig, der Rand bleibt intakt.',
+      },
+      sl: {
+        how: 'Oblikovanje dokončajte do premera, navedenega v receptu. Sredino in robove nežno poravnajte. Če se pojavijo majhne razpoke, jih previdno zaprite z rahlim pritiskom prstov.',
+        look: 'Oblikovana podlaga naj bo okrogla, stabilna in dovolj čvrsta, da ohrani obliko. Sredina je enakomerno oblikovana, rob pa ostane cel.',
+      },
+    },
+    {
+      hr: {
+        how: 'Ravnomjerno rasporedite umak i ostale sastojke u količinama i redoslijedu navedenima u receptu. Nemojte preopteretiti tijesto vlažnim nadjevom jer bezglutenska podloga može biti osjetljivija.',
+        look: 'Sirova bezglutenska pizza ima ravnomjerno raspoređen nadjev. Tijesto zadržava oblik, rub je cjelovit, a sredina nije natopljena tekućinom.',
+      },
+      en: {
+        how: 'Spread the sauce and other ingredients evenly in the quantities and order specified by the recipe. Do not overload the dough with wet toppings, as a gluten-free base may be more delicate.',
+        look: 'The raw gluten-free pizza has evenly distributed toppings. The dough holds its shape, the rim is intact, and the center is not soaked with liquid.',
+      },
+      de: {
+        how: 'Verteilen Sie Sauce und übrige Zutaten gleichmäßig in den im Rezept angegebenen Mengen und der Reihenfolge. Überladen Sie den Teig nicht mit feuchtem Belag, da ein glutenfreier Boden empfindlicher sein kann.',
+        look: 'Die rohe glutenfreie Pizza hat gleichmäßig verteilten Belag. Der Teig behält seine Form, der Rand ist intakt und die Mitte nicht mit Flüssigkeit durchweicht.',
+      },
+      sl: {
+        how: 'Enakomerno razporedite omako in druge sestavine v količinah in vrstnem redu iz recepta. Testa ne obložite s preveč mokrim nadevom, saj je brezglutenska podlaga lahko občutljivejša.',
+        look: 'Surova brezglutenska pica ima enakomerno razporejen nadev. Testo ohrani obliko, rob je cel, sredina pa ni prepojena s tekočino.',
       },
     },
   ];

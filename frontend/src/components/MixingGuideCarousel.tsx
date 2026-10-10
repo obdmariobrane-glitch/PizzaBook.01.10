@@ -58,8 +58,15 @@ const ROMANA_TEGLIA_BAKING_IMAGES = [
   require('../../assets/images/phase_e_romana_teglia_04_final_tray_shape.png'),
   require('../../assets/images/phase_e_romana_teglia_05_add_toppings.png'),
 ];
+const GLUTEN_FREE_BAKING_IMAGES = [
+  require('../../assets/images/phase_e_gluten_free_01_prepare_dough.png'),
+  require('../../assets/images/phase_e_gluten_free_02_press_center.png'),
+  require('../../assets/images/phase_e_gluten_free_03_shape_dough.png'),
+  require('../../assets/images/phase_e_gluten_free_04_final_shape.png'),
+  require('../../assets/images/phase_e_gluten_free_05_add_toppings.png'),
+];
 
-export type MixingGuideKind = 'hand' | 'mixer' | 'stretchFold' | 'balling' | 'baking' | 'bakingRomanaTonda' | 'bakingNewYork' | 'bakingRomanaTeglia';
+export type MixingGuideKind = 'hand' | 'mixer' | 'stretchFold' | 'balling' | 'baking' | 'bakingRomanaTonda' | 'bakingNewYork' | 'bakingRomanaTeglia' | 'bakingGlutenFree';
 
 export default function MixingGuideCarousel({
   lang,
@@ -84,6 +91,8 @@ export default function MixingGuideCarousel({
             ? NEW_YORK_BAKING_IMAGES
             : kind === 'bakingRomanaTeglia'
               ? ROMANA_TEGLIA_BAKING_IMAGES
+              : kind === 'bakingGlutenFree'
+                ? GLUTEN_FREE_BAKING_IMAGES
         : MIXER_IMAGES;
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -111,6 +120,8 @@ export default function MixingGuideCarousel({
                 ? 'phase-e-new-york-carousel'
                 : kind === 'bakingRomanaTeglia'
                   ? 'phase-e-romana-teglia-carousel'
+              : kind === 'bakingGlutenFree'
+                ? 'phase-e-gluten-free-carousel'
           : 'phase-a-mixer-carousel'}
     >
       <View
@@ -139,6 +150,8 @@ export default function MixingGuideCarousel({
                       ? 'phase-e-new-york-carousel-pager'
                       : kind === 'bakingRomanaTeglia'
                         ? 'phase-e-romana-teglia-carousel-pager'
+                        : kind === 'bakingGlutenFree'
+                          ? 'phase-e-gluten-free-carousel-pager'
                 : 'phase-a-mixer-carousel-pager'}
           >
             {images.map((source, index) => (
@@ -171,6 +184,8 @@ export default function MixingGuideCarousel({
                       ? 'phase-e-new-york-carousel-indicator'
                       : kind === 'bakingRomanaTeglia'
                         ? 'phase-e-romana-teglia-carousel-indicator'
+                        : kind === 'bakingGlutenFree'
+                          ? 'phase-e-gluten-free-carousel-indicator'
                   : 'phase-a-mixer-carousel-indicator'}
       >
         {images.map((_, index) => (
