@@ -36,6 +36,7 @@ import {
   createGuidedPlanId,
   getGuidedCountdown,
   getGuidedProgress,
+  getNighttimeActiveEvents,
   getLocalDayOffset,
   getNextGuidedEvent,
   groupGuidedEventsByLocalDate,
@@ -48,6 +49,7 @@ const CALCULATOR_SETTINGS_KEY = 'calculatorSettings';
 const BEGINNER_BAKE_AT_KEY = 'beginnerBakeAt';
 const GUIDED_NOTIFICATIONS_ENABLED_KEY = 'beginnerGuidedNotificationsEnabled';
 const GUIDED_PROGRESS_STORAGE_PREFIX = 'beginnerGuidedProgress:';
+const GUIDED_NIGHT_WARNING_CONFIRMED_PREFIX = 'beginnerNightWarningConfirmed:';
 const FREE_PIZZA_STYLE: PizzaStyle = 'neapolitan';
 const FREE_FLOUR_TYPES: FlourType[] = ['caputo00', 'manitoba', 'spelt'];
 const ALL_FLOUR_TYPES: FlourType[] = ['caputo00', 'manitoba', 'spelt', 'wholeWheat', 'glutenFree', 'custom'];
@@ -409,6 +411,7 @@ export default function CalculatorHome() {
   const [beginnerPlanExpanded, setBeginnerPlanExpanded] = useState(true);
   const [mixingGuideKind, setMixingGuideKind] = useState<MixingGuideKind | null>(null);
   const previousGuidedPlanId = useRef<string | null>(null);
+  const nighttimeWarningShown = useRef<Set<string>>(new Set());
   const notificationSyncGeneration = useRef(0);
   const [flourInfo, setFlourInfo] = useState<null | { label: string; info: string }>(null);
   const [styleInfo, setStyleInfo] = useState<PizzaStyle | null>(null);
@@ -1082,6 +1085,7 @@ export default function CalculatorHome() {
       id: 'preheat',
       label: `${t.beginnerCalc.preheat} · ${formatDuration(preheatMinutes * 60, lang)} · ${formatTemperature(ovenTemp, temperatureUnit)}`,
       at: preheatAt,
+      activeUntil: bakeAt,
       actionable: true,
     });
     const isTargetBeginnerDirect = beginnerDirectHome
@@ -1230,6 +1234,73 @@ export default function CalculatorHome() {
       console.error('Unable to save guided recipe progress:', error);
     });
   }, [guidedPlanId, guidedProgressPlanId, guidedCompletedAt]);
+
+  useEffect(() => {
+    if (!isBeginner || !guidedPlanId || guidedProgressPlanId !== guidedPlanId) return;
+    const affected = getNighttimeActiveEvents(beginnerScheduleSteps);
+    if (affected.length === 0 || nighttimeWarningShown.current.has(guidedPlanId)) return;
+    nighttimeWarningShown.current.add(guidedPlanId);
+    const locale = { hr: 'hr-HR', en: 'en-GB', de: 'de-DE', sl: 'sl-SI' }[lang];
+    const formatTime = (at: Date) => new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(at);
+    const copy = {
+      hr: {
+        title: 'Priprema tijekom noći',
+        description: 'Prema izračunatom rasporedu, neke aktivnosti potrebno je obaviti između 00:00 i 06:00.',
+        recommendation: 'Preporučujemo promjenu vremena pečenja kako biste izbjegli noćnu pripremu.',
+        change: 'Promijeni vrijeme pečenja',
+        keep: 'Zadrži postojeći raspored',
+        activities: 'Aktivnosti:',
+      },
+      en: {
+        title: 'Overnight preparation',
+        description: 'According to the calculated schedule, some activities must be done between 00:00 and 06:00.',
+        recommendation: 'We recommend changing the baking time to avoid overnight preparation.',
+        change: 'Change baking time',
+        keep: 'Keep the current schedule',
+        activities: 'Activities:',
+      },
+      de: {
+        title: 'Vorbereitung während der Nacht',
+        description: 'Laut dem berechneten Zeitplan müssen einige Aktivitäten zwischen 00:00 und 06:00 Uhr durchgeführt werden.',
+        recommendation: 'Wir empfehlen, die Backzeit zu ändern, um nächtliche Vorbereitung zu vermeiden.',
+        change: 'Backzeit ändern',
+        keep: 'Aktuellen Zeitplan beibehalten',
+        activities: 'Aktivitäten:',
+      },
+      sl: {
+        title: 'Priprava ponoči',
+        description: 'Po izračunanem načrtu je treba nekatere dejavnosti opraviti med 00:00 in 06:00.',
+        recommendation: 'Priporočamo spremembo časa peke, da se izognete nočni pripravi.',
+        change: 'Spremeni čas peke',
+        keep: 'Obdrži trenutni načrt',
+        activities: 'Dejavnosti:',
+      },
+    }[lang];
+    const activityList = affected.map((event) => `• ${event.label} — ${formatTime(event.at)}`).join('\n');
+    AsyncStorage.getItem(`${GUIDED_NIGHT_WARNING_CONFIRMED_PREFIX}${guidedPlanId}`).then((confirmed) => {
+      if (confirmed === 'true') return;
+      Alert.alert(
+        copy.title,
+        `${copy.description}\n\n${copy.activities}\n${activityList}\n\n${copy.recommendation}`,
+        [
+          {
+            text: copy.change,
+            onPress: () => router.push(`/(tabs)/planner?returnTo=beginner&returnToken=${Date.now()}&returnSection=bake`),
+          },
+          {
+            text: copy.keep,
+            onPress: () => {
+              AsyncStorage.setItem(`${GUIDED_NIGHT_WARNING_CONFIRMED_PREFIX}${guidedPlanId}`, 'true').catch((error) => {
+                console.error('Unable to remember nighttime schedule confirmation:', error);
+              });
+            },
+          },
+        ],
+      );
+    }).catch((error) => {
+      console.error('Unable to check nighttime schedule confirmation:', error);
+    });
+  }, [isBeginner, guidedPlanId, guidedProgressPlanId, beginnerScheduleSteps, lang, router]);
 
   useEffect(() => {
     if (!guidedPlanId) {

@@ -3,6 +3,7 @@ export type GuidedActionId = 'mix' | 'fold1' | 'fold2' | 'fridgeIn' | 'fridgeInC
 export type GuidedScheduleEvent = {
   id: GuidedActionId;
   at: Date;
+  activeUntil?: Date;
   label: string;
   actionable: boolean;
 };
@@ -34,6 +35,31 @@ export function getNextGuidedEvent(
   return [...events]
     .filter((event) => event.actionable && completedAt[event.id] === undefined)
     .sort((left, right) => left.at.getTime() - right.at.getTime())[0] ?? null;
+}
+
+export function getNighttimeActiveEvents(
+  events: readonly GuidedScheduleEvent[],
+): GuidedScheduleEvent[] {
+  const overlapsNight = (event: GuidedScheduleEvent) => {
+    const end = event.activeUntil ?? event.at;
+    if (!event.activeUntil) {
+      const hour = event.at.getHours();
+      return hour >= 0 && hour < 6;
+    }
+    const cursor = new Date(event.at);
+    cursor.setHours(0, 0, 0, 0);
+    const lastDay = new Date(end);
+    lastDay.setHours(0, 0, 0, 0);
+    for (let day = cursor; day.getTime() <= lastDay.getTime(); day.setDate(day.getDate() + 1)) {
+      const nightStart = new Date(day);
+      nightStart.setHours(0, 0, 0, 0);
+      const nightEnd = new Date(day);
+      nightEnd.setHours(6, 0, 0, 0);
+      if (event.at.getTime() < nightEnd.getTime() && end.getTime() > nightStart.getTime()) return true;
+    }
+    return false;
+  };
+  return events.filter((event) => event.actionable && overlapsNight(event));
 }
 
 export function getGuidedProgress(

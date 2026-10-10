@@ -19,6 +19,7 @@ const {
   getGuidedCountdown,
   getGuidedProgress,
   getLocalDayOffset,
+  getNighttimeActiveEvents,
   getNextGuidedEvent,
   groupGuidedEventsByLocalDate,
   planGuidedNotifications,
@@ -57,6 +58,22 @@ const identity = [firstDay.getTime(), nextDay.getTime(), 'neapolitan'];
 assert.equal(createGuidedPlanId(identity), createGuidedPlanId([...identity]), 'equal plan inputs should have a stable identity');
 assert.notEqual(createGuidedPlanId(identity), createGuidedPlanId([...identity, 'changed']), 'material plan changes should create a new identity');
 assert.equal(getLocalDayOffset(firstDay, nextDay), 1, 'day offsets should use local calendar days');
+
+{
+  const localDate = (hour, minute = 0) => new Date(2027, 3, 13, hour, minute);
+  const event = (id, at, activeUntil) => ({ id, at, activeUntil, label: id, actionable: true });
+  assert.deepEqual(
+    getNighttimeActiveEvents([
+      event('midnight', localDate(0)),
+      event('six', localDate(6)),
+      event('day', localDate(12)),
+      event('preheat', localDate(5, 30), localDate(6, 30)),
+      { id: 'passive', at: localDate(2), label: 'passive', actionable: false },
+    ]).map((item) => item.id),
+    ['midnight', 'preheat'],
+    'nighttime detection must include 00:00 and crossing intervals, but exclude 06:00 and passive waits',
+  );
+}
 
 {
   const t0 = now + 3_600_000;
