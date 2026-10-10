@@ -15,6 +15,7 @@
     "check:beginner-direct-schedule": "node ./scripts/verify-beginner-direct-schedule.js",
     "check:beginner-direct-v1": "node ./scripts/verify-beginner-direct-v1.js",
     "check:beginner-notifications": "node ./scripts/verify-beginner-notifications.js",
+    "check:gallery-sync": "node ./scripts/verify-gallery-sync.js",
     "check:dough-calc": "node ./scripts/verify-dough-calc.js",
     "check:beginner-water-temp": "node ./scripts/verify-beginner-water-temp.js",
     "check:home-pizza-plan": "node ./scripts/verify-home-pizza-plan.js",
