@@ -411,6 +411,7 @@ export default function CalculatorHome() {
   const [beginnerIngredientsExpanded, setBeginnerIngredientsExpanded] = useState(true);
   const [beginnerPlanExpanded, setBeginnerPlanExpanded] = useState(true);
   const [mixingGuideKind, setMixingGuideKind] = useState<MixingGuideKind | null>(null);
+  const [stretchFoldSlide, setStretchFoldSlide] = useState(0);
   const previousGuidedPlanId = useRef<string | null>(null);
   const nighttimeWarningShown = useRef<Set<string>>(new Set());
   const beginnerScheduleModeUserSelected = useRef(false);
@@ -3505,9 +3506,11 @@ export default function CalculatorHome() {
                     doughTemperatureStyle={beginnerDirectHome ? (isRomanTeglia ? 'romanaTeglia' : pizzaStyle === 'romana' ? 'romanaTonda' : pizzaStyle === 'ny_style' ? 'newYork' : 'napolitana') : undefined}
                     phaseKey={`detailed-direct-${pizzaStyle}-${mixing}-${index}`}
                     timers={beginnerDirectHomeSteps ? phase.timers : directHomeSchedule ? [] : phase.timers}
-                    phaseGuide={isBeginner && flour !== 'glutenFree' && mixing === 'mixer' && index === 0
+                    phaseGuide={isBeginner && flour !== 'glutenFree' && index === 0 && mixing === 'mixer'
                       ? { kind: mixing, onPress: () => setMixingGuideKind(mixing) }
-                      : undefined}
+                      : isBeginner && flour !== 'glutenFree' && index === 1 && phase.steps.some((step) => /stretch\s*&?\s*fold|preklop|pregib|fold/i.test(step))
+                        ? { kind: 'stretchFold', onPress: () => { setStretchFoldSlide(0); setMixingGuideKind('stretchFold'); } }
+                        : undefined}
                     completed={completedSteps}
                     onToggle={toggleStep}
                     activeTimers={activeTimers}
@@ -3520,14 +3523,14 @@ export default function CalculatorHome() {
                 mixing === 'hand' ? (
                   <>
                     <PhaseBlock title={t.calc.handMixSteps.A.title} steps={directHomeSchedule ? withoutDirectScheduleTiming(adaptFermentationSteps(t.calc.handMixSteps.A.steps, directRecipeRoomHours, directRecipeFridgeHours, fridgeTemp, lang)) : adaptFermentationSteps(t.calc.handMixSteps.A.steps, roomHours, fridgeHours, fridgeTemp, lang)} phaseKey={`direct-hand-A`} timers={directHomeSchedule ? [] : getDirectPhaseTimers('direct-hand-A', roomHours, fridgeHours)} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onStopTimer={stopTimer} lang={lang} />
-                    <PhaseBlock title={t.calc.handMixSteps.B.title} steps={directHomeSchedule ? withoutDirectScheduleTiming(adaptFermentationSteps(t.calc.handMixSteps.B.steps, directRecipeRoomHours, directRecipeFridgeHours, fridgeTemp, lang)) : adaptFermentationSteps(t.calc.handMixSteps.B.steps, roomHours, fridgeHours, fridgeTemp, lang)} phaseKey={`direct-hand-B`} timers={directHomeSchedule ? [] : getDirectPhaseTimers('direct-hand-B', roomHours, fridgeHours)} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onStopTimer={stopTimer} lang={lang} />
+                    <PhaseBlock title={t.calc.handMixSteps.B.title} steps={directHomeSchedule ? withoutDirectScheduleTiming(adaptFermentationSteps(t.calc.handMixSteps.B.steps, directRecipeRoomHours, directRecipeFridgeHours, fridgeTemp, lang)) : adaptFermentationSteps(t.calc.handMixSteps.B.steps, roomHours, fridgeHours, fridgeTemp, lang)} phaseKey={`direct-hand-B`} timers={directHomeSchedule ? [] : getDirectPhaseTimers('direct-hand-B', roomHours, fridgeHours)} phaseGuide={{ kind: 'stretchFold', onPress: () => { setStretchFoldSlide(0); setMixingGuideKind('stretchFold'); } }} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onStopTimer={stopTimer} lang={lang} />
                     <PhaseBlock title={t.calc.handMixSteps.C.title} steps={directHomeSchedule ? withoutDirectScheduleTiming(adaptDirectPhaseSteps('C', t.calc.handMixSteps.C.steps, directRecipeRoomHours, directRecipeFridgeHours, fridgeTemp, lang)) : adaptDirectPhaseSteps('C', t.calc.handMixSteps.C.steps, roomHours, fridgeHours, fridgeTemp, lang)} phaseKey={`direct-hand-C`} timers={directHomeSchedule ? [] : getDirectPhaseTimers('direct-hand-C', roomHours, fridgeHours)} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onStopTimer={stopTimer} lang={lang} />
                     <PhaseBlock title={t.calc.handMixSteps.D.title} steps={directHomeSchedule ? withoutDirectScheduleTiming(adaptDirectPhaseSteps('D', t.calc.handMixSteps.D.steps, directRecipeRoomHours, directRecipeFridgeHours, fridgeTemp, lang)) : adaptDirectPhaseSteps('D', t.calc.handMixSteps.D.steps, roomHours, fridgeHours, fridgeTemp, lang)} phaseKey={`direct-hand-D`} timers={directHomeSchedule ? [] : getDirectPhaseTimers('direct-hand-D', roomHours, fridgeHours)} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onStopTimer={stopTimer} lang={lang} />
                   </>
                 ) : (
                   <>
                     <PhaseBlock title={t.calc.mixerSteps.A.title} steps={directHomeSchedule ? withoutDirectScheduleTiming(adaptFermentationSteps(t.calc.mixerSteps.A.steps, directRecipeRoomHours, directRecipeFridgeHours, fridgeTemp, lang)) : adaptFermentationSteps(t.calc.mixerSteps.A.steps, roomHours, fridgeHours, fridgeTemp, lang)} phaseKey={`direct-mixer-A`} timers={directHomeSchedule ? [] : getDirectPhaseTimers('direct-mixer-A', roomHours, fridgeHours)} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onStopTimer={stopTimer} lang={lang} />
-                    <PhaseBlock title={t.calc.mixerSteps.B.title} steps={directHomeSchedule ? withoutDirectScheduleTiming(adaptFermentationSteps(t.calc.mixerSteps.B.steps, directRecipeRoomHours, directRecipeFridgeHours, fridgeTemp, lang)) : adaptFermentationSteps(t.calc.mixerSteps.B.steps, roomHours, fridgeHours, fridgeTemp, lang)} phaseKey={`direct-mixer-B`} timers={directHomeSchedule ? [] : getDirectPhaseTimers('direct-mixer-B', roomHours, fridgeHours)} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onStopTimer={stopTimer} lang={lang} />
+                    <PhaseBlock title={t.calc.mixerSteps.B.title} steps={directHomeSchedule ? withoutDirectScheduleTiming(adaptFermentationSteps(t.calc.mixerSteps.B.steps, directRecipeRoomHours, directRecipeFridgeHours, fridgeTemp, lang)) : adaptFermentationSteps(t.calc.mixerSteps.B.steps, roomHours, fridgeHours, fridgeTemp, lang)} phaseKey={`direct-mixer-B`} timers={directHomeSchedule ? [] : getDirectPhaseTimers('direct-mixer-B', roomHours, fridgeHours)} phaseGuide={{ kind: 'stretchFold', onPress: () => { setStretchFoldSlide(0); setMixingGuideKind('stretchFold'); } }} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onStopTimer={stopTimer} lang={lang} />
                     <PhaseBlock title={t.calc.mixerSteps.C.title} steps={directHomeSchedule ? withoutDirectScheduleTiming(adaptDirectPhaseSteps('C', t.calc.mixerSteps.C.steps, directRecipeRoomHours, directRecipeFridgeHours, fridgeTemp, lang)) : adaptDirectPhaseSteps('C', t.calc.mixerSteps.C.steps, roomHours, fridgeHours, fridgeTemp, lang)} phaseKey={`direct-mixer-C`} timers={directHomeSchedule ? [] : getDirectPhaseTimers('direct-mixer-C', roomHours, fridgeHours)} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onStopTimer={stopTimer} lang={lang} />
                     <PhaseBlock title={t.calc.mixerSteps.D.title} steps={directHomeSchedule ? withoutDirectScheduleTiming(adaptDirectPhaseSteps('D', t.calc.mixerSteps.D.steps, directRecipeRoomHours, directRecipeFridgeHours, fridgeTemp, lang)) : adaptDirectPhaseSteps('D', t.calc.mixerSteps.D.steps, roomHours, fridgeHours, fridgeTemp, lang)} phaseKey={`direct-mixer-D`} timers={directHomeSchedule ? [] : getDirectPhaseTimers('direct-mixer-D', roomHours, fridgeHours)} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onStopTimer={stopTimer} lang={lang} />
                   </>
@@ -3807,7 +3810,7 @@ export default function CalculatorHome() {
           <View
             accessibilityViewIsModal
             style={styles.visualGuideCard}
-            testID="phase-a-visual-guide-modal"
+            testID={mixingGuideKind === 'stretchFold' ? 'phase-b-visual-guide-modal' : 'phase-a-visual-guide-modal'}
           >
             <ScrollView
               style={styles.visualGuideContent}
@@ -3816,8 +3819,8 @@ export default function CalculatorHome() {
             >
               <View style={styles.visualGuideHeader}>
                 <View style={styles.visualGuideHeading}>
-                  <Text style={styles.visualGuideEyebrow}>{({ hr: 'FAZA A', en: 'PHASE A', de: 'PHASE A', sl: 'FAZA A' }[lang])}</Text>
-                  <Text style={styles.visualGuideTitle}>{({ hr: 'Priprema i zamjes', en: 'Preparation and mixing', de: 'Vorbereitung und Kneten', sl: 'Priprava in gnetenje' }[lang])}</Text>
+                  <Text style={styles.visualGuideEyebrow}>{mixingGuideKind === 'stretchFold' ? ({ hr: 'FAZA B', en: 'PHASE B', de: 'PHASE B', sl: 'FAZA B' }[lang]) : ({ hr: 'FAZA A', en: 'PHASE A', de: 'PHASE A', sl: 'FAZA A' }[lang])}</Text>
+                  <Text style={styles.visualGuideTitle}>{mixingGuideKind === 'stretchFold' ? ({ hr: 'Preklapanje tijesta', en: 'Stretch & fold', de: 'Stretch & Fold', sl: 'Razteg in prepogib' }[lang]) : ({ hr: 'Priprema i zamjes', en: 'Preparation and mixing', de: 'Vorbereitung und Kneten', sl: 'Priprava in gnetenje' }[lang])}</Text>
                 </View>
                 <Pressable
                   accessibilityLabel={({ hr: 'Zatvori vodič', en: 'Close guide', de: 'Anleitung schließen', sl: 'Zapri vodič' }[lang])}
@@ -3825,16 +3828,25 @@ export default function CalculatorHome() {
                   hitSlop={10}
                   onPress={() => setMixingGuideKind(null)}
                   style={styles.visualGuideCloseIcon}
-                  testID="phase-a-visual-guide-close-icon"
+                  testID={mixingGuideKind === 'stretchFold' ? 'phase-b-visual-guide-close-icon' : 'phase-a-visual-guide-close-icon'}
                 >
                   <Icon name="close" size={21} color={COLORS.onSurface} />
                 </Pressable>
               </View>
-              {mixingGuideKind === 'mixer' ? <MixingGuideCarousel lang={lang} /> : null}
+              {mixingGuideKind === 'mixer' ? <MixingGuideCarousel lang={lang} kind={mixingGuideKind} /> : null}
+              {mixingGuideKind === 'stretchFold' ? (
+                <MixingGuideCarousel
+                  lang={lang}
+                  kind="stretchFold"
+                  onSlideChange={setStretchFoldSlide}
+                />
+              ) : null}
               <View style={styles.visualGuideCopyBlock}>
                 <Text style={styles.visualGuideSectionTitle}>{({ hr: 'KAKO NAPRAVITI', en: 'HOW TO DO IT', de: 'SO GEHT’S', sl: 'KAKO NAREDITI' }[lang])}</Text>
                 <Text style={styles.visualGuideBody}>
-                  {mixingGuideKind === 'mixer'
+                  {mixingGuideKind === 'stretchFold'
+                    ? getStretchFoldGuideCopy(lang, stretchFoldSlide).how
+                    : mixingGuideKind === 'mixer'
                     ? ({
                       hr: 'Počni sporije kako bi se brašno i voda spojili bez prskanja. Kad više nema suhih dijelova, nastavi prema uputama recepta.',
                       en: 'Start slowly so the flour and water come together without splashing. Once no dry patches remain, continue with the recipe instructions.',
@@ -3852,7 +3864,9 @@ export default function CalculatorHome() {
               <View style={styles.visualGuideCopyBlock}>
                 <Text style={styles.visualGuideSectionTitle}>{({ hr: 'KAKO TREBA IZGLEDATI', en: 'WHAT IT SHOULD LOOK LIKE', de: 'SO SOLL ES AUSSEHEN', sl: 'KAKO NAJ IZGLEDA' }[lang])}</Text>
                 <Text style={styles.visualGuideBody}>
-                  {({
+                  {mixingGuideKind === 'stretchFold'
+                    ? getStretchFoldGuideCopy(lang, stretchFoldSlide).look
+                    : ({
                     hr: 'Tijesto treba biti povezano i ujednačeno, bez suhih dijelova brašna.',
                     en: 'The dough should be cohesive and even, with no dry flour remaining.',
                     de: 'Der Teig sollte verbunden und gleichmäßig sein, ohne trockene Mehlstellen.',
@@ -3865,7 +3879,7 @@ export default function CalculatorHome() {
               accessibilityRole="button"
               onPress={() => setMixingGuideKind(null)}
               style={({ pressed }) => [styles.visualGuideCloseButton, pressed && { opacity: 0.84 }]}
-              testID="phase-a-visual-guide-close"
+              testID={mixingGuideKind === 'stretchFold' ? 'phase-b-visual-guide-close' : 'phase-a-visual-guide-close'}
             >
               <Text style={styles.visualGuideCloseText}>{({ hr: 'ZATVORI', en: 'CLOSE', de: 'SCHLIESSEN', sl: 'ZAPRI' }[lang])}</Text>
             </Pressable>
@@ -6875,6 +6889,102 @@ function getBeginnerPhaseCTimers(schedule: HomePizzaPlanSchedule, temperingMinut
   return timers;
 }
 
+function getStretchFoldGuideCopy(lang: Lang, slide: number) {
+  const copy = [
+    {
+      hr: {
+        how: 'Lagano navlažite ruke. Uhvatite tijesto objema rukama s dvije suprotne strane, bez snažnog stiskanja.',
+        look: 'Tijesto treba biti povezano, glatko i dovoljno elastično za nježno podizanje.',
+      },
+      en: {
+        how: 'Lightly wet your hands. Hold the dough with both hands from two opposite sides without squeezing it firmly.',
+        look: 'The dough should be cohesive, smooth, and elastic enough to lift gently.',
+      },
+      de: {
+        how: 'Befeuchten Sie Ihre Hände leicht. Fassen Sie den Teig mit beiden Händen an zwei gegenüberliegenden Seiten, ohne ihn fest zu drücken.',
+        look: 'Der Teig sollte verbunden, glatt und elastisch genug sein, um ihn sanft anzuheben.',
+      },
+      sl: {
+        how: 'Rahlo navlažite roke. Z obema rokama primite testo na dveh nasprotnih straneh, brez močnega stiskanja.',
+        look: 'Testo naj bo povezano, gladko in dovolj elastično za nežno dviganje.',
+      },
+    },
+    {
+      hr: {
+        how: 'Objema rukama polako podignite tijesto prema gore. Pustite da se pod vlastitom težinom nježno rastegne.',
+        look: 'Tijesto se ravnomjerno rasteže, bez pucanja ili odvajanja dijelova.',
+      },
+      en: {
+        how: 'Slowly lift the dough upward with both hands. Let it gently stretch under its own weight.',
+        look: 'The dough stretches evenly without tearing or separating into pieces.',
+      },
+      de: {
+        how: 'Heben Sie den Teig langsam mit beiden Händen an. Lassen Sie ihn sich durch sein eigenes Gewicht sanft dehnen.',
+        look: 'Der Teig dehnt sich gleichmäßig, ohne zu reißen oder sich zu teilen.',
+      },
+      sl: {
+        how: 'Z obema rokama počasi dvignite testo. Pustite, da se pod lastno težo nežno raztegne.',
+        look: 'Testo se enakomerno raztegne, brez trganja ali ločevanja delov.',
+      },
+    },
+    {
+      hr: {
+        how: 'Lagano spustite podignuto tijesto prema sredini posude tako da se preklopi preko ostatka tijesta.',
+        look: 'Preklop treba biti mekan i uredan, bez snažnog pritiskanja tijesta.',
+      },
+      en: {
+        how: 'Gently lower the lifted dough toward the center of the container so it folds over the remaining dough.',
+        look: 'The fold should be soft and neat, without pressing the dough firmly.',
+      },
+      de: {
+        how: 'Lassen Sie den angehobenen Teig sanft zur Mitte der Schüssel sinken, sodass er sich über den restlichen Teig legt.',
+        look: 'Die Faltung sollte weich und ordentlich sein, ohne den Teig stark zu drücken.',
+      },
+      sl: {
+        how: 'Dvignjeno testo nežno spustite proti sredini posode, da se prepogne čez preostalo testo.',
+        look: 'Pregib naj bo mehak in urejen, brez močnega pritiskanja testa.',
+      },
+    },
+    {
+      hr: {
+        how: 'Ponovite nježno podizanje i preklapanje prema postojećim uputama recepta. Nemojte nepotrebno gnječiti tijesto.',
+        look: 'Tijesto postupno postaje glađe, povezanije i blago zategnuto.',
+      },
+      en: {
+        how: 'Repeat the gentle lifting and folding according to the recipe instructions. Do not knead the dough unnecessarily.',
+        look: 'The dough gradually becomes smoother, more cohesive, and lightly tightened.',
+      },
+      de: {
+        how: 'Wiederholen Sie das sanfte Anheben und Falten gemäß den Rezeptanweisungen. Kneten Sie den Teig nicht unnötig.',
+        look: 'Der Teig wird allmählich glatter, verbundener und leicht gestrafft.',
+      },
+      sl: {
+        how: 'Nežno dviganje in prepogib ponovite po navodilih recepta. Testa ne gnetite po nepotrebnem.',
+        look: 'Testo postopoma postaja bolj gladko, povezano in rahlo napeto.',
+      },
+    },
+    {
+      hr: {
+        how: 'Ostavite tijesto u posudi i pokrijte ga prema uputama recepta.',
+        look: 'Tijesto treba imati glatku, blago zategnutu površinu i ostati jedna povezana masa.',
+      },
+      en: {
+        how: 'Leave the dough in the container and cover it according to the recipe instructions.',
+        look: 'The dough should have a smooth, lightly tightened surface and remain one cohesive mass.',
+      },
+      de: {
+        how: 'Lassen Sie den Teig in der Schüssel und decken Sie ihn gemäß den Rezeptanweisungen ab.',
+        look: 'Der Teig sollte eine glatte, leicht gespannte Oberfläche haben und eine verbundene Masse bleiben.',
+      },
+      sl: {
+        how: 'Testo pustite v posodi in ga pokrijte po navodilih recepta.',
+        look: 'Testo naj ima gladko, rahlo napeto površino in ostane ena povezana masa.',
+      },
+    },
+  ];
+  return copy[Math.min(slide, copy.length - 1)][lang];
+}
+
 function PhaseBlock({
   title, steps, stepInfo, phaseKey, timers: customTimers, bigaInfo, waterInfo, waterInfoStepIndex, containerOilInfo, fermentationInfo, fermentationSignsInfo, degassingInfo, doughHandlingInfo, doughHandlingInfoStepIndex, temperingInfo, proofingInfo, ovenTimingInfo, ovenProgramInfo, bakingCheckInfo, bakingInfo, infoTitleOverrides, doughTemperatureStyle, phaseGuide, completed, onToggle,
   activeTimers, onStartTimer, onStopTimer, lang,
@@ -6962,12 +7072,14 @@ function PhaseBlock({
         <Text style={[styles.phaseTitle, phaseGuide && styles.phaseTitleWithGuide]}>{formatText(title)}</Text>
         {phaseGuide ? (
           <Pressable
-            accessibilityLabel={({ hr: 'Vodič za pripremu i zamjes', en: 'Preparation and mixing visual guide', de: 'Visuelle Anleitung für Vorbereitung und Kneten', sl: 'Slikovni vodič za pripravo in gnetenje' }[lang])}
+            accessibilityLabel={(phaseGuide.kind === 'stretchFold'
+              ? { hr: 'Vodič za preklapanje tijesta', en: 'Stretch and fold visual guide', de: 'Visuelle Anleitung für Stretch und Fold', sl: 'Slikovni vodič za razteg in prepogib' }
+              : { hr: 'Vodič za pripremu i zamjes', en: 'Preparation and mixing visual guide', de: 'Visuelle Anleitung für Vorbereitung und Kneten', sl: 'Slikovni vodič za pripravo in gnetenje' })[lang]}
             accessibilityRole="button"
             hitSlop={10}
             onPress={phaseGuide.onPress}
             style={styles.phaseGuideButton}
-            testID="phase-a-visual-guide-open"
+            testID={phaseGuide.kind === 'stretchFold' ? 'phase-b-visual-guide-open' : 'phase-a-visual-guide-open'}
           >
             <Icon name="information-circle-outline" size={19} color={COLORS.brand} />
           </Pressable>

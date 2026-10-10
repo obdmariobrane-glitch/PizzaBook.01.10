@@ -16,22 +16,41 @@ const MIXER_IMAGES = [
   require('../../assets/guides/mixing/mixer-03.png'),
   require('../../assets/guides/mixing/mixer-04.png'),
 ];
+const STRETCH_FOLD_IMAGES = [
+  require('../../assets/images/phase-b-stretch-fold-01.png'),
+  require('../../assets/images/phase-b-stretch-fold-02.png'),
+  require('../../assets/images/phase-b-stretch-fold-03.png'),
+  require('../../assets/images/phase-b-stretch-fold-04.png'),
+  require('../../assets/images/phase-b-stretch-fold-05.png'),
+];
 
-export type MixingGuideKind = 'hand' | 'mixer';
+export type MixingGuideKind = 'hand' | 'mixer' | 'stretchFold';
 
-export default function MixingGuideCarousel({ lang }: { lang: Lang }) {
+export default function MixingGuideCarousel({
+  lang,
+  kind = 'mixer',
+  onSlideChange,
+}: {
+  lang: Lang;
+  kind?: MixingGuideKind;
+  onSlideChange?: (slide: number) => void;
+}) {
   const [frameWidth, setFrameWidth] = useState(0);
   const [activeSlide, setActiveSlide] = useState(0);
+  const images = kind === 'stretchFold' ? STRETCH_FOLD_IMAGES : MIXER_IMAGES;
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (frameWidth > 0) {
-      const nextSlide = Math.min(MIXER_IMAGES.length - 1, Math.round(event.nativeEvent.contentOffset.x / frameWidth));
-      setActiveSlide((currentSlide) => currentSlide === nextSlide ? currentSlide : nextSlide);
+      const nextSlide = Math.min(images.length - 1, Math.round(event.nativeEvent.contentOffset.x / frameWidth));
+      if (activeSlide !== nextSlide) {
+        setActiveSlide(nextSlide);
+        onSlideChange?.(nextSlide);
+      }
     }
   };
 
   return (
-    <View style={styles.container} testID="phase-a-mixer-carousel">
+    <View style={styles.container} testID={kind === 'stretchFold' ? 'phase-b-stretch-fold-carousel' : 'phase-a-mixer-carousel'}>
       <View
         onLayout={(event) => setFrameWidth(event.nativeEvent.layout.width)}
         style={styles.frame}
@@ -48,7 +67,7 @@ export default function MixingGuideCarousel({ lang }: { lang: Lang }) {
             style={styles.pager}
             testID="phase-a-mixer-carousel-pager"
           >
-            {MIXER_IMAGES.map((source, index) => (
+            {images.map((source, index) => (
               <View key={index} style={{ width: frameWidth, height: frameWidth * 9 / 16 }}>
                 <Image source={source} resizeMode="contain" style={styles.image} />
               </View>
@@ -58,17 +77,17 @@ export default function MixingGuideCarousel({ lang }: { lang: Lang }) {
       </View>
       <View
         accessibilityLabel={{
-          hr: `Slika ${activeSlide + 1} od ${MIXER_IMAGES.length}`,
-          en: `Image ${activeSlide + 1} of ${MIXER_IMAGES.length}`,
-          de: `Bild ${activeSlide + 1} von ${MIXER_IMAGES.length}`,
-          sl: `Slika ${activeSlide + 1} od ${MIXER_IMAGES.length}`,
+          hr: `Slika ${activeSlide + 1} od ${images.length}`,
+          en: `Image ${activeSlide + 1} of ${images.length}`,
+          de: `Bild ${activeSlide + 1} von ${images.length}`,
+          sl: `Slika ${activeSlide + 1} od ${images.length}`,
         }[lang]}
         accessibilityRole="progressbar"
-        accessibilityValue={{ min: 1, max: MIXER_IMAGES.length, now: activeSlide + 1 }}
+        accessibilityValue={{ min: 1, max: images.length, now: activeSlide + 1 }}
         style={styles.indicator}
-        testID="phase-a-mixer-carousel-indicator"
+        testID={kind === 'stretchFold' ? 'phase-b-stretch-fold-carousel-indicator' : 'phase-a-mixer-carousel-indicator'}
       >
-        {MIXER_IMAGES.map((_, index) => (
+        {images.map((_, index) => (
           <View
             key={index}
             style={[styles.dot, index === activeSlide ? styles.activeDot : styles.inactiveDot]}
