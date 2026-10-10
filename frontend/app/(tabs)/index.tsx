@@ -3508,8 +3508,10 @@ export default function CalculatorHome() {
                     timers={beginnerDirectHomeSteps ? phase.timers : directHomeSchedule ? [] : phase.timers}
                     phaseGuide={isBeginner && flour === 'glutenFree' && !isRomanTeglia && index === (directRecipeFridgeHours > 0 ? 4 : 3)
                       ? { kind: 'bakingGlutenFree', onPress: () => { setVisualGuideSlide(0); setMixingGuideKind('bakingGlutenFree'); } }
+                      : isBeginner && flour !== 'glutenFree' && index === 0 && mixing === 'hand'
+                        ? { kind: 'hand', onPress: () => { setVisualGuideSlide(0); setMixingGuideKind('hand'); } }
                       : isBeginner && flour !== 'glutenFree' && index === 0 && mixing === 'mixer'
-                      ? { kind: mixing, onPress: () => setMixingGuideKind(mixing) }
+                        ? { kind: mixing, onPress: () => setMixingGuideKind(mixing) }
                       : isBeginner && flour !== 'glutenFree' && index === 1 && phase.steps.some((step) => /stretch\s*&?\s*fold|preklop|pregib|fold/i.test(step))
                         ? { kind: 'stretchFold', onPress: () => { setVisualGuideSlide(0); setMixingGuideKind('stretchFold'); } }
                         : isBeginner && flour !== 'glutenFree' && !isRomanTeglia && index === 2
@@ -3822,7 +3824,9 @@ export default function CalculatorHome() {
           <View
             accessibilityViewIsModal
             style={styles.visualGuideCard}
-            testID={mixingGuideKind === 'stretchFold'
+            testID={mixingGuideKind === 'hand'
+              ? 'phase-a-hand-visual-guide-modal'
+              : mixingGuideKind === 'stretchFold'
               ? 'phase-b-visual-guide-modal'
               : mixingGuideKind === 'balling'
                 ? 'phase-c-visual-guide-modal'
@@ -3837,7 +3841,9 @@ export default function CalculatorHome() {
             >
               <View style={styles.visualGuideHeader}>
                 <View style={styles.visualGuideHeading}>
-                  <Text style={styles.visualGuideEyebrow}>{mixingGuideKind === 'stretchFold'
+                  <Text style={styles.visualGuideEyebrow}>{mixingGuideKind === 'hand' || mixingGuideKind === 'mixer'
+                    ? ({ hr: 'FAZA A', en: 'PHASE A', de: 'PHASE A', sl: 'FAZA A' }[lang])
+                    : mixingGuideKind === 'stretchFold'
                     ? ({ hr: 'FAZA B', en: 'PHASE B', de: 'PHASE B', sl: 'FAZA B' }[lang])
                     : mixingGuideKind === 'balling'
                       ? ({ hr: 'FAZA C', en: 'PHASE C', de: 'PHASE C', sl: 'FAZA C' }[lang])
@@ -3846,7 +3852,9 @@ export default function CalculatorHome() {
                     : mixingGuideKind === 'bakingGlutenFree'
                       ? ({ hr: 'FAZA E', en: 'PHASE E', de: 'PHASE E', sl: 'FAZA E' }[lang])
                       : ({ hr: 'FAZA A', en: 'PHASE A', de: 'PHASE A', sl: 'FAZA A' }[lang])}</Text>
-                  <Text style={styles.visualGuideTitle}>{mixingGuideKind === 'stretchFold'
+                  <Text style={styles.visualGuideTitle}>{mixingGuideKind === 'hand'
+                    ? ({ hr: 'Priprema i ručni zamjes', en: 'Preparation and hand mixing', de: 'Vorbereitung und Handkneten', sl: 'Priprava in ročno mešanje' }[lang])
+                    : mixingGuideKind === 'stretchFold'
                     ? ({ hr: 'Preklapanje tijesta', en: 'Stretch & fold', de: 'Stretch & Fold', sl: 'Razteg in prepogib' }[lang])
                     : mixingGuideKind === 'balling'
                       ? ({ hr: 'Podjela i oblikovanje kuglica', en: 'Dividing and shaping dough balls', de: 'Teilen und Formen von Teigkugeln', sl: 'Delitev in oblikovanje kroglic' }[lang])
@@ -3862,7 +3870,9 @@ export default function CalculatorHome() {
                   hitSlop={10}
                   onPress={() => setMixingGuideKind(null)}
                   style={styles.visualGuideCloseIcon}
-                  testID={mixingGuideKind === 'stretchFold'
+                  testID={mixingGuideKind === 'hand'
+                    ? 'phase-a-hand-visual-guide-close-icon'
+                    : mixingGuideKind === 'stretchFold'
                     ? 'phase-b-visual-guide-close-icon'
                     : mixingGuideKind === 'balling'
                       ? 'phase-c-visual-guide-close-icon'
@@ -3881,7 +3891,7 @@ export default function CalculatorHome() {
                   <Icon name="close" size={21} color={COLORS.onSurface} />
                 </Pressable>
               </View>
-              {mixingGuideKind === 'mixer' ? <MixingGuideCarousel lang={lang} kind={mixingGuideKind} /> : null}
+              {mixingGuideKind === 'hand' || mixingGuideKind === 'mixer' ? <MixingGuideCarousel lang={lang} kind={mixingGuideKind} /> : null}
               {mixingGuideKind === 'stretchFold' ? (
                 <MixingGuideCarousel
                   lang={lang}
@@ -3934,7 +3944,9 @@ export default function CalculatorHome() {
               <View style={styles.visualGuideCopyBlock}>
                 <Text style={styles.visualGuideSectionTitle}>{({ hr: 'KAKO NAPRAVITI', en: 'HOW TO DO IT', de: 'SO GEHT’S', sl: 'KAKO NAREDITI' }[lang])}</Text>
                 <Text style={styles.visualGuideBody}>
-                  {mixingGuideKind === 'stretchFold'
+                  {mixingGuideKind === 'hand'
+                    ? getHandMixGuideCopy(lang, visualGuideSlide).how
+                    : mixingGuideKind === 'stretchFold'
                     ? getStretchFoldGuideCopy(lang, visualGuideSlide).how
                     : mixingGuideKind === 'balling'
                       ? getBallingGuideCopy(lang, visualGuideSlide).how
@@ -3966,7 +3978,9 @@ export default function CalculatorHome() {
               <View style={styles.visualGuideCopyBlock}>
                 <Text style={styles.visualGuideSectionTitle}>{({ hr: 'KAKO TREBA IZGLEDATI', en: 'WHAT IT SHOULD LOOK LIKE', de: 'SO SOLL ES AUSSEHEN', sl: 'KAKO NAJ IZGLEDA' }[lang])}</Text>
                 <Text style={styles.visualGuideBody}>
-                  {mixingGuideKind === 'stretchFold'
+                  {mixingGuideKind === 'hand'
+                    ? getHandMixGuideCopy(lang, visualGuideSlide).look
+                    : mixingGuideKind === 'stretchFold'
                     ? getStretchFoldGuideCopy(lang, visualGuideSlide).look
                     : mixingGuideKind === 'balling'
                       ? getBallingGuideCopy(lang, visualGuideSlide).look
@@ -3993,7 +4007,9 @@ export default function CalculatorHome() {
               accessibilityRole="button"
               onPress={() => setMixingGuideKind(null)}
               style={({ pressed }) => [styles.visualGuideCloseButton, pressed && { opacity: 0.84 }]}
-              testID={mixingGuideKind === 'stretchFold'
+              testID={mixingGuideKind === 'hand'
+                ? 'phase-a-hand-visual-guide-close'
+                : mixingGuideKind === 'stretchFold'
                 ? 'phase-b-visual-guide-close'
                 : mixingGuideKind === 'balling'
                   ? 'phase-c-visual-guide-close'
@@ -7015,6 +7031,102 @@ function getBeginnerPhaseCTimers(schedule: HomePizzaPlanSchedule, temperingMinut
     if (preheatSeconds > 0) timers.push({ id: 'beginner-phase-c-preheat', seconds: preheatSeconds, kind: 'preheat' });
   }
   return timers;
+}
+
+function getHandMixGuideCopy(lang: Lang, slide: number) {
+  const copy = [
+    {
+      hr: {
+        how: 'Dodajte vodu u brašno prema količinama i redoslijedu navedenima u receptu. Vodu ulijevajte postupno ako to zahtijevaju upute odabranog postupka.',
+        look: 'Voda dolazi u dodir s brašnom i počinje ga vlažiti. Brašno još nije potpuno povezano.',
+      },
+      en: {
+        how: 'Add the water to the flour according to the quantities and order given in the recipe. Pour it gradually if the selected method requires it.',
+        look: 'The water comes into contact with the flour and begins to hydrate it. The flour is not fully combined yet.',
+      },
+      de: {
+        how: 'Geben Sie das Wasser gemäß den im Rezept angegebenen Mengen und in der dort genannten Reihenfolge zum Mehl. Gießen Sie es schrittweise ein, wenn es die gewählte Methode erfordert.',
+        look: 'Das Wasser kommt mit dem Mehl in Kontakt und beginnt, es zu befeuchten. Das Mehl ist noch nicht vollständig verbunden.',
+      },
+      sl: {
+        how: 'Vodo dodajte moki v količinah in vrstnem redu, navedenih v receptu. Dolivajte jo postopoma, če to zahteva izbrani postopek.',
+        look: 'Voda pride v stik z moko in jo začne vlažiti. Moka še ni popolnoma povezana.',
+      },
+    },
+    {
+      hr: {
+        how: 'Rukom postupno povezujte brašno i vodu. Skupljajte sastojke s rubova posude prema sredini dok se ne počnu stvarati nepravilni komadi tijesta.',
+        look: 'Smjesa je gruba, neravna i djelomično ljepljiva. Još nije glatka ni elastična.',
+      },
+      en: {
+        how: 'Gradually combine the flour and water by hand. Draw the ingredients from the sides of the bowl toward the center until irregular pieces of dough begin to form.',
+        look: 'The mixture is rough, uneven, and partly sticky. It is not smooth or elastic yet.',
+      },
+      de: {
+        how: 'Verbinden Sie Mehl und Wasser nach und nach von Hand. Schieben Sie die Zutaten vom Schüsselrand zur Mitte, bis unregelmäßige Teigstücke entstehen.',
+        look: 'Die Masse ist grob, uneben und teilweise klebrig. Sie ist noch nicht glatt oder elastisch.',
+      },
+      sl: {
+        how: 'Moko in vodo postopoma povežite z roko. Sestavine z roba posode potiskajte proti sredini, dokler ne začnejo nastajati nepravilni kosi testa.',
+        look: 'Zmes je groba, neenakomerna in delno lepljiva. Še ni gladka ali elastična.',
+      },
+    },
+    {
+      hr: {
+        how: 'Kada se sastojci povežu u jednu masu, slijedite eventualni odmor tijesta naveden u receptu. Nemojte dodavati dodatno brašno samo zato što tijesto još nije glatko.',
+        look: 'Tijesto je povezano, ali površina je još neravna. Veći dijelovi suhog brašna više nisu vidljivi.',
+      },
+      en: {
+        how: 'When the ingredients form one mass, follow any dough rest specified in the recipe. Do not add extra flour just because the dough is not smooth yet.',
+        look: 'The dough is cohesive, but its surface is still uneven. Larger dry patches of flour are no longer visible.',
+      },
+      de: {
+        how: 'Sobald die Zutaten eine Masse bilden, halten Sie die im Rezept angegebene Teigruhe ein. Geben Sie nicht nur deshalb zusätzliches Mehl hinzu, weil der Teig noch nicht glatt ist.',
+        look: 'Der Teig ist verbunden, aber die Oberfläche noch uneben. Größere trockene Mehlstellen sind nicht mehr sichtbar.',
+      },
+      sl: {
+        how: 'Ko se sestavine povežejo v eno maso, upoštevajte morebiten počitek testa, naveden v receptu. Ne dodajajte moke samo zato, ker testo še ni gladko.',
+        look: 'Testo je povezano, vendar je površina še neenakomerna. Večji suhi deli moke niso več vidni.',
+      },
+    },
+    {
+      hr: {
+        how: 'Ako recept predviđa klasično ručno mijesenje, preklapajte tijesto i umjerenim pritiskom dlana nastavite mijesiti prema navedenim uputama. Izbjegavajte nepotrebno dodavanje brašna.',
+        look: 'Tijesto postupno postaje povezanije i glađe. Površina može imati manje nabore.',
+      },
+      en: {
+        how: 'If the recipe calls for classic hand kneading, fold the dough and continue kneading with moderate palm pressure as instructed. Avoid adding unnecessary flour.',
+        look: 'The dough gradually becomes more cohesive and smoother. The surface may have small folds.',
+      },
+      de: {
+        how: 'Wenn das Rezept klassisches Kneten von Hand vorsieht, falten Sie den Teig und kneten Sie ihn gemäß den Angaben mit mäßigem Druck der Handfläche weiter. Vermeiden Sie unnötiges Mehl.',
+        look: 'Der Teig wird allmählich verbundener und glatter. Die Oberfläche kann kleine Falten haben.',
+      },
+      sl: {
+        how: 'Če recept predvideva klasično ročno gnetenje, testo prepogibajte in z zmernim pritiskom dlani nadaljujte po navodilih. Izogibajte se nepotrebnemu dodajanju moke.',
+        look: 'Testo postopoma postaja bolj povezano in gladko. Na površini so lahko manjše gube.',
+      },
+    },
+    {
+      hr: {
+        how: 'Završite ručni zamjes prema uputama recepta i pripremite tijesto za sljedeću fazu. Nemojte ga dodatno mijesiti samo da biste dobili savršeno glatku površinu.',
+        look: 'Tijesto je povezano i ima strukturu prikladnu za odabrano brašno i hidrataciju. Ne mora biti savršeno glatko niti potpuno neljepljivo.',
+      },
+      en: {
+        how: 'Finish the hand mix according to the recipe and prepare the dough for the next phase. Do not knead it further just to make the surface perfectly smooth.',
+        look: 'The dough is cohesive and has a structure suited to the selected flour and hydration. It does not need to be perfectly smooth or completely non-sticky.',
+      },
+      de: {
+        how: 'Beenden Sie das Kneten von Hand gemäß dem Rezept und bereiten Sie den Teig für die nächste Phase vor. Kneten Sie ihn nicht nur für eine vollkommen glatte Oberfläche weiter.',
+        look: 'Der Teig ist verbunden und hat eine für das gewählte Mehl und die Hydration passende Struktur. Er muss weder vollkommen glatt noch völlig klebfrei sein.',
+      },
+      sl: {
+        how: 'Ročno mešanje zaključite po navodilih recepta in testo pripravite na naslednjo fazo. Ne gnetite ga dodatno samo zato, da bi dobili popolnoma gladko površino.',
+        look: 'Testo je povezano in ima strukturo, primerno izbrani moki in hidraciji. Ni treba, da je popolnoma gladko ali povsem nelepljivo.',
+      },
+    },
+  ];
+  return copy[Math.min(slide, copy.length - 1)][lang];
 }
 
 function getStretchFoldGuideCopy(lang: Lang, slide: number) {

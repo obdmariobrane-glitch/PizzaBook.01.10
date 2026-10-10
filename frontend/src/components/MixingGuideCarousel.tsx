@@ -16,6 +16,13 @@ const MIXER_IMAGES = [
   require('../../assets/guides/mixing/mixer-03.png'),
   require('../../assets/guides/mixing/mixer-04.png'),
 ];
+const HAND_IMAGES = [
+  require('../../assets/images/phase_a_hand_01_add_water.png'),
+  require('../../assets/images/phase_a_hand_02_mix_ingredients.png'),
+  require('../../assets/images/phase_a_hand_03_rest_dough.png'),
+  require('../../assets/images/phase_a_hand_04_knead_dough.png'),
+  require('../../assets/images/phase_a_hand_05_finished_dough.png'),
+];
 const STRETCH_FOLD_IMAGES = [
   require('../../assets/images/phase-b-stretch-fold-01.png'),
   require('../../assets/images/phase-b-stretch-fold-02.png'),
@@ -79,7 +86,9 @@ export default function MixingGuideCarousel({
 }) {
   const [frameWidth, setFrameWidth] = useState(0);
   const [activeSlide, setActiveSlide] = useState(0);
-  const images = kind === 'stretchFold'
+  const images = kind === 'hand'
+    ? HAND_IMAGES
+    : kind === 'stretchFold'
     ? STRETCH_FOLD_IMAGES
     : kind === 'balling'
       ? BALLING_IMAGES
@@ -108,7 +117,9 @@ export default function MixingGuideCarousel({
   return (
     <View
       style={styles.container}
-      testID={kind === 'stretchFold'
+      testID={kind === 'hand'
+        ? 'phase-a-hand-carousel'
+        : kind === 'stretchFold'
         ? 'phase-b-stretch-fold-carousel'
         : kind === 'balling'
           ? 'phase-c-balling-carousel'
@@ -138,7 +149,9 @@ export default function MixingGuideCarousel({
             scrollEventThrottle={16}
             onScroll={handleScroll}
             style={styles.pager}
-            testID={kind === 'stretchFold'
+            testID={kind === 'hand'
+              ? 'phase-a-hand-carousel-pager'
+              : kind === 'stretchFold'
               ? 'phase-b-stretch-fold-carousel-pager'
               : kind === 'balling'
                 ? 'phase-c-balling-carousel-pager'
@@ -172,7 +185,9 @@ export default function MixingGuideCarousel({
         accessibilityRole="progressbar"
         accessibilityValue={{ min: 1, max: images.length, now: activeSlide + 1 }}
         style={styles.indicator}
-        testID={kind === 'stretchFold'
+        testID={kind === 'hand'
+          ? 'phase-a-hand-carousel-indicator'
+          : kind === 'stretchFold'
           ? 'phase-b-stretch-fold-carousel-indicator'
           : kind === 'balling'
             ? 'phase-c-balling-carousel-indicator'
