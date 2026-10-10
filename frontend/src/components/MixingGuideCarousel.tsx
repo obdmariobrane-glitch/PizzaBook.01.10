@@ -28,7 +28,7 @@ const BALLING_IMAGES = [
   require('../../assets/images/phase_c_02_no_number.png'),
   require('../../assets/images/phase_c_03_no_number.png'),
   require('../../assets/images/phase_c_04_no_number.png'),
-  require('../../assets/images/phase_c_05_dough_balls_room_temperature (3).png'),
+  require('../../assets/images/phase_c_05_dough_balls_room_temperature (4).png'),
 ];
 
 export type MixingGuideKind = 'hand' | 'mixer' | 'stretchFold' | 'balling';
