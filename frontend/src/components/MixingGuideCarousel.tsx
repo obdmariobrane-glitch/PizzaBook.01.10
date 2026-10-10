@@ -23,8 +23,15 @@ const STRETCH_FOLD_IMAGES = [
   require('../../assets/images/phase-b-stretch-fold-04.png'),
   require('../../assets/images/phase-b-stretch-fold-05.png'),
 ];
+const BALLING_IMAGES = [
+  require('../../assets/images/phase_c_01_no_number.png'),
+  require('../../assets/images/phase_c_02_no_number.png'),
+  require('../../assets/images/phase_c_03_no_number.png'),
+  require('../../assets/images/phase_c_04_no_number.png'),
+  require('../../assets/images/phase_c_05_dough_balls_room_temperature (3).png'),
+];
 
-export type MixingGuideKind = 'hand' | 'mixer' | 'stretchFold';
+export type MixingGuideKind = 'hand' | 'mixer' | 'stretchFold' | 'balling';
 
 export default function MixingGuideCarousel({
   lang,
@@ -37,7 +44,7 @@ export default function MixingGuideCarousel({
 }) {
   const [frameWidth, setFrameWidth] = useState(0);
   const [activeSlide, setActiveSlide] = useState(0);
-  const images = kind === 'stretchFold' ? STRETCH_FOLD_IMAGES : MIXER_IMAGES;
+  const images = kind === 'stretchFold' ? STRETCH_FOLD_IMAGES : kind === 'balling' ? BALLING_IMAGES : MIXER_IMAGES;
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (frameWidth > 0) {
@@ -50,7 +57,10 @@ export default function MixingGuideCarousel({
   };
 
   return (
-    <View style={styles.container} testID={kind === 'stretchFold' ? 'phase-b-stretch-fold-carousel' : 'phase-a-mixer-carousel'}>
+    <View
+      style={styles.container}
+      testID={kind === 'stretchFold' ? 'phase-b-stretch-fold-carousel' : kind === 'balling' ? 'phase-c-balling-carousel' : 'phase-a-mixer-carousel'}
+    >
       <View
         onLayout={(event) => setFrameWidth(event.nativeEvent.layout.width)}
         style={styles.frame}
@@ -65,7 +75,7 @@ export default function MixingGuideCarousel({
             scrollEventThrottle={16}
             onScroll={handleScroll}
             style={styles.pager}
-            testID="phase-a-mixer-carousel-pager"
+            testID={kind === 'stretchFold' ? 'phase-b-stretch-fold-carousel-pager' : kind === 'balling' ? 'phase-c-balling-carousel-pager' : 'phase-a-mixer-carousel-pager'}
           >
             {images.map((source, index) => (
               <View key={index} style={{ width: frameWidth, height: frameWidth * 9 / 16 }}>
@@ -85,7 +95,11 @@ export default function MixingGuideCarousel({
         accessibilityRole="progressbar"
         accessibilityValue={{ min: 1, max: images.length, now: activeSlide + 1 }}
         style={styles.indicator}
-        testID={kind === 'stretchFold' ? 'phase-b-stretch-fold-carousel-indicator' : 'phase-a-mixer-carousel-indicator'}
+        testID={kind === 'stretchFold'
+          ? 'phase-b-stretch-fold-carousel-indicator'
+          : kind === 'balling'
+            ? 'phase-c-balling-carousel-indicator'
+            : 'phase-a-mixer-carousel-indicator'}
       >
         {images.map((_, index) => (
           <View
