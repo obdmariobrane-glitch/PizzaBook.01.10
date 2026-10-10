@@ -574,7 +574,7 @@ for (const lang of languages) {
     assert.ok(!fridge[2].steps[5].includes(labels[lang]));
     assert.equal(fridge.at(-1).stepInfo.length, 8);
     assert.equal(fridge[3].stepInfo.length, 1);
-    assert.match(fridge[3].steps[0], /Alarm/);
+    assert.ok(!fridge[3].steps[0].includes('Alarm'));
     assert.equal(fridge.at(-1).timers[0].kind, 'preBake');
   }
 }

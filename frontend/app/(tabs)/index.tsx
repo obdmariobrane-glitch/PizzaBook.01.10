@@ -5732,7 +5732,6 @@ function buildBeginnerColdPhaseD(schedule: HomePizzaPlanSchedule, lang: Lang, te
       body: teglia
         ? 'Tijekom hladne fermentacije jedna masa tijesta polako razvija okus i strukturu. Zatvorenu posudu držite u hladnjaku kako se površina ne bi osušila. Preporučena temperatura hladnjaka je približno 3–5 °C. Nemojte nepotrebno otvarati posudu.'
         : 'Tijekom hladne fermentacije tijesto polako razvija okus i strukturu. Kutiju držite zatvorenom kako se površina kuglica ne bi osušila. Preporučena temperatura hladnjaka je približno 3–5 °C. Nemojte nepotrebno otvarati kutiju.',
-      alarm: 'Izvadite tijesto iz hladnjaka',
     },
     en: {
       step: teglia
@@ -5742,7 +5741,6 @@ function buildBeginnerColdPhaseD(schedule: HomePizzaPlanSchedule, lang: Lang, te
       body: teglia
         ? 'During cold fermentation, the single dough mass slowly develops flavor and structure. Keep the closed container refrigerated so its surface does not dry out. A refrigerator temperature of about 3–5 °C is recommended. Avoid opening the container unnecessarily.'
         : 'During cold fermentation, the dough slowly develops flavor and structure. Keep the box closed so the dough-ball surfaces do not dry out. A refrigerator temperature of about 3–5 °C is recommended. Avoid opening the box unnecessarily.',
-      alarm: 'Take the dough out of the refrigerator',
     },
     de: {
       step: teglia
@@ -5752,7 +5750,6 @@ function buildBeginnerColdPhaseD(schedule: HomePizzaPlanSchedule, lang: Lang, te
       body: teglia
         ? 'Während der kalten Fermentation entwickelt die einzelne Teigmasse langsam Aroma und Struktur. Bewahren Sie den geschlossenen Behälter im Kühlschrank auf, damit die Oberfläche nicht austrocknet. Empfohlen werden etwa 3–5 °C. Öffnen Sie den Behälter nicht unnötig.'
         : 'Während der kalten Fermentation entwickelt der Teig langsam Aroma und Struktur. Halten Sie die Box geschlossen, damit die Oberfläche der Teigkugeln nicht austrocknet. Empfohlen werden etwa 3–5 °C. Öffnen Sie die Box nicht unnötig.',
-      alarm: 'Teig aus dem Kühlschrank nehmen',
     },
     sl: {
       step: teglia
@@ -5762,16 +5759,12 @@ function buildBeginnerColdPhaseD(schedule: HomePizzaPlanSchedule, lang: Lang, te
       body: teglia
         ? 'Med hladno fermentacijo ena masa testa počasi razvija okus in strukturo. Zaprto posodo hranite v hladilniku, da se površina ne izsuši. Priporočena temperatura hladilnika je približno 3–5 °C. Posode ne odpirajte po nepotrebnem.'
         : 'Med hladno fermentacijo testo počasi razvija okus in strukturo. Posodo hranite zaprto, da se površina kroglic ne izsuši. Priporočena temperatura hladilnika je približno 3–5 °C. Posode ne odpirajte po nepotrebnem.',
-      alarm: 'Vzemi testo iz hladilnika',
     },
   }[lang];
   return {
-    step: schedule.roomAfterFridgeHours > 0
-      ? `${copy.step}\nAlarm — ${copy.alarm}\n${time}`
-      : copy.step,
+    step: copy.step,
     stepInfo: { title: copy.title, body: copy.body },
     fridgeOutAt,
-    alarm: copy.alarm,
   };
 }
 
