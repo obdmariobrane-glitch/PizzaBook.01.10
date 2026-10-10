@@ -3891,7 +3891,13 @@ export default function CalculatorHome() {
                   <Icon name="close" size={21} color={COLORS.onSurface} />
                 </Pressable>
               </View>
-              {mixingGuideKind === 'hand' || mixingGuideKind === 'mixer' ? <MixingGuideCarousel lang={lang} kind={mixingGuideKind} /> : null}
+              {mixingGuideKind === 'hand' || mixingGuideKind === 'mixer' ? (
+                <MixingGuideCarousel
+                  lang={lang}
+                  kind={mixingGuideKind}
+                  onSlideChange={setVisualGuideSlide}
+                />
+              ) : null}
               {mixingGuideKind === 'stretchFold' ? (
                 <MixingGuideCarousel
                   lang={lang}
