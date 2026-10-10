@@ -3514,6 +3514,8 @@ export default function CalculatorHome() {
                           ? { kind: 'balling', onPress: () => { setVisualGuideSlide(0); setMixingGuideKind('balling'); } }
                           : isBeginner && pizzaStyle === 'neapolitan' && flour !== 'glutenFree' && !isRomanTeglia && index === (directRecipeFridgeHours > 0 ? 4 : 3)
                             ? { kind: 'baking', onPress: () => { setVisualGuideSlide(0); setMixingGuideKind('baking'); } }
+                          : isBeginner && pizzaStyle === 'romana' && !isRomanTeglia && flour !== 'glutenFree' && index === (directRecipeFridgeHours > 0 ? 4 : 3)
+                            ? { kind: 'bakingRomanaTonda', onPress: () => { setVisualGuideSlide(0); setMixingGuideKind('bakingRomanaTonda'); } }
                           : undefined}
                     completed={completedSteps}
                     onToggle={toggleStep}
@@ -3833,14 +3835,14 @@ export default function CalculatorHome() {
                     ? ({ hr: 'FAZA B', en: 'PHASE B', de: 'PHASE B', sl: 'FAZA B' }[lang])
                     : mixingGuideKind === 'balling'
                       ? ({ hr: 'FAZA C', en: 'PHASE C', de: 'PHASE C', sl: 'FAZA C' }[lang])
-                      : mixingGuideKind === 'baking'
+                    : mixingGuideKind === 'baking' || mixingGuideKind === 'bakingRomanaTonda'
                         ? ({ hr: 'FAZA E', en: 'PHASE E', de: 'PHASE E', sl: 'FAZA E' }[lang])
                       : ({ hr: 'FAZA A', en: 'PHASE A', de: 'PHASE A', sl: 'FAZA A' }[lang])}</Text>
                   <Text style={styles.visualGuideTitle}>{mixingGuideKind === 'stretchFold'
                     ? ({ hr: 'Preklapanje tijesta', en: 'Stretch & fold', de: 'Stretch & Fold', sl: 'Razteg in prepogib' }[lang])
                     : mixingGuideKind === 'balling'
                       ? ({ hr: 'Podjela i oblikovanje kuglica', en: 'Dividing and shaping dough balls', de: 'Teilen und Formen von Teigkugeln', sl: 'Delitev in oblikovanje kroglic' }[lang])
-                      : mixingGuideKind === 'baking'
+                    : mixingGuideKind === 'baking' || mixingGuideKind === 'bakingRomanaTonda'
                         ? ({ hr: 'Temperiranje, oblikovanje i pečenje', en: 'Tempering, shaping and baking', de: 'Temperieren, Formen und Backen', sl: 'Temperiranje, oblikovanje in peka' }[lang])
                       : ({ hr: 'Priprema i zamjes', en: 'Preparation and mixing', de: 'Vorbereitung und Kneten', sl: 'Priprava in gnetenje' }[lang])}</Text>
                 </View>
@@ -3856,6 +3858,8 @@ export default function CalculatorHome() {
                       ? 'phase-c-visual-guide-close-icon'
                       : mixingGuideKind === 'baking'
                         ? 'phase-e-visual-guide-close-icon'
+                      : mixingGuideKind === 'bakingRomanaTonda'
+                        ? 'phase-e-romana-tonda-visual-guide-close-icon'
                       : 'phase-a-visual-guide-close-icon'}
                 >
                   <Icon name="close" size={21} color={COLORS.onSurface} />
@@ -3883,6 +3887,13 @@ export default function CalculatorHome() {
                   onSlideChange={setVisualGuideSlide}
                 />
               ) : null}
+              {mixingGuideKind === 'bakingRomanaTonda' ? (
+                <MixingGuideCarousel
+                  lang={lang}
+                  kind="bakingRomanaTonda"
+                  onSlideChange={setVisualGuideSlide}
+                />
+              ) : null}
               <View style={styles.visualGuideCopyBlock}>
                 <Text style={styles.visualGuideSectionTitle}>{({ hr: 'KAKO NAPRAVITI', en: 'HOW TO DO IT', de: 'SO GEHT’S', sl: 'KAKO NAREDITI' }[lang])}</Text>
                 <Text style={styles.visualGuideBody}>
@@ -3892,6 +3903,8 @@ export default function CalculatorHome() {
                       ? getBallingGuideCopy(lang, visualGuideSlide).how
                     : mixingGuideKind === 'baking'
                       ? getNapoletanaBakingGuideCopy(lang, visualGuideSlide).how
+                    : mixingGuideKind === 'bakingRomanaTonda'
+                      ? getRomanaTondaBakingGuideCopy(lang, visualGuideSlide).how
                     : mixingGuideKind === 'mixer'
                     ? ({
                       hr: 'Počni sporije kako bi se brašno i voda spojili bez prskanja. Kad više nema suhih dijelova, nastavi prema uputama recepta.',
@@ -3916,6 +3929,8 @@ export default function CalculatorHome() {
                       ? getBallingGuideCopy(lang, visualGuideSlide).look
                     : mixingGuideKind === 'baking'
                       ? getNapoletanaBakingGuideCopy(lang, visualGuideSlide).look
+                    : mixingGuideKind === 'bakingRomanaTonda'
+                      ? getRomanaTondaBakingGuideCopy(lang, visualGuideSlide).look
                     : ({
                     hr: 'Tijesto treba biti povezano i ujednačeno, bez suhih dijelova brašna.',
                     en: 'The dough should be cohesive and even, with no dry flour remaining.',
@@ -7227,6 +7242,102 @@ function getNapoletanaBakingGuideCopy(lang: Lang, slide: number) {
       sl: {
         how: 'Enakomerno razporedite količino omake in dobro odcejene mocarele, navedeno v receptu. Rob pustite brez nadeva in pico čim prej prestavite v peko.',
         look: 'Nadev naj bo enakomerno razporejen, brez preveč tekočine na sredini. Rob pice ostane prost.',
+      },
+    },
+  ];
+  return copy[Math.min(slide, copy.length - 1)][lang];
+}
+
+function getRomanaTondaBakingGuideCopy(lang: Lang, slide: number) {
+  const copy = [
+    {
+      hr: {
+        how: 'Nježno izvadite jednu kuglicu iz fermentacijske kutije i položite je na lagano pobrašnjenu radnu površinu. Nemojte je ponovno mijesiti. Ostale kuglice ostavite pokrivene.',
+        look: 'Tijesto treba biti glatko, opušteno i dovoljno elastično za oblikovanje, bez većih pukotina.',
+      },
+      en: {
+        how: 'Gently remove one dough ball from the fermentation box and place it on a lightly floured work surface. Do not knead it again. Keep the remaining balls covered.',
+        look: 'The dough should be smooth, relaxed, and elastic enough to shape, without major cracks.',
+      },
+      de: {
+        how: 'Nehmen Sie vorsichtig eine Teigkugel aus der Gärbox und legen Sie sie auf eine leicht bemehlte Arbeitsfläche. Kneten Sie sie nicht erneut. Lassen Sie die übrigen Kugeln abgedeckt.',
+        look: 'Der Teig sollte glatt, entspannt und elastisch genug zum Formen sein, ohne größere Risse.',
+      },
+      sl: {
+        how: 'Nežno vzemite eno kroglico testa iz fermentacijske škatle in jo položite na rahlo pomokano delovno površino. Ne gnetite je znova. Preostale kroglice pustite pokrite.',
+        look: 'Testo naj bo gladko, sproščeno in dovolj elastično za oblikovanje, brez večjih razpok.',
+      },
+    },
+    {
+      hr: {
+        how: 'Jagodicama prstiju postupno pritišćite tijesto od sredine prema van. Za razliku od Napoletane, cilj nije stvoriti visok i prozračan rub.',
+        look: 'Tijesto postaje ravnomjerno spljošteno, s tankom sredinom i niskim rubom.',
+      },
+      en: {
+        how: 'Gradually press the dough outward from the center with your fingertips. Unlike Napoletana, the goal is not to create a high, airy rim.',
+        look: 'The dough becomes evenly flattened, with a thin center and a low rim.',
+      },
+      de: {
+        how: 'Drücken Sie den Teig mit den Fingerspitzen nach und nach von der Mitte nach außen. Anders als bei Napoletana soll kein hoher, luftiger Rand entstehen.',
+        look: 'Der Teig wird gleichmäßig flach, mit dünner Mitte und niedrigem Rand.',
+      },
+      sl: {
+        how: 'S konicami prstov postopoma potiskajte testo od sredine navzven. Za razliko od napolitanske pice cilj ni visok in zračen rob.',
+        look: 'Testo se enakomerno splošči, s tanko sredino in nizkim robom.',
+      },
+    },
+    {
+      hr: {
+        how: 'Nježno razvlačite tijesto rukama i postupno povećavajte promjer. Radite ravnomjerno kako bi tijesto ostalo tanko, bez trganja.',
+        look: 'Tijesto treba biti tanko i ujednačeno, bez velikih razlika u debljini i bez pukotina.',
+      },
+      en: {
+        how: 'Gently stretch the dough by hand and gradually increase its diameter. Work evenly so it stays thin without tearing.',
+        look: 'The dough should be thin and even, without large differences in thickness or cracks.',
+      },
+      de: {
+        how: 'Dehnen Sie den Teig vorsichtig mit den Händen und vergrößern Sie den Durchmesser schrittweise. Arbeiten Sie gleichmäßig, damit er dünn bleibt und nicht reißt.',
+        look: 'Der Teig sollte dünn und gleichmäßig sein, ohne große Unterschiede in der Dicke oder Risse.',
+      },
+      sl: {
+        how: 'Testo nežno raztegujte z rokami in postopoma povečujte premer. Delajte enakomerno, da ostane tanko in se ne strga.',
+        look: 'Testo naj bo tanko in enakomerno, brez velikih razlik v debelini in brez razpok.',
+      },
+    },
+    {
+      hr: {
+        how: 'Dovršite oblikovanje do promjera navedenog u receptu. Ravnomjerno oblikujte rub, bez stvaranja visokog napuljskog cornicionea.',
+        look: 'Pizza treba biti okrugla, vrlo tanka i ravnomjerna, s niskim rubom, spremna za dodavanje nadjeva.',
+      },
+      en: {
+        how: 'Finish shaping to the diameter specified in the recipe. Shape the rim evenly without creating a high Neapolitan cornicione.',
+        look: 'The pizza should be round, very thin, and even, with a low rim, ready for toppings.',
+      },
+      de: {
+        how: 'Formen Sie den Teig bis zum im Rezept angegebenen Durchmesser fertig. Formen Sie den Rand gleichmäßig, ohne einen hohen neapolitanischen Cornicione zu bilden.',
+        look: 'Die Pizza sollte rund, sehr dünn und gleichmäßig sein, mit niedrigem Rand und bereit für den Belag.',
+      },
+      sl: {
+        how: 'Oblikovanje dokončajte do premera, navedenega v receptu. Rob oblikujte enakomerno, brez visokega neapeljskega cornicioneja.',
+        look: 'Pica naj bo okrogla, zelo tanka in enakomerna, z nizkim robom, pripravljena za nadev.',
+      },
+    },
+    {
+      hr: {
+        how: 'Ravnomjerno rasporedite umak i ostale sastojke u količinama navedenima u receptu. Izbjegavajte previše vlažnog nadjeva kako bi tijesto ostalo hrskavo.',
+        look: 'Nadjev treba biti ravnomjerno raspoređen, bez nakupljanja tekućine. Tanki rub ostaje slobodan.',
+      },
+      en: {
+        how: 'Distribute the sauce and other ingredients evenly using the quantities specified in the recipe. Avoid overly wet toppings so the dough stays crisp.',
+        look: 'The toppings should be evenly distributed without liquid pooling. The thin rim remains clear.',
+      },
+      de: {
+        how: 'Verteilen Sie Sauce und übrige Zutaten gleichmäßig in den im Rezept angegebenen Mengen. Vermeiden Sie zu feuchten Belag, damit der Teig knusprig bleibt.',
+        look: 'Der Belag sollte gleichmäßig verteilt sein, ohne Flüssigkeitsansammlungen. Der dünne Rand bleibt frei.',
+      },
+      sl: {
+        how: 'Enakomerno razporedite omako in druge sestavine v količinah, navedenih v receptu. Izogibajte se premokremu nadevu, da testo ostane hrustljavo.',
+        look: 'Nadev naj bo enakomerno razporejen, brez nabiranja tekočine. Tanek rob ostane prost.',
       },
     },
   ];

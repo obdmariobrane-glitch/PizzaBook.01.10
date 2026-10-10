@@ -37,8 +37,15 @@ const NAPOLETANA_BAKING_IMAGES = [
   require('../../assets/images/phase_e_04_shape_pizza.png'),
   require('../../assets/images/phase_e_05_add_toppings.png'),
 ];
+const ROMANA_TONDA_BAKING_IMAGES = [
+  require('../../assets/images/phase_e_romana_tonda_01_prepare_dough.png'),
+  require('../../assets/images/phase_e_romana_tonda_02_press_center.png'),
+  require('../../assets/images/phase_e_romana_tonda_03_stretch_dough.png'),
+  require('../../assets/images/phase_e_romana_tonda_04_thin_round_shape.png'),
+  require('../../assets/images/phase_e_romana_tonda_05_add_toppings.png'),
+];
 
-export type MixingGuideKind = 'hand' | 'mixer' | 'stretchFold' | 'balling' | 'baking';
+export type MixingGuideKind = 'hand' | 'mixer' | 'stretchFold' | 'balling' | 'baking' | 'bakingRomanaTonda';
 
 export default function MixingGuideCarousel({
   lang,
@@ -57,6 +64,8 @@ export default function MixingGuideCarousel({
       ? BALLING_IMAGES
       : kind === 'baking'
         ? NAPOLETANA_BAKING_IMAGES
+        : kind === 'bakingRomanaTonda'
+          ? ROMANA_TONDA_BAKING_IMAGES
         : MIXER_IMAGES;
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -78,7 +87,9 @@ export default function MixingGuideCarousel({
           ? 'phase-c-balling-carousel'
           : kind === 'baking'
             ? 'phase-e-napoletana-carousel'
-            : 'phase-a-mixer-carousel'}
+            : kind === 'bakingRomanaTonda'
+              ? 'phase-e-romana-tonda-carousel'
+          : 'phase-a-mixer-carousel'}
     >
       <View
         onLayout={(event) => setFrameWidth(event.nativeEvent.layout.width)}
@@ -100,7 +111,9 @@ export default function MixingGuideCarousel({
                 ? 'phase-c-balling-carousel-pager'
                 : kind === 'baking'
                   ? 'phase-e-napoletana-carousel-pager'
-                  : 'phase-a-mixer-carousel-pager'}
+                  : kind === 'bakingRomanaTonda'
+                    ? 'phase-e-romana-tonda-carousel-pager'
+                : 'phase-a-mixer-carousel-pager'}
           >
             {images.map((source, index) => (
               <View key={index} style={{ width: frameWidth, height: frameWidth * 9 / 16 }}>
@@ -126,6 +139,8 @@ export default function MixingGuideCarousel({
             ? 'phase-c-balling-carousel-indicator'
             : kind === 'baking'
               ? 'phase-e-napoletana-carousel-indicator'
+                  : kind === 'bakingRomanaTonda'
+                    ? 'phase-e-romana-tonda-carousel-indicator'
               : 'phase-a-mixer-carousel-indicator'}
       >
         {images.map((_, index) => (
