@@ -6088,7 +6088,7 @@ function buildBeginnerTegliaHomeSteps(
     schedule,
     schedule.preheatAt ?? new Date(schedule.bakeAt.getTime() - getBeginnerPreheatMinutes(schedule.ovenType ?? 'homePan') * 60000),
   );
-  const tegliaPhaseC = buildBeginnerTegliaPhaseC(lang, refrigerated, flourType, teglaRoomEnd);
+  const tegliaPhaseC = buildBeginnerTegliaPhaseC(lang, refrigerated, flourType, teglaRoomEnd, schedule.fridgeAt, schedule.fridgeTemp);
   const activeBase = refrigerated ? phases : phases.filter((phase) => !coldTitle.test(phase.title));
   const hasPhaseC = activeBase.some((phase) => /(?:Phase|Faza) C\b/i.test(phase.title));
   const active = refrigerated || hasPhaseC || activeBase.length < 1
@@ -6168,7 +6168,11 @@ function buildBeginnerTegliaPhaseC(
   refrigerated: boolean,
   flourType: FlourType,
   roomEnd: BeginnerRoomOnlyEnd | null = null,
+  fridgeAt?: Date,
+  fridgeTemp?: number,
 ) {
+  const fridgeEntryTime = refrigerated && fridgeAt ? formatBeginnerClockTime(fridgeAt, lang) : '';
+  const fridgeTemperature = fridgeTemp ?? 4;
   const copy = {
     hr: {
       title: 'Faza C: Priprema mase za tepsiju',
@@ -6178,7 +6182,7 @@ function buildBeginnerTegliaPhaseC(
         'Ostavite tijesto u jednoj masi. Nemojte ga dijeliti na pojedinačne komade.',
         flourType === 'glutenFree' ? 'Nježno skupite tijesto u jednu masu pomoću strugalice ili lagano nauljenih ruku. Nemojte ga rastezati ni pokušavati razviti površinsku napetost.' : flourType === 'manitoba' ? 'Nježno skupite tijesto u kompaktnu masu. Manitoba tijesto može biti elastičnije i opirati se oblikovanju; nemojte ga siliti ni trgati. Prestanite čim tijesto zadrži oblik.' : flourType === 'spelt' ? 'Nježno skupite tijesto u jednu masu. Izbjegavajte ponavljano rastezanje i pretjerano zatezanje osjetljivijeg pirovog tijesta.' : flourType === 'wholeWheat' ? 'Nježno skupite tijesto u kompaktnu masu. Manje nepravilnosti na površini su prihvatljive; nemojte ga pretjerano zatezati.' : flourType === 'custom' ? 'Nježno skupite tijesto u kompaktnu masu. Prilagodite rukovanje njegovoj stvarnoj čvrstoći i ljepljivosti.' : 'Nježno skupite tijesto u kompaktnu masu. Lagano podvucite rubove i prestanite kada tijesto zadrži oblik.',
         'Stavite tijesto u odgovarajuću fermentacijsku posudu. Ostavite dovoljno prostora za povećanje volumena i zatvorite posudu.',
-        refrigerated ? 'Premjestite zatvorenu fermentacijsku posudu u hladnjak u vrijeme određeno izračunatim rasporedom.' : 'Ostavite zatvorenu fermentacijsku posudu na sobnoj temperaturi i nastavite fermentaciju prema izračunatom rasporedu.',
+        refrigerated ? `U ${fridgeEntryTime} premjestite zatvorenu fermentacijsku posudu s jednom masom tijesta u hladnjak na približno ${fridgeTemperature} °C.` : 'Ostavite zatvorenu fermentacijsku posudu na sobnoj temperaturi i nastavite fermentaciju prema izračunatom rasporedu.',
       ],
       info: [
         ['Radna površina', flourType === 'glutenFree' ? 'Pripremite čistu i suhu površinu, strugač i vagu. Koristite bezglutensko brašno ili certificirano bezglutensko rižino brašno, nikada obično pšenično brašno, i rasporedite ga u tanak sloj.' : 'Pripremite čistu i suhu površinu, strugač i vagu. Koristite malu količinu brašna u tankom sloju; višak može otežati rukovanje.'],
@@ -6197,7 +6201,7 @@ function buildBeginnerTegliaPhaseC(
         'Keep the dough as one mass. Do not divide it into individual pieces.',
         flourType === 'glutenFree' ? 'Gently gather the dough into one mass using a scraper or lightly oiled hands. Do not stretch it or try to develop surface tension.' : flourType === 'manitoba' ? 'Gently gather the dough into a compact mass. Manitoba dough may be more elastic and resist shaping; do not force or tear it. Stop as soon as it holds its shape.' : flourType === 'spelt' ? 'Gently gather the dough into one mass. Avoid repeated stretching and excessive tightening of the more delicate spelt dough.' : flourType === 'wholeWheat' ? 'Gently gather the dough into a compact mass. Minor surface irregularities are acceptable; do not over-tighten it.' : flourType === 'custom' ? 'Gently gather the dough into a compact mass. Adapt handling to its actual firmness and stickiness.' : 'Gently gather the dough into a compact mass. Tuck the edges lightly and stop when it holds its shape.',
         'Place the dough in a suitable fermentation container. Leave enough room for expansion and close the container.',
-        refrigerated ? 'Transfer the closed fermentation container to the refrigerator at the time set by the calculated schedule.' : 'Keep the closed fermentation container at room temperature and continue fermentation according to the calculated schedule.',
+        refrigerated ? `At ${fridgeEntryTime}, transfer the closed fermentation container with the single dough mass to the refrigerator at approximately ${fridgeTemperature} °C.` : 'Keep the closed fermentation container at room temperature and continue fermentation according to the calculated schedule.',
       ],
       info: [
         ['Work surface', flourType === 'glutenFree' ? 'Prepare a clean, dry surface, scraper, and scale. Use gluten-free flour or certified gluten-free rice flour, never regular wheat flour, and spread it in a thin layer.' : 'Prepare a clean, dry surface, scraper, and scale. Use a small amount of flour in a thin layer; excess flour can make handling difficult.'],
@@ -6216,7 +6220,7 @@ function buildBeginnerTegliaPhaseC(
         'Lassen Sie den Teig als eine Masse. Teilen Sie ihn nicht in einzelne Stücke.',
         flourType === 'glutenFree' ? 'Sammeln Sie den Teig vorsichtig mit einem Schaber oder leicht geölten Händen zu einer Masse. Dehnen Sie ihn nicht und versuchen Sie nicht, Oberflächenspannung zu entwickeln.' : flourType === 'manitoba' ? 'Sammeln Sie den Teig vorsichtig zu einer kompakten Masse. Manitoba-Teig kann elastischer sein und sich widersetzen; erzwingen oder reißen Sie ihn nicht. Hören Sie auf, sobald er seine Form hält.' : flourType === 'spelt' ? 'Sammeln Sie den Teig vorsichtig zu einer Masse. Vermeiden Sie wiederholtes Dehnen und starkes Straffen des empfindlicheren Dinkelteigs.' : flourType === 'wholeWheat' ? 'Sammeln Sie den Teig vorsichtig zu einer kompakten Masse. Kleine Unregelmäßigkeiten sind akzeptabel; straffen Sie ihn nicht übermäßig.' : flourType === 'custom' ? 'Sammeln Sie den Teig vorsichtig zu einer kompakten Masse. Passen Sie die Behandlung an seine tatsächliche Festigkeit und Klebrigkeit an.' : 'Sammeln Sie den Teig vorsichtig zu einer kompakten Masse. Schlagen Sie die Ränder leicht ein und hören Sie auf, sobald er seine Form hält.',
         'Geben Sie den Teig in einen geeigneten Gärbehälter. Lassen Sie ausreichend Platz zum Aufgehen und schließen Sie den Behälter.',
-        refrigerated ? 'Stellen Sie den geschlossenen Gärbehälter zum im berechneten Zeitplan festgelegten Zeitpunkt in den Kühlschrank.' : 'Lassen Sie den geschlossenen Gärbehälter bei Raumtemperatur stehen und setzen Sie die Fermentation nach dem berechneten Zeitplan fort.',
+        refrigerated ? `Stellen Sie den geschlossenen Gärbehälter mit der einzelnen Teigmasse um ${fridgeEntryTime} bei etwa ${fridgeTemperature} °C in den Kühlschrank.` : 'Lassen Sie den geschlossenen Gärbehälter bei Raumtemperatur stehen und setzen Sie die Fermentation nach dem berechneten Zeitplan fort.',
       ],
       info: [
         ['Arbeitsfläche', flourType === 'glutenFree' ? 'Bereiten Sie eine saubere, trockene Fläche, Schaber und Waage vor. Verwenden Sie glutenfreies Mehl oder zertifiziert glutenfreies Reismehl, niemals normales Weizenmehl, und verteilen Sie es dünn.' : 'Bereiten Sie eine saubere, trockene Fläche, Schaber und Waage vor. Verwenden Sie wenig Mehl in einer dünnen Schicht; zu viel Mehl erschwert die Handhabung.'],
@@ -6235,7 +6239,7 @@ function buildBeginnerTegliaPhaseC(
         'Testo pustite v eni masi. Ne delite ga na posamezne kose.',
         flourType === 'glutenFree' ? 'Testo nežno zberite v eno maso s strgalom ali rahlo naoljenimi rokami. Ne raztegujte ga in ne poskušajte ustvariti površinske napetosti.' : flourType === 'manitoba' ? 'Testo nežno zberite v kompaktno maso. Manitobsko testo je lahko bolj elastično in se upira oblikovanju; ne silite vanj in ga ne trgajte. Končajte, ko drži obliko.' : flourType === 'spelt' ? 'Testo nežno zberite v eno maso. Izogibajte se ponavljanemu raztezanju in pretiranemu zategovanju občutljivega pirinega testa.' : flourType === 'wholeWheat' ? 'Testo nežno zberite v kompaktno maso. Manjše nepravilnosti na površini so sprejemljive; ne zategujte ga preveč.' : flourType === 'custom' ? 'Testo nežno zberite v kompaktno maso. Ravnanje prilagodite dejanski čvrstosti in lepljivosti.' : 'Testo nežno zberite v kompaktno maso. Robove rahlo spodvijte in končajte, ko drži obliko.',
         'Testo položite v ustrezno fermentacijsko posodo. Pustite dovolj prostora za širjenje in posodo zaprite.',
-        refrigerated ? 'Zaprto fermentacijsko posodo ob času, določenem z izračunanim načrtom, prestavite v hladilnik.' : 'Zaprto fermentacijsko posodo pustite pri sobni temperaturi in nadaljujte fermentacijo po izračunanem načrtu.',
+        refrigerated ? `Ob ${fridgeEntryTime} zaprto fermentacijsko posodo z eno maso testa prestavite v hladilnik na približno ${fridgeTemperature} °C.` : 'Zaprto fermentacijsko posodo pustite pri sobni temperaturi in nadaljujte fermentacijo po izračunanem načrtu.',
       ],
       info: [
         ['Delovna površina', flourType === 'glutenFree' ? 'Pripravite čisto in suho površino, strgalo in tehtnico. Uporabite brezglutensko moko ali certificirano brezglutensko riževo moko, nikoli navadne pšenične moke, ter jo razporedite v tanek sloj.' : 'Pripravite čisto in suho površino, strgalo in tehtnico. Uporabite malo moke v tankem sloju; preveč moke oteži delo.'],
@@ -6263,7 +6267,11 @@ function buildNeapolitanDirectPhaseC(
   refrigerated: boolean,
   flourType: FlourType,
   roomEnd: BeginnerRoomOnlyEnd | null = null,
+  fridgeAt?: Date,
+  fridgeTemp?: number,
 ) {
+  const fridgeEntryTime = refrigerated && fridgeAt ? formatBeginnerClockTime(fridgeAt, lang) : '';
+  const fridgeTemperature = fridgeTemp ?? 4;
   const croatianPieceForm = pizzas >= 5 ? 'jednakih komada' : 'jednaka komada';
   const copy = {
     hr: {
@@ -6275,7 +6283,7 @@ function buildNeapolitanDirectPhaseC(
         'Svaki komad nježno oblikujte u kuglicu. Podvucite rubove prema donjoj strani i zatvorite spoj kako biste stvorili blagu površinsku napetost bez trganja tijesta.',
         'Stavite kuglice u fermentacijsku kutiju sa spojem prema dolje. Ostavite dovoljno razmaka između njih i zatvorite kutiju.',
         refrigerated
-          ? 'Premjestite zatvorenu fermentacijsku kutiju u hladnjak u vrijeme određeno izračunatim rasporedom.'
+          ? `U ${fridgeEntryTime} premjestite zatvorenu fermentacijsku kutiju s kuglicama u hladnjak na približno ${fridgeTemperature} °C.`
           : 'Ostavite zatvorenu kutiju s kuglicama na sobnoj temperaturi i nastavite fermentaciju prema izračunatom rasporedu.',
       ],
       info: [
@@ -6296,7 +6304,7 @@ function buildNeapolitanDirectPhaseC(
         'Gently shape each piece into a dough ball. Tuck the edges underneath and close the seam to create light surface tension without tearing the dough.',
         'Place the dough balls seam-side down in a fermentation box. Leave enough space between them and close the box.',
         refrigerated
-          ? 'Transfer the closed fermentation box to the refrigerator at the time set by the calculated schedule.'
+          ? `At ${fridgeEntryTime}, transfer the closed fermentation box with the dough balls to the refrigerator at approximately ${fridgeTemperature} °C.`
           : 'Keep the closed box with the dough balls at room temperature and continue fermentation according to the calculated schedule.',
       ],
       info: [
@@ -6317,7 +6325,7 @@ function buildNeapolitanDirectPhaseC(
         'Formen Sie jedes Stück vorsichtig zu einer Teigkugel. Schlagen Sie die Ränder nach unten ein und schließen Sie die Naht, um leichte Oberflächenspannung zu erzeugen, ohne den Teig zu reißen.',
         'Legen Sie die Teigkugeln mit der Naht nach unten in eine Gärbox. Lassen Sie ausreichend Abstand zwischen ihnen und schließen Sie die Box.',
         refrigerated
-          ? 'Stellen Sie die geschlossene Gärbox zum im berechneten Zeitplan festgelegten Zeitpunkt in den Kühlschrank.'
+          ? `Stellen Sie die geschlossene Gärbox mit den Teigkugeln um ${fridgeEntryTime} bei etwa ${fridgeTemperature} °C in den Kühlschrank.`
           : 'Lassen Sie die geschlossene Box mit den Teigkugeln bei Raumtemperatur stehen und setzen Sie die Fermentation nach dem berechneten Zeitplan fort.',
       ],
       info: [
@@ -6338,7 +6346,7 @@ function buildNeapolitanDirectPhaseC(
         'Vsak kos nežno oblikujte v kroglico. Robove spodvijte na spodnjo stran in zaprite stik, da ustvarite rahlo površinsko napetost brez trganja testa.',
         'Kroglice položite v fermentacijsko posodo s stikom navzdol. Med njimi pustite dovolj prostora in posodo zaprite.',
         refrigerated
-          ? 'Zaprto fermentacijsko posodo ob času, določenem z izračunanim načrtom, prestavite v hladilnik.'
+          ? `Ob ${fridgeEntryTime} zaprto fermentacijsko posodo s kroglicami prestavite v hladilnik na približno ${fridgeTemperature} °C.`
           : 'Zaprto posodo s kroglicami pustite pri sobni temperaturi in nadaljujte fermentacijo po izračunanem načrtu.',
       ],
       info: [
@@ -6475,6 +6483,8 @@ function buildBeginnerDirectHomeSteps(
   ballWeightLabel: string,
   pizzas: number,
 ): DetailedPhase[] {
+  const fridgeEntryTime = schedule.fridgeAt ? formatBeginnerClockTime(schedule.fridgeAt, lang) : '';
+  const fridgeTemperature = schedule.fridgeTemp ?? fridgeTemp;
   const phaseBTitle = {
     hr: 'Prva fermentacija',
     en: 'First fermentation',
@@ -6489,10 +6499,10 @@ function buildBeginnerDirectHomeSteps(
     sl: `Skupno ${totalDoughLabel} testa razdelite na ${pizzas} enakih kosov po približno ${ballWeightLabel}. Vsak kos nežno oblikujte: robove spodvijte na spodnjo stran in zaprite stik, da ustvarite površinsko napetost brez močnega iztiskanja plina ali trganja testa.`,
   }[lang];
   const ballingContainerInstruction = (schedule.fridgeHours > 0 ? {
-    hr: 'Stavite kuglice u fermentacijsku kutiju s dovoljno razmaka između njih, zatvorite kutiju i premjestite je u hladnjak u vrijeme određeno izračunatim rasporedom.',
-    en: 'Place the dough balls in a fermentation box with enough space between them, close the box, and transfer it to the refrigerator at the time set by the calculated schedule.',
-    de: 'Legen Sie die Teigkugeln mit ausreichend Abstand zueinander in eine Gärbox, schließen Sie die Box und stellen Sie sie zum im berechneten Zeitplan festgelegten Zeitpunkt in den Kühlschrank.',
-    sl: 'Kroglice položite v fermentacijsko posodo z dovolj prostora med njimi, posodo zaprite in jo ob času, določenem z izračunanim načrtom, prestavite v hladilnik.',
+    hr: `U ${fridgeEntryTime} stavite kuglice u fermentacijsku kutiju s dovoljno razmaka između njih, zatvorite kutiju i premjestite je u hladnjak na približno ${fridgeTemperature} °C.`,
+    en: `At ${fridgeEntryTime}, place the dough balls in a fermentation box with enough space between them, close the box, and transfer it to the refrigerator at approximately ${fridgeTemperature} °C.`,
+    de: `Legen Sie die Teigkugeln um ${fridgeEntryTime} mit ausreichend Abstand zueinander in eine Gärbox, schließen Sie die Box und stellen Sie sie bei etwa ${fridgeTemperature} °C in den Kühlschrank.`,
+    sl: `Ob ${fridgeEntryTime} kroglice položite v fermentacijsko posodo z dovolj prostora med njimi, posodo zaprite in jo pri približno ${fridgeTemperature} °C prestavite v hladilnik.`,
   } : {
     hr: 'Stavite kuglice u zatvorenu fermentacijsku kutiju, ostavite dovoljno razmaka između njih i nastavite fermentaciju na sobnoj temperaturi prema izračunatom rasporedu.',
     en: 'Place the dough balls in a closed fermentation box, leave enough space between them, and continue fermentation at room temperature according to the calculated schedule.',
@@ -6663,7 +6673,17 @@ function buildBeginnerDirectHomeSteps(
     ? ({ hr: 'Radnu površinu lagano pospite certificiranim bezglutenskim brašnom ili rižinim brašnom.', en: 'Lightly dust the work surface with certified gluten-free flour or rice flour.', de: 'Bestäuben Sie die Arbeitsfläche leicht mit zertifiziert glutenfreiem Mehl oder Reismehl.', sl: 'Delovno površino rahlo posujte s certificirano brezglutensko ali riževo moko.' }[lang])
     : shapingSteps.surface;
 
-  const neapolitanPhaseC = buildNeapolitanDirectPhaseC(lang, totalDoughLabel, ballWeightLabel, pizzas, schedule.fridgeHours > 0, flourType, getBeginnerRoomOnlyEnd(schedule, preheatAt));
+  const neapolitanPhaseC = buildNeapolitanDirectPhaseC(
+    lang,
+    totalDoughLabel,
+    ballWeightLabel,
+    pizzas,
+    schedule.fridgeHours > 0,
+    flourType,
+    getBeginnerRoomOnlyEnd(schedule, preheatAt),
+    schedule.fridgeAt,
+    fridgeTemp,
+  );
   const tipo00ColdFermentationStep = {
     hr: `Nastavite hladnu fermentaciju zatvorene kutije u hladnjaku ${formatDuration(schedule.fridgeHours * 3600, lang)} prema izračunanom rasporedu.`,
     en: `Continue cold fermentation of the closed box in the refrigerator for ${formatDuration(schedule.fridgeHours * 3600, lang)} according to the calculated schedule.`,

@@ -88,7 +88,9 @@ function schedule(fridgeHours, roomBeforeFridgeHours = 2, roomAfterFridgeHours =
     roomBeforeFridgeHours,
     roomAfterFridgeHours,
     startAt,
+    fridgeAt: new Date(startAt.getTime() + roomBeforeFridgeHours * 3600000),
     bakeAt,
+    fridgeTemp: 4,
     preheatAt: new Date(bakeAt.getTime() - preheatMinutes * 60000),
     ovenType: oven,
   };
