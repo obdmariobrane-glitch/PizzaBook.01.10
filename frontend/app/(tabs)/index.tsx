@@ -407,11 +407,13 @@ export default function CalculatorHome() {
   const [guidedNotificationsEnabled, setGuidedNotificationsEnabled] = useState(false);
   const [guidedNotificationPreferenceLoaded, setGuidedNotificationPreferenceLoaded] = useState(false);
   const [guidedNow, setGuidedNow] = useState(() => Date.now());
+  const [nighttimeWarningRequest, setNighttimeWarningRequest] = useState(0);
   const [beginnerIngredientsExpanded, setBeginnerIngredientsExpanded] = useState(true);
   const [beginnerPlanExpanded, setBeginnerPlanExpanded] = useState(true);
   const [mixingGuideKind, setMixingGuideKind] = useState<MixingGuideKind | null>(null);
   const previousGuidedPlanId = useRef<string | null>(null);
   const nighttimeWarningShown = useRef<Set<string>>(new Set());
+  const beginnerScheduleModeUserSelected = useRef(false);
   const notificationSyncGeneration = useRef(0);
   const [flourInfo, setFlourInfo] = useState<null | { label: string; info: string }>(null);
   const [styleInfo, setStyleInfo] = useState<PizzaStyle | null>(null);
@@ -1236,7 +1238,7 @@ export default function CalculatorHome() {
   }, [guidedPlanId, guidedProgressPlanId, guidedCompletedAt]);
 
   useEffect(() => {
-    if (!isBeginner || !guidedPlanId || guidedProgressPlanId !== guidedPlanId) return;
+    if (!isBeginner || !guidedPlanId || !beginnerScheduleModeUserSelected.current) return;
     const affected = getNighttimeActiveEvents(beginnerScheduleSteps);
     if (affected.length === 0 || nighttimeWarningShown.current.has(guidedPlanId)) return;
     nighttimeWarningShown.current.add(guidedPlanId);
@@ -1300,7 +1302,7 @@ export default function CalculatorHome() {
     }).catch((error) => {
       console.error('Unable to check nighttime schedule confirmation:', error);
     });
-  }, [isBeginner, guidedPlanId, guidedProgressPlanId, beginnerScheduleSteps, lang, router]);
+  }, [isBeginner, guidedPlanId, beginnerScheduleSteps, lang, router, nighttimeWarningRequest]);
 
   useEffect(() => {
     if (!guidedPlanId) {
@@ -2921,7 +2923,11 @@ export default function CalculatorHome() {
                         <Pressable
                           key={mode}
                           testID={`beginner-mode-${mode}`}
-                          onPress={() => setBeginnerScheduleMode(mode)}
+                          onPress={() => {
+                            beginnerScheduleModeUserSelected.current = true;
+                            setBeginnerScheduleMode(mode);
+                            setNighttimeWarningRequest((request) => request + 1);
+                          }}
                           style={[
                             styles.fermentationModeOption,
                             selected && styles.fermentationModeOptionSelected,
