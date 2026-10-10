@@ -30,8 +30,15 @@ const BALLING_IMAGES = [
   require('../../assets/images/phase_c_04_no_number.png'),
   require('../../assets/images/phase_c_05_dough_balls_room_temperature (4).png'),
 ];
+const NAPOLETANA_BAKING_IMAGES = [
+  require('../../assets/images/phase_e_01_prepare_dough.png'),
+  require('../../assets/images/phase_e_02_press_center.png'),
+  require('../../assets/images/phase_e_03_stretch_dough.png'),
+  require('../../assets/images/phase_e_04_shape_pizza.png'),
+  require('../../assets/images/phase_e_05_add_toppings.png'),
+];
 
-export type MixingGuideKind = 'hand' | 'mixer' | 'stretchFold' | 'balling';
+export type MixingGuideKind = 'hand' | 'mixer' | 'stretchFold' | 'balling' | 'baking';
 
 export default function MixingGuideCarousel({
   lang,
@@ -44,7 +51,13 @@ export default function MixingGuideCarousel({
 }) {
   const [frameWidth, setFrameWidth] = useState(0);
   const [activeSlide, setActiveSlide] = useState(0);
-  const images = kind === 'stretchFold' ? STRETCH_FOLD_IMAGES : kind === 'balling' ? BALLING_IMAGES : MIXER_IMAGES;
+  const images = kind === 'stretchFold'
+    ? STRETCH_FOLD_IMAGES
+    : kind === 'balling'
+      ? BALLING_IMAGES
+      : kind === 'baking'
+        ? NAPOLETANA_BAKING_IMAGES
+        : MIXER_IMAGES;
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (frameWidth > 0) {
@@ -59,7 +72,13 @@ export default function MixingGuideCarousel({
   return (
     <View
       style={styles.container}
-      testID={kind === 'stretchFold' ? 'phase-b-stretch-fold-carousel' : kind === 'balling' ? 'phase-c-balling-carousel' : 'phase-a-mixer-carousel'}
+      testID={kind === 'stretchFold'
+        ? 'phase-b-stretch-fold-carousel'
+        : kind === 'balling'
+          ? 'phase-c-balling-carousel'
+          : kind === 'baking'
+            ? 'phase-e-napoletana-carousel'
+            : 'phase-a-mixer-carousel'}
     >
       <View
         onLayout={(event) => setFrameWidth(event.nativeEvent.layout.width)}
@@ -75,7 +94,13 @@ export default function MixingGuideCarousel({
             scrollEventThrottle={16}
             onScroll={handleScroll}
             style={styles.pager}
-            testID={kind === 'stretchFold' ? 'phase-b-stretch-fold-carousel-pager' : kind === 'balling' ? 'phase-c-balling-carousel-pager' : 'phase-a-mixer-carousel-pager'}
+            testID={kind === 'stretchFold'
+              ? 'phase-b-stretch-fold-carousel-pager'
+              : kind === 'balling'
+                ? 'phase-c-balling-carousel-pager'
+                : kind === 'baking'
+                  ? 'phase-e-napoletana-carousel-pager'
+                  : 'phase-a-mixer-carousel-pager'}
           >
             {images.map((source, index) => (
               <View key={index} style={{ width: frameWidth, height: frameWidth * 9 / 16 }}>
@@ -99,7 +124,9 @@ export default function MixingGuideCarousel({
           ? 'phase-b-stretch-fold-carousel-indicator'
           : kind === 'balling'
             ? 'phase-c-balling-carousel-indicator'
-            : 'phase-a-mixer-carousel-indicator'}
+            : kind === 'baking'
+              ? 'phase-e-napoletana-carousel-indicator'
+              : 'phase-a-mixer-carousel-indicator'}
       >
         {images.map((_, index) => (
           <View

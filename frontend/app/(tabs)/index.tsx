@@ -3512,7 +3512,9 @@ export default function CalculatorHome() {
                         ? { kind: 'stretchFold', onPress: () => { setVisualGuideSlide(0); setMixingGuideKind('stretchFold'); } }
                         : isBeginner && flour !== 'glutenFree' && !isRomanTeglia && index === 2
                           ? { kind: 'balling', onPress: () => { setVisualGuideSlide(0); setMixingGuideKind('balling'); } }
-                        : undefined}
+                          : isBeginner && pizzaStyle === 'neapolitan' && flour !== 'glutenFree' && !isRomanTeglia && index === (directRecipeFridgeHours > 0 ? 4 : 3)
+                            ? { kind: 'baking', onPress: () => { setVisualGuideSlide(0); setMixingGuideKind('baking'); } }
+                          : undefined}
                     completed={completedSteps}
                     onToggle={toggleStep}
                     activeTimers={activeTimers}
@@ -3816,6 +3818,8 @@ export default function CalculatorHome() {
               ? 'phase-b-visual-guide-modal'
               : mixingGuideKind === 'balling'
                 ? 'phase-c-visual-guide-modal'
+                : mixingGuideKind === 'baking'
+                  ? 'phase-e-visual-guide-modal'
                 : 'phase-a-visual-guide-modal'}
           >
             <ScrollView
@@ -3829,11 +3833,15 @@ export default function CalculatorHome() {
                     ? ({ hr: 'FAZA B', en: 'PHASE B', de: 'PHASE B', sl: 'FAZA B' }[lang])
                     : mixingGuideKind === 'balling'
                       ? ({ hr: 'FAZA C', en: 'PHASE C', de: 'PHASE C', sl: 'FAZA C' }[lang])
+                      : mixingGuideKind === 'baking'
+                        ? ({ hr: 'FAZA E', en: 'PHASE E', de: 'PHASE E', sl: 'FAZA E' }[lang])
                       : ({ hr: 'FAZA A', en: 'PHASE A', de: 'PHASE A', sl: 'FAZA A' }[lang])}</Text>
                   <Text style={styles.visualGuideTitle}>{mixingGuideKind === 'stretchFold'
                     ? ({ hr: 'Preklapanje tijesta', en: 'Stretch & fold', de: 'Stretch & Fold', sl: 'Razteg in prepogib' }[lang])
                     : mixingGuideKind === 'balling'
                       ? ({ hr: 'Podjela i oblikovanje kuglica', en: 'Dividing and shaping dough balls', de: 'Teilen und Formen von Teigkugeln', sl: 'Delitev in oblikovanje kroglic' }[lang])
+                      : mixingGuideKind === 'baking'
+                        ? ({ hr: 'Temperiranje, oblikovanje i pečenje', en: 'Tempering, shaping and baking', de: 'Temperieren, Formen und Backen', sl: 'Temperiranje, oblikovanje in peka' }[lang])
                       : ({ hr: 'Priprema i zamjes', en: 'Preparation and mixing', de: 'Vorbereitung und Kneten', sl: 'Priprava in gnetenje' }[lang])}</Text>
                 </View>
                 <Pressable
@@ -3846,6 +3854,8 @@ export default function CalculatorHome() {
                     ? 'phase-b-visual-guide-close-icon'
                     : mixingGuideKind === 'balling'
                       ? 'phase-c-visual-guide-close-icon'
+                      : mixingGuideKind === 'baking'
+                        ? 'phase-e-visual-guide-close-icon'
                       : 'phase-a-visual-guide-close-icon'}
                 >
                   <Icon name="close" size={21} color={COLORS.onSurface} />
@@ -3866,6 +3876,13 @@ export default function CalculatorHome() {
                   onSlideChange={setVisualGuideSlide}
                 />
               ) : null}
+              {mixingGuideKind === 'baking' ? (
+                <MixingGuideCarousel
+                  lang={lang}
+                  kind="baking"
+                  onSlideChange={setVisualGuideSlide}
+                />
+              ) : null}
               <View style={styles.visualGuideCopyBlock}>
                 <Text style={styles.visualGuideSectionTitle}>{({ hr: 'KAKO NAPRAVITI', en: 'HOW TO DO IT', de: 'SO GEHT’S', sl: 'KAKO NAREDITI' }[lang])}</Text>
                 <Text style={styles.visualGuideBody}>
@@ -3873,6 +3890,8 @@ export default function CalculatorHome() {
                     ? getStretchFoldGuideCopy(lang, visualGuideSlide).how
                     : mixingGuideKind === 'balling'
                       ? getBallingGuideCopy(lang, visualGuideSlide).how
+                    : mixingGuideKind === 'baking'
+                      ? getNapoletanaBakingGuideCopy(lang, visualGuideSlide).how
                     : mixingGuideKind === 'mixer'
                     ? ({
                       hr: 'Počni sporije kako bi se brašno i voda spojili bez prskanja. Kad više nema suhih dijelova, nastavi prema uputama recepta.',
@@ -3895,6 +3914,8 @@ export default function CalculatorHome() {
                     ? getStretchFoldGuideCopy(lang, visualGuideSlide).look
                     : mixingGuideKind === 'balling'
                       ? getBallingGuideCopy(lang, visualGuideSlide).look
+                    : mixingGuideKind === 'baking'
+                      ? getNapoletanaBakingGuideCopy(lang, visualGuideSlide).look
                     : ({
                     hr: 'Tijesto treba biti povezano i ujednačeno, bez suhih dijelova brašna.',
                     en: 'The dough should be cohesive and even, with no dry flour remaining.',
@@ -3912,6 +3933,8 @@ export default function CalculatorHome() {
                 ? 'phase-b-visual-guide-close'
                 : mixingGuideKind === 'balling'
                   ? 'phase-c-visual-guide-close'
+                  : mixingGuideKind === 'baking'
+                    ? 'phase-e-visual-guide-close'
                   : 'phase-a-visual-guide-close'}
             >
               <Text style={styles.visualGuideCloseText}>{({ hr: 'ZATVORI', en: 'CLOSE', de: 'SCHLIESSEN', sl: 'ZAPRI' }[lang])}</Text>
@@ -7114,6 +7137,102 @@ function getBallingGuideCopy(lang: Lang, slide: number) {
   return copy[Math.min(slide, copy.length - 1)][lang];
 }
 
+function getNapoletanaBakingGuideCopy(lang: Lang, slide: number) {
+  const copy = [
+    {
+      hr: {
+        how: 'Nježno izvadite jednu kuglicu tijesta iz fermentacijske kutije i stavite je na lagano posutu radnu površinu. Nemojte je ponovno mijesiti niti snažno pritiskati. Ostale kuglice ostavite pokrivene.',
+        look: 'Kuglica treba biti mekana, elastična i blago opuštena, s glatkom površinom i bez većih pukotina.',
+      },
+      en: {
+        how: 'Gently remove one dough ball from the fermentation box and place it on a lightly floured work surface. Do not knead or press it firmly again. Keep the remaining balls covered.',
+        look: 'The ball should be soft, elastic, and slightly relaxed, with a smooth surface and no major cracks.',
+      },
+      de: {
+        how: 'Nehmen Sie vorsichtig eine Teigkugel aus der Gärbox und legen Sie sie auf eine leicht bemehlte Arbeitsfläche. Kneten oder drücken Sie sie nicht erneut kräftig. Lassen Sie die übrigen Kugeln abgedeckt.',
+        look: 'Die Kugel sollte weich, elastisch und leicht entspannt sein, mit glatter Oberfläche und ohne größere Risse.',
+      },
+      sl: {
+        how: 'Nežno vzemite eno kroglico testa iz fermentacijske škatle in jo položite na rahlo pomokano delovno površino. Ne gnetite je znova in je ne pritiskajte močno. Preostale kroglice pustite pokrite.',
+        look: 'Kroglica naj bo mehka, elastična in rahlo sproščena, z gladko površino in brez večjih razpok.',
+      },
+    },
+    {
+      hr: {
+        how: 'Jagodicama prstiju nježno potiskujte tijesto od sredine prema rubovima. Ostavite vanjski rub približno 1–2 cm bez pritiskanja.',
+        look: 'Sredina tijesta postaje tanja i ravnomjernija, dok rub ostaje nešto deblji i zadržava zrak nastao fermentacijom.',
+      },
+      en: {
+        how: 'Gently press the dough from the center toward the edges with your fingertips. Leave the outer rim, approximately 1–2 cm, untouched.',
+        look: 'The center becomes thinner and more even, while the rim remains thicker and retains the air created during fermentation.',
+      },
+      de: {
+        how: 'Drücken Sie den Teig mit den Fingerspitzen vorsichtig von der Mitte zu den Rändern. Lassen Sie den äußeren Rand von etwa 1–2 cm unberührt.',
+        look: 'Die Mitte wird dünner und gleichmäßiger, während der Rand etwas dicker bleibt und die bei der Fermentation entstandene Luft behält.',
+      },
+      sl: {
+        how: 'S konicami prstov nežno potiskajte testo od sredine proti robovom. Zunanji rob približno 1–2 cm pustite nedotaknjen.',
+        look: 'Sredina postane tanjša in enakomernejša, rob pa ostane nekoliko debelejši in zadrži zrak, ki je nastal med fermentacijo.',
+      },
+    },
+    {
+      hr: {
+        how: 'Pažljivo razvlačite tijesto rukama, postupno povećavajući promjer. Izbjegavajte naglo povlačenje i nemojte koristiti valjak.',
+        look: 'Tijesto treba biti tanko u sredini, elastično i bez pukotina. Rub ostaje povezan i prozračan.',
+      },
+      en: {
+        how: 'Carefully stretch the dough with your hands, gradually increasing its diameter. Avoid sudden pulling and do not use a rolling pin.',
+        look: 'The dough should be thin in the center, elastic, and free of cracks. The rim remains cohesive and airy.',
+      },
+      de: {
+        how: 'Dehnen Sie den Teig vorsichtig mit den Händen und vergrößern Sie den Durchmesser schrittweise. Vermeiden Sie ruckartiges Ziehen und verwenden Sie kein Nudelholz.',
+        look: 'Der Teig sollte in der Mitte dünn, elastisch und rissfrei sein. Der Rand bleibt verbunden und luftig.',
+      },
+      sl: {
+        how: 'Testo previdno raztegujte z rokami in postopoma povečujte premer. Izogibajte se sunkovitemu vlečenju in ne uporabljajte valjarja.',
+        look: 'Testo naj bo na sredini tanko, elastično in brez razpok. Rob ostane povezan in zračen.',
+      },
+    },
+    {
+      hr: {
+        how: 'Nježno dovršite oblikovanje pizze do promjera navedenog u izračunatom receptu. Provjerite da je sredina ravnomjerna i da rub nije spljošten.',
+        look: 'Pizza treba imati približno okrugao oblik, tanku sredinu i jasno oblikovan, blago povišen rub.',
+      },
+      en: {
+        how: 'Gently finish shaping the pizza to the diameter specified in the calculated recipe. Check that the center is even and the rim is not flattened.',
+        look: 'The pizza should be approximately round, with a thin center and a clearly formed, slightly raised rim.',
+      },
+      de: {
+        how: 'Formen Sie die Pizza vorsichtig bis zum im berechneten Rezept angegebenen Durchmesser fertig. Achten Sie auf eine gleichmäßige Mitte und darauf, dass der Rand nicht flachgedrückt ist.',
+        look: 'Die Pizza sollte annähernd rund sein, mit dünner Mitte und einem klar geformten, leicht erhöhten Rand.',
+      },
+      sl: {
+        how: 'Pico nežno dokončno oblikujte do premera, navedenega v izračunanem receptu. Preverite, da je sredina enakomerna in rob ni sploščen.',
+        look: 'Pica naj bo približno okrogla, s tanko sredino in jasno oblikovanim, rahlo dvignjenim robom.',
+      },
+    },
+    {
+      hr: {
+        how: 'Ravnomjerno rasporedite količinu umaka i dobro ocijeđene mozzarelle navedenu u receptu. Ostavite rub bez nadjeva i pizzu što prije prebacite na pečenje.',
+        look: 'Nadjev treba biti ravnomjerno raspoređen, bez previše tekućine u sredini. Rub pizze ostaje slobodan.',
+      },
+      en: {
+        how: 'Distribute the recipe’s specified amount of sauce and well-drained mozzarella evenly. Leave the rim free of toppings and transfer the pizza to bake as soon as possible.',
+        look: 'The toppings should be evenly distributed without excess liquid in the center. The pizza rim remains clear.',
+      },
+      de: {
+        how: 'Verteilen Sie die im Rezept angegebene Menge Sauce und gut abgetropften Mozzarella gleichmäßig. Lassen Sie den Rand frei und schieben Sie die Pizza möglichst bald zum Backen ein.',
+        look: 'Der Belag sollte gleichmäßig verteilt sein, ohne zu viel Flüssigkeit in der Mitte. Der Pizzarand bleibt frei.',
+      },
+      sl: {
+        how: 'Enakomerno razporedite količino omake in dobro odcejene mocarele, navedeno v receptu. Rob pustite brez nadeva in pico čim prej prestavite v peko.',
+        look: 'Nadev naj bo enakomerno razporejen, brez preveč tekočine na sredini. Rob pice ostane prost.',
+      },
+    },
+  ];
+  return copy[Math.min(slide, copy.length - 1)][lang];
+}
+
 function PhaseBlock({
   title, steps, stepInfo, phaseKey, timers: customTimers, bigaInfo, waterInfo, waterInfoStepIndex, containerOilInfo, fermentationInfo, fermentationSignsInfo, degassingInfo, doughHandlingInfo, doughHandlingInfoStepIndex, temperingInfo, proofingInfo, ovenTimingInfo, ovenProgramInfo, bakingCheckInfo, bakingInfo, infoTitleOverrides, doughTemperatureStyle, phaseGuide, completed, onToggle,
   activeTimers, onStartTimer, onStopTimer, lang,
@@ -7205,6 +7324,8 @@ function PhaseBlock({
               ? { hr: 'Vodič za preklapanje tijesta', en: 'Stretch and fold visual guide', de: 'Visuelle Anleitung für Stretch und Fold', sl: 'Slikovni vodič za razteg in prepogib' }
               : phaseGuide.kind === 'balling'
                 ? { hr: 'Vodič za podjelu i oblikovanje kuglica', en: 'Dough ball dividing and shaping guide', de: 'Anleitung zum Teilen und Formen von Teigkugeln', sl: 'Vodič za delitev in oblikovanje kroglic' }
+                : phaseGuide.kind === 'baking'
+                  ? { hr: 'Vodič za temperiranje, oblikovanje i pečenje', en: 'Tempering, shaping and baking guide', de: 'Anleitung zum Temperieren, Formen und Backen', sl: 'Vodič za temperiranje, oblikovanje in peko' }
                 : { hr: 'Vodič za pripremu i zamjes', en: 'Preparation and mixing visual guide', de: 'Visuelle Anleitung für Vorbereitung und Kneten', sl: 'Slikovni vodič za pripravo in gnetenje' })[lang]}
             accessibilityRole="button"
             hitSlop={10}
@@ -7214,6 +7335,8 @@ function PhaseBlock({
               ? 'phase-b-visual-guide-open'
               : phaseGuide.kind === 'balling'
                 ? 'phase-c-visual-guide-open'
+                : phaseGuide.kind === 'baking'
+                  ? 'phase-e-visual-guide-open'
                 : 'phase-a-visual-guide-open'}
           >
             <Icon name="information-circle-outline" size={19} color={COLORS.brand} />
