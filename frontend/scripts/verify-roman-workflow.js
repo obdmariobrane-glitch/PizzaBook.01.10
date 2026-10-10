@@ -5,6 +5,7 @@ const path = require('path');
 
 const calculatorScreen = path.join(__dirname, '..', 'app', '(tabs)', 'index.tsx');
 const source = fs.readFileSync(calculatorScreen, 'utf8');
+const calculatorSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'calculator.ts'), 'utf8');
 const styleSteps = fs.readFileSync(path.join(__dirname, '..', 'src', 'i18n', 'styleSteps.ts'), 'utf8');
 
 const requiredMarkers = [
@@ -17,9 +18,10 @@ const requiredMarkers = [
   'Romana Teglia',
   "setOven('homePan')",
   'romanFormat, trayWidth, trayLength',
+  'romanFormat: input.romanFormat',
 ];
 
-const missingMarkers = requiredMarkers.filter((marker) => !source.includes(marker));
+const missingMarkers = requiredMarkers.filter((marker) => !source.includes(marker) && !calculatorSource.includes(marker));
 
 const requiredPhaseMarkers = [
   'Faza B: Prva fermentacija (Bulking)',

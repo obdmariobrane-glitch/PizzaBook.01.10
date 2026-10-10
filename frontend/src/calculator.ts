@@ -1219,6 +1219,7 @@ export function createDirectHomePizzaPlan(
       preheatAt: new Date(input.bakeAt.getTime() - getBeginnerPreheatMinutes(input.ovenType) * 60000),
       strategy: selectedCandidate.strategy,
       style: input.style,
+      romanFormat: input.romanFormat,
       ovenType: input.ovenType,
       ovenTemp: input.ovenTemp,
       roomTemp: input.roomTemp,
