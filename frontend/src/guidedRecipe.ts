@@ -1,4 +1,4 @@
-export type GuidedActionId = 'mix' | 'fold1' | 'fold2' | 'fridgeIn' | 'fridgeInCombined' | 'balling' | 'portioning' | 'doughRest' | 'trayPrepare' | 'fridgeOut' | 'roomFermentationEnd' | 'preheat' | 'shape' | 'bake';
+export type GuidedActionId = 'mix' | 'fold1' | 'fold2' | 'fridgeIn' | 'fridgeInCombined' | 'balling' | 'portioning' | 'doughRest' | 'trayPrepare' | 'tegliaFinalProof' | 'trayTop' | 'fridgeOut' | 'roomFermentationEnd' | 'preheat' | 'shape' | 'bake';
 
 export type GuidedScheduleEvent = {
   id: GuidedActionId;
@@ -108,7 +108,13 @@ export function planGuidedNotifications(
   const pending = events.filter((event) => event.actionable && completedAt[event.id] === undefined && event.at.getTime() > now);
   const roomEnd = pending.find((event) => event.id === 'roomFermentationEnd');
   const preheat = roomEnd ? pending.find((event) => event.id === 'preheat' && event.at.getTime() === roomEnd.at.getTime()) : undefined;
+  const trayTop = pending.find((event) => event.id === 'trayTop');
+  const bake = trayTop ? pending.find((event) => event.id === 'bake' && event.at.getTime() === trayTop.at.getTime()) : undefined;
   return pending
-    .filter((event) => event !== preheat)
-    .map((event) => (event === roomEnd && preheat ? { event, combinedWith: preheat } : { event }));
+    .filter((event) => event !== preheat && (!bake || event !== trayTop))
+    .map((event) => {
+      if (event === roomEnd && preheat) return { event, combinedWith: preheat };
+      if (event === bake && trayTop) return { event, combinedWith: trayTop };
+      return { event };
+    });
 }

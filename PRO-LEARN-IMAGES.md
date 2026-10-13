@@ -1,0 +1,64 @@
+# PRO-LEARN-1 — plan ilustracija
+
+**Stanje:** plan za buduću vizualnu izradu; slike nisu izrađene, preuzete ni ugrađene.  
+**Povezani tekst:** [PRO-LEARN-HR.md](./PRO-LEARN-HR.md)
+
+Ilustracije trebaju poučavati postupak i prepoznavanje stanja, ne služiti kao ukras. Svi ID-jevi u nastavku su jezično neutralni i trebaju ostati stabilni kroz buduće prijevode. Vizuali moraju biti originalni PizzaBook crteži ili fotografije; ne kopirati tuđe fotografije, raspored koraka, ilustracije ni vizualni identitet. Ne koristiti ime ili brend vanjskog izvora u naslovu, vizualu ili promotivnom opisu.
+
+| ID | Tema / sidro | Opis vizuala | Didaktička svrha | Izvedba i položaj | Alt tekst (HR) |
+|---|---|---|---|---|---|
+| `img-dough-structure` | `topic-dough` / `dough-formation` | Brašno i voda koja se povezuje u tijesto; pojednostavljeni prikaz proteina koji tvore mrežu i zadržavaju plin. | Objasniti kako sastojci postaju kohezivna masa i zašto tijesto može zadržavati plin. | Originalni presjek s nekoliko označenih faza; neposredno nakon odlomka o nastanku tijesta. | „Od brašna i vode do rastezljive strukture tijesta.” |
+| `img-gluten-development` | `topic-dough` / `dough-gluten` | Nedovoljno povezano, razvijeno i previše obrađeno tijesto uz vidljive razlike u rastezljivosti. | Pomoći prepoznati stupanj razvoja, a ne samo pratiti minutažu. | Tri usporedna kadra istog tipa tijesta; bez tvrdnje da jedna tekstura vrijedi za sve hidracije. | „Usporedba slabo razvijenog, elastičnog i pretjerano obrađenog tijesta.” |
+| `img-windowpane-test` | `topic-dough` / `dough-properties` | Ruka pažljivo rasteže mali komad tijesta, uz primjer tankog prozirnog dijela i primjera pucanja. | Prikazati test kao pomoćni znak, ne apsolutni kriterij. | Kratka sekvenca 2–3 sličice; postaviti uz objašnjenje testa. | „Pažljivo rastezanje malog komada pokazuje elastičnost; test nije obvezan za svaku formulu.” |
+| `img-flour-labels` | `topic-flour` / `flour-labels` | Primjer neutralne deklaracije s odvojenim poljima za proteine, W i P/L; ne prikazivati izmišljenu marku kao stvaran proizvod. | Učvrstiti da su proteini, W i P/L različiti podaci. | Shematska deklaracija s oznakom „primjer”; uz dio o čitanju vreće. | „Proteini, W i P/L opisuju različite podatke; jedan broj ne zamjenjuje ostale.” |
+| `img-bakers-math` | `topic-water` / `water-bakers-math` | Omjer brašna 100% prema vodi/soli/kvascu i primjer raspodjele vode između prefermenta i završnog zamjesa. | Učiniti postotke i kontrolu ukupne vode vizualno provjerljivima. | Kružni ili složeni trakasti dijagram s jednostavnim aritmetičkim primjerom; uz formulu za hidrataciju. | „Ukupno brašno je 100%; voda iz prefermenta ulazi u ukupni izračun samo jednom.” |
+| `img-yeast-suspension` | `topic-yeast` / `yeast-suspension` | Svježi kvasac ravnomjerno raspršen u dijelu odmjerene vode, a zatim podijeljen na jednake porcije. | Objasniti sigurno vaganje male količine i da voda za suspenziju nije dodatna voda. | Jednostavni prikaz vage i miješanja; uz korake za male doze. | „Kvasac je ravnomjerno raspoređen u dijelu već izvagane receptne vode.” |
+| `img-dough-temperature` | `topic-temperature` / `temperature-target` | Mjerenja brašna, sobe, vode, tijesta nakon zamjesa i tijesta prije oblikovanja kao odvojeni momenti. | Spriječiti brkanje ciljne temperature nakon zamjesa sa stanjem kasnije u procesu. | Vremenska crta s termometrom na svakoj fazi; uz jednadžbu DDT. | „Temperaturu nakon zamjesa i prije oblikovanja mjerimo odvojeno.” |
+| `img-fermentation-stages` | `topic-fermentation` / `fermentation-readiness` | Početno zbijeno tijesto, aktivno napuhano tijesto i oslabljeno/urušeno tijesto s mjehurićima i površinom. | Naučiti prepoznavati napredovanje i prekoračenje fermentacije bez oslanjanja samo na sat ili udvostručenje. | Tri fotografije iste posude/veličine, iste perspektive; oznake „početak / aktivno / možda preko vrhunca”. | „Mjehurići, volumen i čvrstoća zajedno pomažu procijeniti fermentaciju.” |
+| `img-direct-workflow` | `topic-methods` / `method-direct` | Redoslijed miješanja, kratki odmor, provjera tijesta i mjerenje temperature. | Prikazati direct kao metodu bez prefermenta, a ne kao obvezu dugog neprekinutog miješenja. | Četiri numerirane sličice, PizzaBook grafika. | „Direct: izmjeri, poveži sastojke, odmori po potrebi i provjeri tijesto.” |
+| `img-folding-sequence` | `topic-handling` / `handling-rests` | Numerirani prikaz rubova tijesta koji se podižu i polažu prema sredini, zatim odmora mase u istoj posudi. | Pokazati nježno jačanje tijesta bez agresivnog gnječenja. | Zasebna sekvenca od 3–4 koraka, istovjetan kut snimanja i neutralna PizzaBook tehnika. | „Podigni rub tijesta, položi ga prema sredini i ostavi masu pokrivenu da odmori.” |
+| `img-balling-sequence` | `topic-handling` / `handling-balling` | Porcija tijesta preklapa se prema sredini, okreće spojem prema dolje i nježno zateže po radnoj plohi. | Razlikovati oblikovanje kugle i površinsku napetost od presavijanja mase. | Zasebna sekvenca; prikazati zatvaranje bez kidanja ili pretjeranog brašna. | „Zatvori spoj ispod kugle i zategni površinu bez kidanja tijesta.” |
+| `img-mixing-hand` | `topic-methods` / `direct-hand` | Ruke povezuju brašno i vodu, dodaju sol i postupno umeću rezerviranu vodu; tijesto se odmara između kratkih serija. | Učiniti ručni direct zamjes ponovljivim kroz opažljive znakove, ne broj minuta. | Tri kadra: suha mjesta nestaju, tijesto odmara, zatim se elastičnost provjerava. | „Ručnim zamjesom uklopi vodu postupno, ostavi tijesto da odmori i provjeri njegovu elastičnost.” |
+| `img-mixing-planetary` | `topic-methods` / `direct-mixer` | Kućni planetarni mikser sa zdjelom i nastavkom koji proizvođač dopušta; tijesto se provjerava dok je mikser zaustavljen. | Naglasiti sigurnu uporabu, prikladnu količinu i provjere između radnih intervala. | Neutralan uređaj bez brenda; prikazati isključen mikser tijekom provjere tijesta. | „Zaustavi mikser prije dodirivanja tijesta ili struganja zdjele.” |
+| `img-mixing-spiral` | `topic-methods` / `direct-spiral` | Spiralna zdjela i nastavak uz fazno dodavanje vode i završno mjerenje temperature tijesta. | Prikazati postupak bez pretpostavke univerzalne brzine, vremena ili veličine šarže. | Neutralan prikaz spirale; pokazati zaštitu i odvojene trenutke rada i provjere. | „Dodaj receptnu vodu postupno i izmjeri temperaturu tijesta nakon miješanja.” |
+| `img-biga-readiness` | `topic-methods` / `biga-readiness` | Čvrsta biga prije fermentacije i zrela, šupljikava biga; odvojeno primjer pretjerano splasnule mase. | Učiti znakove spremnosti specifične za čvrsti preferment. | Usporedne posude, isti kut kamere; označiti da volumen nije jedini kriterij. | „Zrela biga je lagano napuhnuta i šupljikava; ne mora se udvostručiti.” |
+| `img-poolish-readiness` | `topic-methods` / `poolish-readiness` | Tekući poolish na početku, u zrelosti s mjehurićima i nakon urušavanja. | Pokazati kako površina i mjehurići upotpunjuju vremenski plan. | Tri jednaka spremnika i jasna oznaka faza; neposredno uz korake spremnosti. | „Poolish je blizu vrhunca dok je pun mjehurića, a površina još nije potpuno urušena.” |
+| `img-cold-proof-timeline` | `topic-cold-proof` / `cold-stage`, `cold-balls`, `cold-pan` | Zamjes → bulk → hlađenje mase ili kugli → temperiranje → završno dizanje kugli ili u plehu. | Razdvojiti temperaturno zagrijavanje, završno dizanje i pleh-proof. | Dvije paralelne vremenske crte: kugle i teglija; uz temu J. | „Kugle i tijesto u plehu imaju različit završni odmor; temperiranje nije dokaz spremnosti.” |
+| `img-neapolitan-shaping` | `topic-styles` / `style-neapolitan` | Otvaranje sredine od centra prema rubu uz očuvan prozračan obod. | Pokazati oblikovanje napolitane i raspored plina. | Sekvenca odozgo, bez osobe ili identiteta izvora; uz tradicionalnu/kućnu razliku. | „Otvaraj od sredine prema rubu i sačuvaj dio plina u obodu.” |
+| `img-tonda-shaping` | `topic-styles` / `tonda-shaping` | Tanka okrugla podloga, ravnomjerna debljina i opcionalna uporaba valjka. | Razlikovati tonda od napuhane napolitanske kore i teglije. | Presjek i pogled odozgo s označenom debljinom; uz korake. | „Romana Tonda je tanka i ravnomjerna; stupanj hrskavosti ovisi o formuli i pečenju.” |
+| `img-teglia-pan-proof` | `topic-styles` / `teglia-shaping`, `cold-pan` | Jedna masa koja se utiskuje do rubova pleha u fazama pa se napuhuje u plehu. | Učvrstiti da se ne kugla kao tonda i da je završno dizanje u plehu. | Četiri slike prije/poslije odmora u istom plehu. | „Tijesto za tegliju ostaje jedna masa i završno se diže u plehu.” |
+| `img-new-york-shaping` | `topic-styles` / `new-york-shaping` | Ravnomjerno tanka sredina, umjeren obod i pizza koja se može presaviti nakon pečenja. | Prikazati opisne, ne regulatorne, znakove stila. | Gornji pogled i presjek pečene kriške; uz oblikovanje i pečenje. | „New York stil: tanka savitljiva sredina i umjeren rub.” |
+| `img-gluten-free-handling` | `topic-gluten-free` / `gf-handling`, `gf-safety` | Mekša bezglutenska masa utiskuje se u obložen pleh; zaseban čist pribor i radna površina. | Pokazati drukčiji postupak bez imitacije glutenskog kuglanja i naglasiti kontrolu kontaminacije. | Dvostruki kadar: rukovanje tijestom i čista odvojena oprema. | „Mekšu bezglutensku smjesu utisni u pleh i spriječi kontakt s pšeničnim brašnom.” |
+| `img-oven-surfaces` | `topic-equipment` / `equipment-surface`, `equipment-preheat` | Položaj kamena/čelika/pleha te odvojeno mjerenje podloge i gornje topline u kućnoj i pizza peći. | Pomoći razumjeti zašto zaslon pećnice ne daje temperaturu ploče i zašto se površina oporavlja između pizza. | Presjek pećnice s visinom rešetke, površinom i IR termometrom; uz opremu. | „Kamen, čelik i pleh prenose toplinu različito; izmjeri podlogu i pričekaj oporavak.” |
+| `img-bake-quality` | `topic-troubleshooting` / `troubleshooting-table` | Usporedba: dobro pečeno dno i vrh, blijedi vrh/tamno dno, mokra sredina i zagorjeli rub. | Upariti simptome s prilagodbama položaja, nadjeva i vremena pečenja. | Četiri jednaka presjeka; jasno označiti da uzroci mogu biti višestruki. | „Boja dna, sredina i rub zajedno pokazuju treba li mijenjati toplinu ili nadjev.” |
+| `img-storage-safety` | `topic-storage` / `storage-safety`, `storage-freeze` | Oznaka datuma, zatvorena posuda u hladnjaku, sigurno odmrzavanje i odvojeno bezglutensko posuđe. | Pamtiti osnovne postupke higijene i razlikovati skladištenje od fermentacije. | Jednostavna infografika s hladnjakom, zamrzivačem i odvojenim priborom. | „Pokrij, označi datum, odmrzavaj u hladnjaku i odvoji pribor za bezglutensko.” |
+
+## Upute za buduću izradu
+
+- Prvo validirati sadržaj i fotografirati iste tijesto/posude kroz faze; izbjegavati prikaz satnice kao jedinog znaka.
+- Za presjeke i dijagrame koristiti čitljive oznake, neutralnu opremu i dosljednu legendu.
+- Svaki vizual treba imati hrvatski alt tekst, kratak opis i izvorni PizzaBook ID. EN/DE/SL opise dodati tek u zasebnoj prijevodnoj fazi.
+- Prije objave bezglutenskih fotografija potvrditi stvarno odvajanje opreme i površina.
+
+## Pokrivenost 18 tema
+
+| ID teme | Naslov | Vizualna pokrivenost |
+|---|---|---|
+| `topic-dough` | Kako nastaje tijesto | `img-dough-structure`, `img-gluten-development`, `img-windowpane-test` |
+| `topic-flour` | Brašno | `img-flour-labels` |
+| `topic-water` | Voda i hidratacija | `img-bakers-math` |
+| `topic-yeast` | Kvasac | `img-yeast-suspension` |
+| `topic-additions` | Sol i dodatci | Zaseban vizual nije potreban; mase i učinak sastojaka jasnije se uspoređuju u tekstu i receptnim tablicama. |
+| `topic-temperature` | Temperatura | `img-dough-temperature` |
+| `topic-fermentation` | Fermentacija | `img-fermentation-stages` |
+| `topic-methods` | Metode zamjesa | `img-direct-workflow`, `img-mixing-hand`, `img-mixing-planetary`, `img-mixing-spiral`, `img-biga-readiness`, `img-poolish-readiness` |
+| `topic-handling` | Obrada tijesta | `img-folding-sequence`, `img-balling-sequence` |
+| `topic-cold-proof` | Hladna fermentacija i završni odmor | `img-cold-proof-timeline` |
+| `topic-styles` | Stilovi pizze | `img-neapolitan-shaping`, `img-tonda-shaping`, `img-teglia-pan-proof`, `img-new-york-shaping` |
+| `topic-gluten-free` | Bezglutensko tijesto | `img-gluten-free-handling` |
+| `topic-toppings` | Umak, sir i nadjevi | Zaseban vizual nije potreban; količine i vlažnost nadjeva ovise o receptu, pa su tekstualne upute prikladnije. |
+| `topic-equipment` | Pećnice i oprema | `img-oven-surfaces` |
+| `topic-troubleshooting` | Rješavanje problema | `img-bake-quality` |
+| `topic-storage` | Čuvanje i higijena | `img-storage-safety` |
+| `topic-recipes` | Recepti i rasporedi | Zaseban vizual nije potreban; točne grame, zbrojeve i rasporede čuvati u čitljivim tablicama. |
+| `topic-glossary` | Rječnik pojmova | Zaseban vizual nije potreban; abecedni tekst omogućuje brže traženje i preciznije definicije. |

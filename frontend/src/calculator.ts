@@ -1,18 +1,89 @@
 // Pizza calculator logic
 export type Method = 'direct' | 'biga' | 'poolish';
-export type YeastType = 'fresh' | 'dry' | 'sourdough';
+export type CommercialYeastType = 'fresh' | 'activeDry' | 'dry';
+export type YeastType = CommercialYeastType | 'sourdough';
+export const YEAST_MASS_FACTORS: Record<CommercialYeastType, number> = {
+  fresh: 1,
+  activeDry: 0.4,
+  dry: 1 / 3,
+};
 export type Mixing = 'hand' | 'home' | 'spiral';
+export type MixingSelection = 'hand' | 'mixer' | 'spiral';
 export type Fermentation = 'sameDay' | 'coldLong';
 export type OvenType = 'ooni' | 'homeStone' | 'homePan';
 export type PizzaStyle = 'neapolitan' | 'romana' | 'ny_style';
 export type BakingLanguage = 'hr' | 'en' | 'de' | 'sl';
 export type BeginnerDirectDoughStyle = 'neapolitan' | 'newYork' | 'romanaTonda' | 'romanaTeglia';
-export type BeginnerDirectMixing = 'hand' | 'home' | 'spiral';
+export type BeginnerDirectMixing = 'hand' | 'home';
+
+export function splitFlourBlend(totalFlour: number, firstPercent: number): { first: number; second: number } {
+  if (!Number.isFinite(totalFlour) || totalFlour < 0 || !Number.isFinite(firstPercent) || firstPercent < 0 || firstPercent > 100) {
+    throw new RangeError('Flour blend inputs must be finite, with a percentage between 0 and 100.');
+  }
+  const first = Math.round(totalFlour * firstPercent / 100);
+  return { first, second: Math.round(totalFlour) - first };
+}
+
+export function parseMixingSelection(value: unknown): MixingSelection | null {
+  return value === 'hand' || value === 'mixer' || value === 'spiral' ? value : null;
+}
+
+export function toCalculatorMixing(selection: MixingSelection): Mixing {
+  return selection === 'mixer' ? 'home' : selection;
+}
+
+export function toBeginnerDirectMixing(selection: MixingSelection): BeginnerDirectMixing {
+  const mixing = toCalculatorMixing(selection);
+  return mixing === 'spiral' ? 'home' : mixing;
+}
 export type BeginnerPhaseBFlourBehavior = 'standard' | 'gentle' | 'glutenFree';
 export type BeginnerPhaseBWorkflow = 'round' | 'teglia';
 
 export function getBeginnerPreheatMinutes(ovenType: OvenType): number {
   return ovenType === 'homeStone' ? 60 : 20;
+}
+
+export function getTemperingWindow(roomTemp: number) {
+  const minimumMinutes = Math.min(120, Math.max(15, Math.round(30 + (22 - roomTemp) * 7.5)));
+  const maximumMinutes = Math.min(120, minimumMinutes + 15);
+  return {
+    minimumMinutes,
+    maximumMinutes,
+    initialMinutes: Math.round((minimumMinutes + maximumMinutes) / 2),
+  };
+}
+
+export const TEGLIA_FINAL_PROOF_MINUTES = {
+  minimumProof: 60,
+  maximumProof: 120,
+  maxPressRelaxation: 15,
+} as const;
+
+export function getTegliaFinalProofPlan(availableRoomMinutes: number): {
+  totalMinutes: number;
+  pressRelaxationMinutes: number;
+  proofMinutes: number;
+} {
+  if (!Number.isFinite(availableRoomMinutes) || availableRoomMinutes <= 0) {
+    return { totalMinutes: 0, pressRelaxationMinutes: 0, proofMinutes: 0 };
+  }
+  const minimumWindow = TEGLIA_FINAL_PROOF_MINUTES.minimumProof + TEGLIA_FINAL_PROOF_MINUTES.maxPressRelaxation;
+  if (availableRoomMinutes < minimumWindow) {
+    return { totalMinutes: 0, pressRelaxationMinutes: 0, proofMinutes: 0 };
+  }
+  const totalMinutes = Math.min(
+    TEGLIA_FINAL_PROOF_MINUTES.maximumProof + TEGLIA_FINAL_PROOF_MINUTES.maxPressRelaxation,
+    Math.round(availableRoomMinutes),
+  );
+  const pressRelaxationMinutes = Math.min(
+    TEGLIA_FINAL_PROOF_MINUTES.maxPressRelaxation,
+    totalMinutes - TEGLIA_FINAL_PROOF_MINUTES.minimumProof,
+  );
+  return {
+    totalMinutes,
+    pressRelaxationMinutes,
+    proofMinutes: totalMinutes - pressRelaxationMinutes,
+  };
 }
 
 function formatPlannerClockTime(at: Date, lang: BakingLanguage): string {
@@ -88,7 +159,6 @@ export const BEGINNER_DIRECT_TARGET_DOUGH_TEMP_C: Record<BeginnerDirectDoughStyl
 export const BEGINNER_DIRECT_MIXING_FRICTION_C: Record<BeginnerDirectMixing, number> = {
   hand: 2,
   home: 10,
-  spiral: 7,
 };
 
 // Beginner recommendations stay within practical water temperatures; ice remains disabled.
@@ -199,6 +269,42 @@ export interface HomePizzaPlanInput {
   beginnerScheduleMode?: BeginnerDirectScheduleMode;
 }
 
+export type SharedCalculatorPlanSettings = {
+  pizzaStyle: PizzaStyle;
+  romanFormat: 'tonda' | 'teglia';
+  method: Method;
+  mixing: Mixing;
+  roomTemp: number;
+  roomHours: number;
+  fridgeTemp: number;
+  fridgeHours: number;
+  bigaHours: number;
+  poolishHours: number;
+  trayCount: number;
+  doughPerTray: number;
+  trayWidth: number;
+  trayLength: number;
+  proFermentationSchedule: FermentationSchedule | null;
+};
+
+let sharedCalculatorPlanSettings: SharedCalculatorPlanSettings | null = null;
+const sharedCalculatorPlanSettingsListeners = new Set<() => void>();
+
+export function getSharedCalculatorPlanSettings(): SharedCalculatorPlanSettings | null {
+  return sharedCalculatorPlanSettings;
+}
+
+export function setSharedCalculatorPlanSettings(settings: SharedCalculatorPlanSettings): void {
+  if (JSON.stringify(sharedCalculatorPlanSettings) === JSON.stringify(settings)) return;
+  sharedCalculatorPlanSettings = settings;
+  sharedCalculatorPlanSettingsListeners.forEach((listener) => listener());
+}
+
+export function subscribeSharedCalculatorPlanSettings(listener: () => void): () => void {
+  sharedCalculatorPlanSettingsListeners.add(listener);
+  return () => sharedCalculatorPlanSettingsListeners.delete(listener);
+}
+
 export type BeginnerDirectScheduleMode = 'roomOnly' | 'fridgeRoom';
 
 export interface HomePizzaPlanSchedule {
@@ -249,6 +355,7 @@ export function setSharedHomeBakeAt(bakeAt: Date | null): void {
 }
 
 let sharedHomeDirectSchedule: HomePizzaPlanSchedule | null = null;
+let sharedHomeDirectScheduleMode: 'beginner' | 'pro' | null = null;
 const sharedHomeDirectScheduleListeners = new Set<() => void>();
 let sharedHomeBigaSchedule: BigaHomePizzaSchedule | null = null;
 const sharedHomeBigaScheduleListeners = new Set<() => void>();
@@ -259,9 +366,18 @@ export function getSharedHomeDirectSchedule(): HomePizzaPlanSchedule | null {
   return sharedHomeDirectSchedule;
 }
 
-export function setSharedHomeDirectSchedule(schedule: HomePizzaPlanSchedule | null): void {
-  if (sharedHomeDirectSchedule === schedule) return;
+export function getSharedHomeDirectScheduleMode(): 'beginner' | 'pro' | null {
+  return sharedHomeDirectScheduleMode;
+}
+
+export function setSharedHomeDirectSchedule(
+  schedule: HomePizzaPlanSchedule | null,
+  mode: 'beginner' | 'pro' | null = null,
+): void {
+  const nextMode = schedule ? mode : null;
+  if (sharedHomeDirectSchedule === schedule && sharedHomeDirectScheduleMode === nextMode) return;
   sharedHomeDirectSchedule = schedule;
+  sharedHomeDirectScheduleMode = nextMode;
   sharedHomeDirectScheduleListeners.forEach((listener) => listener());
 }
 
@@ -329,8 +445,20 @@ export function getHomeScheduleDurationHours(schedule: HomePizzaPlanSchedule): n
 export function isHomeScheduleDurationValid(schedule: HomePizzaPlanSchedule): boolean {
   const durationHours = getHomeScheduleDurationHours(schedule);
   const intervalHours = (schedule.bakeAt.getTime() - schedule.startAt.getTime()) / (1000 * 60 * 60);
+  const phaseMinutes = [schedule.phaseAMinutes, schedule.phaseBMinutes, schedule.phaseCMinutes];
+  const hasPhaseMinutes = phaseMinutes.some((minutes) => minutes !== undefined);
+  let expectedBallingAt = schedule.startAt.getTime() + schedule.roomBeforeFridgeHours * 3600000;
+  if (hasPhaseMinutes) {
+    const [phaseAMinutes, phaseBMinutes, phaseCMinutes] = phaseMinutes;
+    if (
+      phaseAMinutes === undefined || phaseBMinutes === undefined || phaseCMinutes === undefined
+      || !Number.isFinite(phaseAMinutes) || !Number.isFinite(phaseBMinutes) || !Number.isFinite(phaseCMinutes)
+      || phaseAMinutes < 0 || phaseBMinutes < 0 || phaseCMinutes < 0
+    ) return false;
+    if (Math.abs((phaseAMinutes + phaseBMinutes + phaseCMinutes) / 60 - schedule.roomBeforeFridgeHours) > 1e-6) return false;
+    expectedBallingAt = schedule.startAt.getTime() + (phaseAMinutes + phaseBMinutes) * 60000;
+  }
   if (schedule.ballingAt) {
-    const expectedBallingAt = schedule.startAt.getTime() + schedule.roomBeforeFridgeHours * 3600000;
     if (Math.abs(schedule.ballingAt.getTime() - expectedBallingAt) > 1000) return false;
   }
   return Math.abs(durationHours - intervalHours) <= 1e-6;
@@ -538,8 +666,10 @@ export interface DirectHomeFermentationExposure {
 
 export interface DirectHomeYeastRequirement {
   freshYeastPct: number;
+  activeDryYeastPct: number;
   dryYeastPct: number;
   freshYeastGramsPer1000gFlour: number;
+  activeDryYeastGramsPer1000gFlour: number;
   dryYeastGramsPer1000gFlour: number;
 }
 
@@ -932,12 +1062,15 @@ export function calculateDirectHomeYeastRequirement(
   // Legacy-equivalent PizzaBook yeast relationship applied to Home candidate exposure.
   const effectiveExposure = Math.max(0.5, exposure.totalExposure);
   const freshYeastPct = 0.5 / effectiveExposure;
-  const dryYeastPct = freshYeastPct / 3;
+  const activeDryYeastPct = freshYeastPct * YEAST_MASS_FACTORS.activeDry;
+  const dryYeastPct = freshYeastPct * YEAST_MASS_FACTORS.dry;
 
   return {
     freshYeastPct,
+    activeDryYeastPct,
     dryYeastPct,
     freshYeastGramsPer1000gFlour: freshYeastPct * 10,
+    activeDryYeastGramsPer1000gFlour: activeDryYeastPct * 10,
     dryYeastGramsPer1000gFlour: dryYeastPct * 10,
   };
 }
@@ -1059,7 +1192,9 @@ export function evaluateDirectHomeCandidate(
   const yeastRequirement = calculateDirectHomeYeastRequirement(exposure);
   const yeastGrams = yeastType === 'fresh'
     ? yeastRequirement.freshYeastGramsPer1000gFlour
-    : yeastRequirement.dryYeastGramsPer1000gFlour;
+    : yeastType === 'activeDry'
+      ? yeastRequirement.activeDryYeastGramsPer1000gFlour
+      : yeastRequirement.dryYeastGramsPer1000gFlour;
   const yeastMeasurement = assessHomeYeastMeasurement(yeastGrams);
   const baseResilience = normalizedInput.flour.source === 'unknown' && input.flour.source !== 'unknown'
     ? {
@@ -1165,7 +1300,7 @@ export function createDirectHomePizzaPlan(
 
   const isBeginnerDirectScheduleTarget = conservativeUnknownFlour
     && (input.style === 'neapolitan' || input.style === 'romana' || input.style === 'ny_style')
-    && (input.mixing === 'hand' || input.mixing === 'home');
+    && (input.mixing === 'hand' || input.mixing === 'home' || input.mixing === 'spiral');
   if (isBeginnerDirectScheduleTarget) {
     if (availableHours < BEGINNER_DIRECT_MIN_WINDOW_HOURS) return null;
     const scheduleCandidates = generateBeginnerDirectScheduleCandidates(availableHours, input.roomTemp, input.bakeAt);
@@ -1561,6 +1696,32 @@ export function getPoolishHomeScheduleMilestones(schedule: PoolishHomePizzaSched
   ];
 }
 
+export function selectPlannerHomeSchedules(input: {
+  isBeginner: boolean;
+  bakeAt: Date | null;
+  directSchedule: HomePizzaPlanSchedule | null;
+  directScheduleMode: 'beginner' | 'pro' | null;
+  bigaSchedule: BigaHomePizzaSchedule | null;
+  poolishSchedule: PoolishHomePizzaSchedule | null;
+}): {
+  direct: HomePizzaPlanSchedule | null;
+  biga: BigaHomePizzaSchedule | null;
+  poolish: PoolishHomePizzaSchedule | null;
+} {
+  const direct = input.directSchedule
+    && input.directScheduleMode === (input.isBeginner ? 'beginner' : 'pro')
+    && input.bakeAt
+    && input.directSchedule.bakeAt.getTime() === input.bakeAt.getTime()
+    && isHomeScheduleDurationValid(input.directSchedule)
+    ? input.directSchedule
+    : null;
+  return {
+    direct,
+    biga: input.isBeginner ? input.bigaSchedule : null,
+    poolish: input.isBeginner ? input.poolishSchedule : null,
+  };
+}
+
 export const POOLISH_HOME_V1_POLICY = {
   finalDoughRoomHoursCap: 3,
   finalBallRestHours: 3,
@@ -1754,7 +1915,7 @@ export const BASE_FLOURS: Exclude<FlourType, 'custom'>[] = [
 ];
 
 export type FermentationPhase = {
-  kind: 'preferment' | 'final';
+  kind: 'preferment' | 'final' | 'final-rest';
   environment: 'room' | 'fridge';
   hours: number;
   temperature: number;
@@ -1774,6 +1935,7 @@ type FermentationScheduleOptions = {
   fridgeHours: number;
   fridgeTemp: number;
   prefermentHours?: number;
+  roomAfterFridgeHours?: number;
   prefermentRoomHours?: number;
   prefermentFridgeHours?: number;
 };
@@ -1789,6 +1951,7 @@ export function getFermentationSchedule(opts: FermentationScheduleOptions): Ferm
   if (opts.method === 'direct') {
     addPhase({ kind: 'final', environment: 'room', hours: roomHours, temperature: opts.roomTemp });
     addPhase({ kind: 'final', environment: 'fridge', hours: fridgeHours, temperature: opts.fridgeTemp });
+    addPhase({ kind: 'final-rest', environment: 'room', hours: Math.max(0, opts.roomAfterFridgeHours ?? 0), temperature: opts.roomTemp });
     return { phases, prefermentHours: 0, prefermentRoomHours: 0, prefermentFridgeHours: 0 };
   }
 
@@ -1805,8 +1968,26 @@ export function getFermentationSchedule(opts: FermentationScheduleOptions): Ferm
   addPhase({ kind: 'preferment', environment: 'fridge', hours: prefermentFridgeHours, temperature: opts.fridgeTemp });
   addPhase({ kind: 'final', environment: 'room', hours: roomHours, temperature: opts.roomTemp });
   addPhase({ kind: 'final', environment: 'fridge', hours: fridgeHours, temperature: opts.fridgeTemp });
+  addPhase({ kind: 'final-rest', environment: 'room', hours: Math.max(0, opts.roomAfterFridgeHours ?? 0), temperature: opts.roomTemp });
 
   return { phases, prefermentHours, prefermentRoomHours, prefermentFridgeHours };
+}
+
+export function getDirectHomeFermentationSchedule(
+  schedule: HomePizzaPlanSchedule,
+  roomTemp: number,
+  fridgeTemp: number,
+): FermentationSchedule {
+  const phases: FermentationPhase[] = [];
+  const addPhase = (phase: FermentationPhase) => {
+    if (phase.hours > 0) phases.push(phase);
+  };
+
+  addPhase({ kind: 'final', environment: 'room', hours: schedule.roomBeforeFridgeHours, temperature: roomTemp });
+  addPhase({ kind: 'final', environment: 'fridge', hours: schedule.fridgeHours, temperature: fridgeTemp });
+  addPhase({ kind: 'final-rest', environment: 'room', hours: schedule.roomAfterFridgeHours, temperature: roomTemp });
+
+  return { phases, prefermentHours: 0, prefermentRoomHours: 0, prefermentFridgeHours: 0 };
 }
 
 // Single source of truth for Biga Home timing: builds fermentation-exposure phases directly from a
@@ -1929,13 +2110,14 @@ export function doughCalc(opts: {
   // When provided, the method's Home schedule replaces legacy timing inputs for yeast calculation.
   bigaHomeSchedule?: BigaHomePizzaSchedule;
   poolishHomeSchedule?: PoolishHomePizzaSchedule;
+  fermentationSchedule?: FermentationSchedule;
 }): DoughCalculationResult {
   // === Fermentation math (dynamic yeast) ===
-  const fermentation = opts.method === 'biga' && opts.bigaHomeSchedule
+  const fermentation = opts.fermentationSchedule ?? (opts.method === 'biga' && opts.bigaHomeSchedule
     ? getBigaHomeFermentationSchedule(opts.bigaHomeSchedule, opts.roomTemp, opts.fridgeTemp)
     : opts.method === 'poolish' && opts.poolishHomeSchedule
       ? getPoolishHomeFermentationSchedule(opts.poolishHomeSchedule, opts.roomTemp, opts.fridgeTemp)
-      : getFermentationSchedule(opts);
+      : getFermentationSchedule(opts));
   const eTotal = Math.max(0.5, fermentation.phases.reduce((total, phase) => {
     const rate = phase.environment === 'room'
       ? 1 + 0.08 * (phase.temperature - 20)
@@ -1944,10 +2126,9 @@ export function doughCalc(opts: {
   }, 0)); // clamp min to avoid explosion
   // yeastPct = K / E_total (K = factor constant; 0.5 gives ~0.1% fresh yeast for 24h cold ferment @4°C + 2h RT @22°C)
   const K = 0.5;
-  let yeastPct = K / eTotal;
-  if (opts.yeastType === 'dry') yeastPct /= 3;
-  const bigaPrefermentShare = 7 / 12;
-  const poolishPrefermentShare = 5 / 12;
+  const freshYeastPct = K / eTotal;
+  const yeastType = opts.yeastType === 'sourdough' ? 'fresh' : opts.yeastType ?? 'fresh';
+  const yeastPct = freshYeastPct * YEAST_MASS_FACTORS[yeastType];
   const effectiveYeastPct = yeastPct;
 
   // === Baker's percentages ===
@@ -1967,7 +2148,7 @@ export function doughCalc(opts: {
     ? calculateBeginnerDirectWaterTemperature({
       style: opts.beginnerDirectStyle,
       roomTemp: opts.roomTemp,
-      mixing: opts.beginnerDirectMixing ?? opts.mixing ?? 'hand',
+      mixing: opts.beginnerDirectMixing ?? (opts.mixing === 'spiral' ? 'home' : opts.mixing) ?? 'hand',
     })
     : null;
 
@@ -1999,11 +2180,13 @@ export function doughCalc(opts: {
   });
 
   if (opts.method === 'biga') {
-    // Biga: configurable flour percentage and 45% hydration. Yeast quantity follows fermentation conditions.
+    // Split the calculated total yeast dose in proportion to the displayed flour quantities.
     const bigaFlour = flour * (Math.max(20, Math.min(100, opts.bigaPct ?? 50)) / 100);
     const bigaWater = bigaFlour * 0.45;
-    const bigaYeast = flour * (yeastPct * bigaPrefermentShare / 100);
-    const mainYeast = flour * (yeastPct * (1 - bigaPrefermentShare) / 100);
+    const totalFlour = R0(flour);
+    const totalYeast = R2(yeast);
+    const bigaYeast = R2(totalYeast * R0(bigaFlour) / totalFlour);
+    const mainYeast = R2(totalYeast - bigaYeast);
     return {
       method: 'biga' as const,
       preferment: { flour: R0(bigaFlour), water: R0(bigaWater), yeast: R2(bigaYeast) },
@@ -2021,11 +2204,13 @@ export function doughCalc(opts: {
   }
 
   if (opts.method === 'poolish') {
-    // Poolish: configurable flour percentage and 100% hydration. Yeast quantity follows fermentation conditions.
+    // Poolish: configurable flour percentage and 100% hydration; split yeast by its flour share.
     const pFlour = flour * (Math.max(20, Math.min(100, opts.poolishPct ?? 35)) / 100);
     const pWater = pFlour * 1.0;
-    const pYeast = flour * (yeastPct * poolishPrefermentShare / 100);
-    const mainYeast = flour * (yeastPct * (1 - poolishPrefermentShare) / 100);
+    const totalFlour = R0(flour);
+    const totalYeast = R2(yeast);
+    const pYeast = R2(totalYeast * R0(pFlour) / totalFlour);
+    const mainYeast = R2(totalYeast - pYeast);
     return {
       method: 'poolish' as const,
       preferment: { flour: R0(pFlour), water: R0(pWater), yeast: R2(pYeast) },
@@ -2106,6 +2291,10 @@ export function iceCalc(totalWater: number, tapTemp: number, targetTemp: number)
 }
 
 export type PlannerStepCopy = {
+  yeastHandling: {
+    fresh: string;
+    dry: string;
+  };
   fold1Title?: string;
   fold2Title?: string;
   ovenTitle: string;
@@ -2156,12 +2345,26 @@ export type PlannerStepCopy = {
   directHomeTegliaCopy?: DirectHomePlannerCopy;
 };
 
+export type PlannerTegliaSettings = {
+  romanFormat: 'tonda' | 'teglia';
+  trayCount: number;
+  doughPerTray: number;
+  trayWidth: number;
+  trayLength: number;
+};
+
 type DirectHomePlannerCopy = {
   start: string;
   ballingFridge: string;
   ballingTitle?: string;
+  balling?: string;
+  fridgeInTitle?: string;
+  fridgeIn?: string;
+  coldMassTitle?: string;
   roomOnlyBalling: string;
   roomOnlyTitle?: string;
+  bulkAsMass?: string;
+  temperingAsMass?: string;
   finalRoom: string;
   finalRoomTitle?: string;
   preheat: string;
@@ -2169,6 +2372,11 @@ type DirectHomePlannerCopy = {
   shapingTitle: string;
   shaping: string;
   shapingGlutenFree?: string;
+  trayPrepareTitle?: string;
+  trayPrepare?: string;
+  finalProofTitle?: string;
+  finalProof?: string;
+  proofUnavailable?: string;
   bake: string;
 };
 
@@ -2184,6 +2392,21 @@ function formatHoursLabel(hoursValue: number): string {
   return m ? `${h} h ${m} min` : `${h} h`;
 }
 
+function formatTemperingDuration(minutes: number, lang: BakingLanguage): string {
+  const totalMinutes = Math.max(0, Math.round(minutes));
+  const hours = Math.floor(totalMinutes / 60);
+  const remainingMinutes = totalMinutes % 60;
+  const hourLabel = hours === 1
+    ? ({ hr: 'sat', en: 'hour', de: 'Stunde', sl: 'ura' }[lang])
+    : ({ hr: 'sati', en: 'hours', de: 'Stunden', sl: 'ur' }[lang]);
+  const minuteLabel = ({ hr: 'minuta', en: 'minutes', de: 'Minuten', sl: 'minut' }[lang]);
+  const hourText = hours > 0 ? `${hours} ${hourLabel}` : '';
+  const minuteText = remainingMinutes > 0 ? `${remainingMinutes} ${minuteLabel}` : '';
+  if (!hourText) return minuteText;
+  if (!minuteText) return hourText;
+  return `${hourText}${lang === 'hr' ? ' i ' : lang === 'sl' ? ' in ' : ' '}${minuteText}`;
+}
+
 export function reversePlan(
   bakeAt: Date,
   method: Method,
@@ -2194,11 +2417,68 @@ export function reversePlan(
   poolishHomeSchedule?: PoolishHomePizzaSchedule | null,
   bakingLanguage: BakingLanguage = 'en',
   bakingTemperatureLabel?: string,
+  roomTemp = 22,
+  selectedFermentationSchedule?: FermentationSchedule,
+  tegliaSettings?: PlannerTegliaSettings | null,
 ) {
-  const steps: { at: Date; title: string; desc: string }[] = [];
-  const push = (offsetMin: number, title: string, desc: string) => {
+  const steps: { at: Date; title: string; desc: string; phaseId?: string }[] = [];
+  const push = (offsetMin: number, title: string, desc: string, phaseId?: string) => {
     const at = new Date(bakeAt.getTime() - offsetMin * 60000);
-    steps.push({ at, title, desc });
+    steps.push({ at, title, desc, ...(phaseId ? { phaseId } : {}) });
+  };
+  const tegliaEnabled = style === 'romana'
+    && (tegliaSettings?.romanFormat === 'teglia' || homeSchedule?.romanFormat === 'teglia');
+  const positiveSetting = (value: number | undefined, fallback: number) =>
+    value !== undefined && Number.isFinite(value) && value > 0 ? value : fallback;
+  const trayCount = Math.max(1, Math.round(positiveSetting(tegliaSettings?.trayCount, 1)));
+  const trayWidth = positiveSetting(tegliaSettings?.trayWidth, 30);
+  const trayLength = positiveSetting(tegliaSettings?.trayLength, 40);
+  const doughPerTray = Math.round(positiveSetting(
+    tegliaSettings?.doughPerTray,
+    Math.round(trayWidth * trayLength * 0.4),
+  ));
+  const tegliaValues = (proofPlan: ReturnType<typeof getTegliaFinalProofPlan>) => ({
+    TRAY_COUNT: trayCount,
+    TRAY_DIMENSIONS: `${trayWidth} × ${trayLength} cm`,
+    DOUGH_PER_TRAY: `${doughPerTray} g`,
+    TOTAL_DOUGH: `${trayCount * doughPerTray} g`,
+    PROOF_WINDOW: formatTemperingDuration(proofPlan.totalMinutes, bakingLanguage),
+    PROOF_MINUTES: formatTemperingDuration(proofPlan.proofMinutes, bakingLanguage),
+  });
+  const addTegliaProofSteps = (availableRoomMinutes: number) => {
+    const tegliaCopy = copy.directHomeTegliaCopy;
+    if (
+      !tegliaEnabled
+      || !tegliaCopy?.trayPrepareTitle
+      || !tegliaCopy.trayPrepare
+      || !tegliaCopy.finalProofTitle
+      || !tegliaCopy.finalProof
+    ) return;
+    const proofPlan = getTegliaFinalProofPlan(availableRoomMinutes);
+    if (proofPlan.totalMinutes <= 0) {
+      if (tegliaCopy.proofUnavailable) {
+        steps.push({
+          at: new Date(bakeAt.getTime() - 60000),
+          title: tegliaCopy.finalProofTitle,
+          desc: tegliaCopy.proofUnavailable,
+          phaseId: 'teglia.finalProof',
+        });
+      }
+      return;
+    }
+    const values = tegliaValues(proofPlan);
+    steps.push({
+      at: new Date(bakeAt.getTime() - proofPlan.totalMinutes * 60000),
+      title: tegliaCopy.trayPrepareTitle,
+      desc: fillPlannerCopy(tegliaCopy.trayPrepare, values),
+      phaseId: 'teglia.trayPrepare',
+    });
+    steps.push({
+      at: new Date(bakeAt.getTime() - proofPlan.proofMinutes * 60000),
+      title: tegliaCopy.finalProofTitle,
+      desc: fillPlannerCopy(tegliaCopy.finalProof, values),
+      phaseId: 'teglia.finalProof',
+    });
   };
 
   const usePoolishHomeSchedule = method === 'poolish'
@@ -2208,15 +2488,24 @@ export function reversePlan(
     const copyByStage = {
       poolishStart: [copy.poolishMixTitle, copy.poolishMixDesc],
       finalMix: [fillPlannerCopy(copy.finalMixTitle, { PREFERMENT: copy.poolishName }), copy.finalPoolishDesc],
-      balling: [copy.ballsTitle, copy.ballsDesc],
+      balling: [
+        tegliaEnabled ? copy.directHomeTegliaCopy?.roomOnlyTitle ?? copy.ballsTitle : copy.ballsTitle,
+        fillPlannerCopy(
+          tegliaEnabled ? copy.directHomeTegliaCopy?.roomOnlyBalling ?? copy.ballsDesc : copy.ballsDesc,
+          tegliaValues(getTegliaFinalProofPlan(poolishHomeSchedule!.finalBallRestHours * 60)),
+        ),
+      ],
       preheat: [copy.ovenTitle, copy.ovenDesc],
       bake: [copy.ovenTitle, copy.ovenDesc],
     } as const;
-    return getPoolishHomeScheduleMilestones(poolishHomeSchedule!).map(({ stage, at }) => ({
+    const milestones = getPoolishHomeScheduleMilestones(poolishHomeSchedule!).map(({ stage, at }) => ({
       at,
       title: copyByStage[stage][0],
       desc: copyByStage[stage][1],
+      phaseId: `poolish.${stage}`,
     }));
+    if (tegliaEnabled) addTegliaProofSteps(poolishHomeSchedule!.finalBallRestHours * 60);
+    return [...milestones, ...steps].sort((a, b) => a.at.getTime() - b.at.getTime());
   }
 
   const useBigaHomeSchedule = method === 'biga'
@@ -2224,6 +2513,7 @@ export function reversePlan(
     && bigaHomeSchedule.bakeAt.getTime() === bakeAt.getTime();
   if (useBigaHomeSchedule) {
     const homeCopy = style === 'neapolitan' ? copy.bigaHomeCopy : undefined;
+    const tegliaCopy = tegliaEnabled ? copy.directHomeTegliaCopy : undefined;
     const homeDurations = {
       BIGA_ROOM: formatHoursLabel(bigaHomeSchedule!.bigaRoomHours),
       BIGA_FRIDGE: formatHoursLabel(bigaHomeSchedule!.bigaFridgeHours),
@@ -2234,15 +2524,24 @@ export function reversePlan(
     const copyByStage = {
       bigaStart: [copy.bigaMixTitle, fillPlannerCopy(homeCopy?.bigaStart ?? copy.bigaMixDesc, homeDurations)],
       finalMix: [fillPlannerCopy(copy.finalMixTitle, { PREFERMENT: copy.bigaName }), fillPlannerCopy(homeCopy?.finalMix ?? copy.finalBigaDesc, homeDurations)],
-      balling: [copy.ballsTitle, fillPlannerCopy(homeCopy?.balling ?? copy.ballsDesc, homeDurations)],
-      preheat: [copy.ovenTitle, homeCopy?.preheat ?? copy.ovenDesc],
-      bake: [copy.ovenTitle, homeCopy?.bake ?? copy.ovenDesc],
+      balling: [
+        tegliaEnabled ? tegliaCopy?.roomOnlyTitle ?? copy.ballsTitle : copy.ballsTitle,
+        fillPlannerCopy(
+          tegliaEnabled ? tegliaCopy?.roomOnlyBalling ?? copy.ballsDesc : homeCopy?.balling ?? copy.ballsDesc,
+          { ...homeDurations, ...tegliaValues(getTegliaFinalProofPlan(bigaHomeSchedule!.finalBallRestHours * 60)) },
+        ),
+      ],
+      preheat: [copy.ovenTitle, tegliaCopy?.preheat ?? homeCopy?.preheat ?? copy.ovenDesc],
+      bake: [copy.ovenTitle, tegliaCopy?.bake ?? homeCopy?.bake ?? copy.ovenDesc],
     } as const;
-    return getBigaHomeScheduleMilestones(bigaHomeSchedule!).map(({ stage, at }) => ({
+    const milestones = getBigaHomeScheduleMilestones(bigaHomeSchedule!).map(({ stage, at }) => ({
       at,
       title: copyByStage[stage][0],
       desc: copyByStage[stage][1],
+      phaseId: `biga.${stage}`,
     }));
+    if (tegliaEnabled) addTegliaProofSteps(bigaHomeSchedule!.finalBallRestHours * 60);
+    return [...milestones, ...steps].sort((a, b) => a.at.getTime() - b.at.getTime());
   }
 
   // Single source of truth for all Direct styles: when a valid Home schedule exists for this bakeAt,
@@ -2259,29 +2558,61 @@ export function reversePlan(
     const styleName = isRoman ? 'Romana' : isNy ? 'New York Style' : 'Napolitana';
     const directTitle = isRoman || isNy ? copy.directMixTitle : copy.directTitle;
     const directDesc = isRoman ? copy.directRomanDesc : isNy ? copy.directNyDesc : copy.directDesc;
-    const homeCopy = isRoman && homeSchedule!.romanFormat === 'teglia'
+    const homeCopy = tegliaEnabled
       ? copy.directHomeTegliaCopy
       : copy.directHomeCopy;
     if (!homeSchedule!.strategy) {
       const ovenDesc = isRoman ? copy.ovenRomanDesc : isNy ? copy.ovenNyDesc : copy.ovenDesc;
-      push(60, copy.ovenTitle, ovenDesc);
-      push(roomAfterFridgeHours * 60, copy.warmTitle, fillPlannerCopy(copy.warmDesc, { STYLE: styleName }));
-      push((roomAfterFridgeHours + fridgeHours) * 60, copy.coldTitle, fillPlannerCopy(copy.coldDesc, { HOURS: formatHoursLabel(fridgeHours), STYLE: styleName }));
-      push((roomAfterFridgeHours + fridgeHours + roomBeforeFridgeHours) * 60, directTitle, directDesc);
+      push(60, copy.ovenTitle, ovenDesc, 'direct.preheat');
+      const tempering = formatTemperingDuration(roomAfterFridgeHours * 60, bakingLanguage);
+      if (roomAfterFridgeHours > 0) {
+        const roomValues = {
+          STYLE: styleName,
+          TEMPERING: tempering,
+          ...(tegliaEnabled ? tegliaValues(getTegliaFinalProofPlan(roomAfterFridgeHours * 60)) : {}),
+        };
+        push(
+          roomAfterFridgeHours * 60,
+          tegliaEnabled ? homeCopy?.finalRoomTitle ?? copy.warmTitle : copy.warmTitle,
+          fillPlannerCopy(tegliaEnabled ? homeCopy?.finalRoom ?? copy.warmDesc : copy.warmDesc, roomValues),
+          'direct.finalRoom',
+        );
+      }
+      if (fridgeHours > 0) {
+        const coldDesc = roomAfterFridgeHours > 0
+          ? fillPlannerCopy(copy.coldDesc, {
+            HOURS: formatHoursLabel(fridgeHours),
+            STYLE: styleName,
+            TEMPERING: tempering,
+          })
+          : fillPlannerCopy({
+            hr: 'Drži kugle {HOURS} sati u zatvorenoj kutiji na {FRIDGE_TEMP}.',
+            en: 'Keep the dough balls in a covered box at {FRIDGE_TEMP} for {HOURS} hours.',
+            de: 'Lassen Sie die Teigkugeln {HOURS} Stunden in einer geschlossenen Box bei {FRIDGE_TEMP}.',
+            sl: 'Kroglice hranite {HOURS} ur v zaprti posodi pri {FRIDGE_TEMP}.',
+          }[bakingLanguage], {
+            HOURS: formatHoursLabel(fridgeHours),
+            FRIDGE_TEMP: `${homeSchedule!.fridgeTemp ?? 4}°C`,
+          });
+        push((roomAfterFridgeHours + fridgeHours) * 60, copy.coldTitle, coldDesc, 'direct.fridge');
+      }
+      push((roomAfterFridgeHours + fridgeHours + roomBeforeFridgeHours) * 60, directTitle, directDesc, 'direct.mix');
       if (isNy) {
         const bakeValues = {
           BAKE_TIME: formatBakingTimeRange(homeSchedule!.ovenType ?? 'homeStone', homeSchedule!.ovenTemp ?? 250, bakingLanguage),
+          TEMPERING: formatTemperingDuration(roomAfterFridgeHours * 60, bakingLanguage),
           OVEN_TEMP_DISPLAY: bakingTemperatureLabel ?? `${homeSchedule!.ovenTemp ?? 250}°C`,
         };
-        push(0, copy.bakeTitle ?? copy.ovenTitle, fillPlannerCopy(copy.directNyBakeDesc ?? copy.bakeDesc ?? copy.ovenDesc, bakeValues));
+        push(0, copy.bakeTitle ?? copy.ovenTitle, fillPlannerCopy(copy.directNyBakeDesc ?? copy.bakeDesc ?? copy.ovenDesc, bakeValues), 'direct.bake');
       }
+      addTegliaProofSteps(roomAfterFridgeHours * 60);
       return steps.sort((a, b) => a.at.getTime() - b.at.getTime());
     }
     const preheatAt = homeSchedule!.preheatAt
       ?? new Date(bakeAt.getTime() - getBeginnerPreheatMinutes(homeSchedule!.ovenType ?? 'homeStone') * 60000);
     const ballingAt = homeSchedule!.ballingAt
       ?? new Date(homeSchedule!.startAt.getTime() + roomBeforeFridgeHours * 3600000);
-    const finalRoomAt = new Date(ballingAt.getTime() + fridgeHours * 3600000);
+    const finalRoomAt = new Date((homeSchedule!.fridgeAt ?? ballingAt).getTime() + fridgeHours * 3600000);
     if (homeCopy) {
       const phaseBStart = new Date(
         homeSchedule!.startAt.getTime() + (homeSchedule!.phaseAMinutes ?? 0) * 60000,
@@ -2298,10 +2629,12 @@ export function reversePlan(
             at: new Date(phaseBStart.getTime() + fold.offsetMinutes * 60000),
             title,
             desc: title,
+            phaseId: `direct.fold${fold.index}`,
           });
         }
       });
     }
+    const tegliaProofPlan = getTegliaFinalProofPlan(roomAfterFridgeHours * 60);
     const values = {
       STYLE: styleName,
       HOURS: formatHoursLabel(fridgeHours),
@@ -2310,59 +2643,203 @@ export function reversePlan(
       ROOM_TEMP: `${homeSchedule!.roomTemp ?? ''}°C`,
       FRIDGE_TEMP: `${homeSchedule!.fridgeTemp ?? ''}°C`,
       WEIGHT: homeSchedule!.ballWeight ?? PIZZA_STYLE_PROFILES[style].ballWeight,
+      TEMPERING: formatTemperingDuration(roomAfterFridgeHours * 60, bakingLanguage),
       PREHEAT_MINUTES: Math.round((bakeAt.getTime() - preheatAt.getTime()) / 60000),
       PREHEAT_TIME: formatPlannerClockTime(preheatAt, bakingLanguage),
       OVEN_TEMP: `${homeSchedule!.ovenTemp ?? 250}°C`,
       OVEN_TEMP_DISPLAY: bakingTemperatureLabel ?? `${homeSchedule!.ovenTemp ?? 250}°C`,
       BAKE_TIME: formatBakingTimeRange(homeSchedule!.ovenType ?? 'homeStone', homeSchedule!.ovenTemp ?? 250, bakingLanguage),
+      ...(tegliaEnabled ? tegliaValues(tegliaProofPlan) : {}),
     };
-    steps.push({ at: preheatAt, title: homeCopy?.preheatTitle ?? copy.ovenTitle, desc: fillPlannerCopy(homeCopy?.preheat ?? copy.ovenDesc, values) });
+    steps.push({ at: preheatAt, title: homeCopy?.preheatTitle ?? copy.ovenTitle, desc: fillPlannerCopy(homeCopy?.preheat ?? copy.ovenDesc, values), phaseId: 'direct.preheat' });
     if (fridgeHours > 0) {
-      steps.push({ at: finalRoomAt, title: homeCopy?.finalRoomTitle ?? copy.warmTitle, desc: fillPlannerCopy(homeCopy?.finalRoom ?? copy.warmDesc, values) });
-      steps.push({
-        at: ballingAt,
-        title: homeCopy?.ballingTitle ?? copy.ballsTitle,
-        desc: fillPlannerCopy(homeCopy?.ballingFridge ?? copy.coldDesc, values),
-      });
+      if (roomAfterFridgeHours > 0) {
+        steps.push({ at: finalRoomAt, title: homeCopy?.finalRoomTitle ?? copy.warmTitle, desc: fillPlannerCopy(homeCopy?.finalRoom ?? copy.warmDesc, values), phaseId: 'direct.finalRoom' });
+      }
+      const fridgeAt = homeSchedule!.fridgeAt;
+      if (fridgeAt && fridgeAt.getTime() > ballingAt.getTime() && homeCopy?.fridgeIn) {
+        if (homeCopy.balling) {
+          steps.push({
+            at: ballingAt,
+            title: homeCopy.ballingTitle ?? copy.ballsTitle,
+            desc: fillPlannerCopy(homeCopy.balling, values),
+            phaseId: 'direct.balling',
+          });
+        }
+        steps.push({
+          at: fridgeAt,
+          title: homeCopy.fridgeInTitle ?? copy.coldTitle,
+          desc: fillPlannerCopy(homeCopy.fridgeIn, values),
+          phaseId: 'direct.fridge',
+        });
+      } else {
+        steps.push({
+          at: ballingAt,
+          title: homeCopy?.ballingTitle ?? copy.ballsTitle,
+          desc: fillPlannerCopy(homeCopy?.ballingFridge ?? copy.coldDesc, values),
+          phaseId: 'direct.balling',
+        });
+      }
     } else {
-      steps.push({ at: ballingAt, title: homeCopy?.roomOnlyTitle ?? copy.ballsTitle, desc: fillPlannerCopy(homeCopy?.roomOnlyBalling ?? copy.ballsDesc, values) });
+      steps.push({ at: ballingAt, title: homeCopy?.roomOnlyTitle ?? copy.ballsTitle, desc: fillPlannerCopy(homeCopy?.roomOnlyBalling ?? copy.ballsDesc, values), phaseId: 'direct.balling' });
     }
-    steps.push({ at: homeSchedule!.startAt, title: directTitle, desc: fillPlannerCopy(homeCopy?.start ?? directDesc, values) });
+    steps.push({ at: homeSchedule!.startAt, title: directTitle, desc: fillPlannerCopy(homeCopy?.start ?? directDesc, values), phaseId: 'direct.mix' });
     if (homeCopy && homeSchedule!.phaseAMinutes === undefined) {
       steps.push({
-        at: new Date(homeSchedule!.bakeAt.getTime() - 15 * 60000),
+        at: new Date(homeSchedule!.bakeAt.getTime() - (tegliaEnabled ? 0 : 15) * 60000),
         title: homeCopy.shapingTitle,
         desc: fillPlannerCopy(homeSchedule?.glutenFree && homeCopy.shapingGlutenFree ? homeCopy.shapingGlutenFree : homeCopy.shaping, values),
+        phaseId: tegliaEnabled ? 'teglia.legacyShape' : 'direct.shape',
       });
     }
+    addTegliaProofSteps(roomAfterFridgeHours * 60);
     const bakeDesc = isNy
       ? copy.directNyBakeDesc ?? copy.bakeDesc ?? copy.ovenDesc
       : homeCopy?.bake ?? copy.bakeDesc ?? copy.ovenDesc;
-    steps.push({ at: homeSchedule!.bakeAt, title: copy.bakeTitle ?? copy.ovenTitle, desc: fillPlannerCopy(bakeDesc, values) });
+    steps.push({ at: homeSchedule!.bakeAt, title: copy.bakeTitle ?? copy.ovenTitle, desc: fillPlannerCopy(bakeDesc, values), phaseId: 'direct.bake' });
+    return steps.sort((a, b) => a.at.getTime() - b.at.getTime());
+  }
+
+  if (selectedFermentationSchedule) {
+    const sumHours = (kind: FermentationPhase['kind'], environment: FermentationPhase['environment']) =>
+      selectedFermentationSchedule.phases
+        .filter((phase) => phase.kind === kind && phase.environment === environment)
+        .reduce((total, phase) => total + phase.hours, 0);
+    const finalRoomHours = sumHours('final', 'room');
+    const finalFridgeHours = sumHours('final', 'fridge');
+    const finalRestHours = sumHours('final-rest', 'room');
+    const prefermentRoomHours = sumHours('preferment', 'room');
+    const prefermentFridgeHours = sumHours('preferment', 'fridge');
+    const prefermentHours = prefermentRoomHours + prefermentFridgeHours;
+    const isRoman = style === 'romana';
+    const isNy = style === 'ny_style';
+    const styleName = isRoman ? 'Romana' : isNy ? 'New York Style' : 'Napolitana';
+    const warmBeforeBake = finalRestHours * 60;
+    const tempering = formatTemperingDuration(warmBeforeBake, bakingLanguage);
+    const finalRoomOffset = warmBeforeBake + (finalFridgeHours + finalRoomHours) * 60;
+    const finalMixTitle = isRoman || isNy ? copy.directMixTitle : copy.directTitle;
+    const finalMixDesc = isRoman ? copy.directRomanDesc : isNy ? copy.directNyDesc : copy.directDesc;
+    const tegliaCopy = tegliaEnabled ? copy.directHomeTegliaCopy : undefined;
+
+    push(60, copy.ovenTitle, isRoman ? copy.ovenRomanDesc : isNy ? copy.ovenNyDesc : copy.ovenDesc);
+    if (warmBeforeBake > 0) {
+      push(
+        warmBeforeBake,
+        tegliaCopy?.temperingAsMass ? tegliaCopy.finalRoomTitle ?? copy.warmTitle : copy.warmTitle,
+        fillPlannerCopy(tegliaCopy?.temperingAsMass ?? copy.warmDesc, {
+        STYLE: styleName,
+        TEMPERING: tempering,
+        }),
+      );
+    }
+    if (finalFridgeHours > 0) {
+      const fridgeTemp = selectedFermentationSchedule.phases.find((phase) => phase.kind === 'final' && phase.environment === 'fridge')?.temperature ?? 4;
+      const coldDesc = tegliaCopy?.ballingFridge
+        ? fillPlannerCopy(tegliaCopy.ballingFridge, {
+          HOURS: formatHoursLabel(finalFridgeHours),
+          FRIDGE_TEMP: `${fridgeTemp}°C`,
+        })
+        : warmBeforeBake > 0
+        ? fillPlannerCopy(copy.coldDesc, {
+          HOURS: formatHoursLabel(finalFridgeHours),
+          FRIDGE_TEMP: `${fridgeTemp}°C`,
+          STYLE: styleName,
+          TEMPERING: tempering,
+        })
+        : fillPlannerCopy({
+          hr: 'Drži kugle {HOURS} sati u zatvorenoj kutiji na {FRIDGE_TEMP}.',
+          en: 'Keep the dough balls in a covered box at {FRIDGE_TEMP} for {HOURS} hours.',
+          de: 'Lassen Sie die Teigkugeln {HOURS} Stunden in einer geschlossenen Box bei {FRIDGE_TEMP}.',
+          sl: 'Kroglice hranite {HOURS} ur v zaprti posodi pri {FRIDGE_TEMP}.',
+        }[bakingLanguage], {
+          HOURS: formatHoursLabel(finalFridgeHours),
+          FRIDGE_TEMP: `${fridgeTemp}°C`,
+        });
+      push(warmBeforeBake + finalFridgeHours * 60, tegliaCopy?.coldMassTitle ?? copy.coldTitle, coldDesc);
+    }
+
+    if (method === 'direct') {
+      if (finalRoomHours > 0) {
+        push(finalRoomOffset, copy.bulkTitle, fillPlannerCopy(tegliaCopy?.bulkAsMass ?? copy.bulkDesc, {
+          STYLE: styleName,
+          HOURS: formatHoursLabel(finalRoomHours),
+        }));
+      }
+      push(finalRoomOffset, finalMixTitle, finalMixDesc);
+    } else {
+      if (prefermentHours > 0) {
+        const prefermentValues = {
+          HOURS: formatHoursLabel(prefermentHours),
+          ROOM_HOURS: formatHoursLabel(prefermentRoomHours),
+          FRIDGE_HOURS: formatHoursLabel(prefermentFridgeHours),
+        };
+        push(finalRoomOffset + prefermentHours * 60, method === 'biga' ? copy.bigaTitle : copy.poolishTitle,
+          fillPlannerCopy(method === 'biga' ? copy.bigaDesc : copy.poolishDesc, prefermentValues));
+      }
+      push(finalRoomOffset, fillPlannerCopy(copy.finalMixTitle, {
+        PREFERMENT: method === 'biga' ? copy.bigaName : copy.poolishName,
+      }), method === 'biga' ? copy.finalBigaDesc : copy.finalPoolishDesc);
+      if (finalRoomHours > 0) {
+        push(finalRoomOffset, copy.finalBulkTitle, fillPlannerCopy(tegliaCopy?.bulkAsMass ?? copy.finalBulkDesc, {
+          HOURS: formatHoursLabel(finalRoomHours),
+        }));
+      }
+    }
+
+    if (tegliaEnabled) {
+      const finalProofWindowMinutes = finalRestHours > 0
+        ? finalRestHours * 60
+        : finalFridgeHours === 0 ? finalRoomHours * 60 : 0;
+      addTegliaProofSteps(finalProofWindowMinutes);
+    }
+
+    if (isNy) {
+      const bakeValues = {
+        BAKE_TIME: formatBakingTimeRange('homeStone', 250, bakingLanguage),
+        TEMPERING: tempering,
+        OVEN_TEMP_DISPLAY: bakingTemperatureLabel ?? '250°C',
+      };
+      push(0, copy.bakeTitle ?? copy.ovenTitle, fillPlannerCopy(copy.directNyBakeDesc ?? copy.bakeDesc ?? copy.ovenDesc, bakeValues));
+    }
     return steps.sort((a, b) => a.at.getTime() - b.at.getTime());
   }
 
   if (style !== 'neapolitan') {
     const isRoman = style === 'romana';
     const styleName = isRoman ? 'Romana' : 'New York Style';
-    const warmBeforeBake = isRoman ? 75 : 75;
+    const warmBeforeBake = getTemperingWindow(roomTemp).initialMinutes;
+    const tempering = formatTemperingDuration(warmBeforeBake, bakingLanguage);
     const ballsColdHours = 24;
     const bulkMinutes = method === 'direct' ? 60 : method === 'biga' ? 60 : 60;
     const finalMixHours = method === 'direct' ? 0 : method === 'biga' ? 18 : 16;
 
     push(60, copy.ovenTitle, isRoman ? copy.ovenRomanDesc : copy.ovenNyDesc);
-    push(warmBeforeBake, copy.warmTitle, fillPlannerCopy(copy.warmDesc, { STYLE: styleName }));
-    push(warmBeforeBake + ballsColdHours * 60, copy.coldTitle, fillPlannerCopy(copy.coldDesc, { HOURS: ballsColdHours, STYLE: styleName }));
+    push(warmBeforeBake, copy.warmTitle, fillPlannerCopy(copy.warmDesc, {
+      STYLE: styleName,
+      TEMPERING: tempering,
+    }));
+    push(warmBeforeBake + ballsColdHours * 60, copy.coldTitle, fillPlannerCopy(copy.coldDesc, {
+      HOURS: formatHoursLabel(ballsColdHours),
+      FRIDGE_TEMP: '4°C',
+      STYLE: styleName,
+      TEMPERING: tempering,
+    }));
 
     if (method === 'direct') {
-      push(warmBeforeBake + ballsColdHours * 60 + bulkMinutes, copy.bulkTitle, fillPlannerCopy(copy.bulkDesc, { STYLE: styleName }));
+      push(warmBeforeBake + ballsColdHours * 60 + bulkMinutes, copy.bulkTitle, fillPlannerCopy(copy.bulkDesc, { STYLE: styleName, HOURS: formatHoursLabel(bulkMinutes / 60) }));
       push(warmBeforeBake + ballsColdHours * 60 + bulkMinutes, copy.directMixTitle, isRoman ? copy.directRomanDesc : copy.directNyDesc);
     } else {
       const prefermentName = method === 'biga' ? copy.bigaName : copy.poolishName;
-      push(warmBeforeBake + ballsColdHours * 60 + bulkMinutes, copy.finalBulkTitle, copy.finalBulkDesc);
+      push(warmBeforeBake + ballsColdHours * 60 + bulkMinutes, copy.finalBulkTitle, fillPlannerCopy(copy.finalBulkDesc, { HOURS: formatHoursLabel(bulkMinutes / 60) }));
       push(warmBeforeBake + ballsColdHours * 60 + bulkMinutes + finalMixHours * 60, fillPlannerCopy(copy.finalMixTitle, { PREFERMENT: prefermentName }), method === 'biga' ? copy.finalBigaDesc : copy.finalPoolishDesc);
-      push(warmBeforeBake + ballsColdHours * 60 + bulkMinutes + finalMixHours * 60 + (method === 'biga' ? 16 * 60 : 16 * 60), method === 'biga' ? copy.bigaTitle : copy.poolishTitle, method === 'biga' ? copy.bigaDesc : copy.poolishDesc);
+      const legacyPrefermentHours = 16;
+      push(warmBeforeBake + ballsColdHours * 60 + bulkMinutes + finalMixHours * 60 + legacyPrefermentHours * 60, method === 'biga' ? copy.bigaTitle : copy.poolishTitle, fillPlannerCopy(method === 'biga' ? copy.bigaDesc : copy.poolishDesc, {
+        HOURS: formatHoursLabel(legacyPrefermentHours),
+        ROOM_HOURS: formatHoursLabel(method === 'biga' ? legacyPrefermentHours : 0),
+        FRIDGE_HOURS: formatHoursLabel(method === 'poolish' ? legacyPrefermentHours : 0),
+      }));
     }
+    addTegliaProofSteps(warmBeforeBake);
     return steps.sort((a, b) => a.at.getTime() - b.at.getTime());
   }
 

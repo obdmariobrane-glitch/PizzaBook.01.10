@@ -23,7 +23,7 @@ assert.match(
 );
 assert.match(
   source,
-  /\(beginnerDirectHomeSteps \?\? beginnerUnscheduledDirectSteps \?\? beginnerDirectRecipeSteps \?\? detailedDirectSteps\)\.map/,
+  /\(beginnerDirectHomeSteps \?\? beginnerUnscheduledDirectSteps \?\? beginnerDirectRecipeSteps \?\? yeastAwareDetailedDirectSteps \?\? detailedDirectSteps\)\.map/,
   'The existing scheduled and unscheduled recipe step sources must remain unchanged',
 );
 assert.match(source, /const beginnerHomeRecipeLayout = isBeginner && !!\(/);

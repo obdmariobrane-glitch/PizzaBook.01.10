@@ -19,13 +19,17 @@ const direct = (mixing: 'hand' | 'mixer', style: 'romana' | 'ny_style', roomHour
   const tray = romanTray || { width: 30, length: 40, doughWeight: 475 };
   const isTray = romanTray !== false;
   const amounts = 'amounts' in tray ? tray.amounts : undefined;
+  const initialWaterPct = isTray ? 80 : 90;
+  const initialWater = amounts ? Math.round(amounts.water * (initialWaterPct / 100)) : null;
     return [
       {
         title: hand ? 'Faza A: Priprema i ručni zamjes' : 'Faza A: Priprema i zamjes mikserom',
         steps: hand ? [
           'Operite i temeljito osušite ruke.',
           ...(amounts ? [`Pripremite ${amounts.flour} g brašna, ${amounts.salt} g soli, ${amounts.yeast} g svježeg kvasca, ${amounts.oil} g maslinovog ulja i ukupno ${amounts.water} g vode.`] : []),
-          isGlutenFree ? 'U posudi otopite kvasac u 90% ukupne hladne vode.' : isRoman ? 'U posudi otopite kvasac u 90% ukupne predviđene vode.' : 'U posudi otopite kvasac i šećer u 90% ukupne predviđene vode.',
+          initialWater !== null
+            ? `U približno ${initialWaterPct}% vode, odnosno ${initialWater} g, otopite kvasac.`
+            : `U približno ${initialWaterPct}% vode otopite kvasac.`,
           'Postupno dodajte polovicu brašna i miješajte dok ne dobijete glatku smjesu bez grudica.',
           'Dodajte sol i dobro promiješajte kako sol ne bi došla u izravan kontakt s kvascem.',
           'Postupno dodajte preostalo brašno i ostatak vode te umijesite kompaktno tijesto.',
@@ -36,7 +40,13 @@ const direct = (mixing: 'hand' | 'mixer', style: 'romana' | 'ny_style', roomHour
           'Operite i temeljito osušite ruke.',
           'Pripremite mikser i njegovu posudu.',
           ...(amounts ? [`Pripremite ${amounts.flour} g brašna, ${amounts.salt} g soli, ${amounts.yeast} g svježeg kvasca, ${amounts.oil} g maslinovog ulja i ukupno ${amounts.water} g vode.`] : []),
-          isGlutenFree ? 'U posudu miksera stavite brašno i obaveznih 2% psylliuma, dodajte 90% hladne vode i kvasac.' : isRoman ? 'U posudu miksera stavite 85% vode i brašno.' : 'U posudu miksera stavite 85% vode, kvasac i šećer.',
+          isGlutenFree
+            ? (initialWater !== null
+              ? `U približno ${initialWaterPct}% vode, odnosno ${initialWater} g, otopite kvasac, zatim dodajte brašno i obaveznih 2% psylliuma u posudu miksera.`
+              : `U približno ${initialWaterPct}% vode otopite kvasac, zatim dodajte brašno i obaveznih 2% psylliuma u posudu miksera.`)
+            : (initialWater !== null
+              ? `U približno ${initialWaterPct}% vode, odnosno ${initialWater} g, otopite kvasac, zatim dodajte brašno u posudu miksera.`
+              : `U približno ${initialWaterPct}% vode otopite kvasac, zatim dodajte brašno u posudu miksera.`),
           'Pokrenite mikser u prvoj brzini i dodajte preostalo brašno.',
           'Postupno dodajte preostalih 15% vode zajedno sa soli.',
           'U drugoj polovici mijesenja dodajte preostalu vodu, sol i izračunatu količinu maslinovog ulja ili masti.',

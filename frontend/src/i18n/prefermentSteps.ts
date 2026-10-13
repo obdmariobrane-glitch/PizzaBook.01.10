@@ -1,6 +1,8 @@
 // Detailed BIGA and POOLISH step-by-step recipes, per language and per mixing method.
 // P1 = Preferment build, P2 = Final mix (hand OR mixer), P3 = Rest / Balling / Baking.
 import type { Lang } from './translations';
+import type { PreferredYeastType } from '../preferences';
+import { getSpiralMixingSteps, getSpiralMixingTitle } from './spiralMixing';
 
 export type Phase = { title: string; steps: string[] };
 export type Path = { p1: Phase; p2: Phase; p3: Phase };
@@ -389,6 +391,305 @@ export const POOLISH_STEPS: Record<Lang, MethodSteps> = {
   },
 };
 
+const TEGLIA_P3: Record<Lang, Phase> = {
+  hr: {
+    title: 'Faza C: Podjela, završno dizanje i pečenje',
+    steps: [
+      'Tijesto tijekom preostale fermentacije drži pokriveno kao jednu masu; nemoj oblikovati kugle.',
+      'Naulji plehove prema izračunatom broju i dimenzijama. Tijesto podijeli na izračunatu masu po plehu i nježno utisni do rubova. Ako se vraća, pokrij ga i ostavi do 15 minuta da se opusti prije nastavka.',
+      'Pokrij plehove i nakon utiskivanja ostavi tijesto da se završno diže 60–120 minuta, prema rasporedu i stanju tijesta. Spremno je kada je vidljivo napuhnuto i mjehurasto. Ako raspored ne ostavlja barem 75 minuta za pripremu i dizanje, pomakni pečenje.',
+      'Dodaj nadjev i peci prema uputama za odabranu pećnicu.',
+    ],
+  },
+  en: {
+    title: 'Phase C: Portion, final rise and bake',
+    steps: [
+      'Keep the dough covered as one mass during the remaining fermentation; do not shape balls.',
+      'Oil the trays using the calculated count and dimensions. Divide the dough into the calculated weight per tray and gently press it to the edges. If it springs back, cover it and let it relax for up to 15 minutes before continuing.',
+      'Cover the trays and, after pressing, let the dough complete its final rise for 60–120 minutes, guided by the schedule and dough condition. It is ready when noticeably puffy and bubbly. If the schedule leaves less than 75 minutes for preparation and rising, move the bake time.',
+      'Add the toppings and bake according to the selected oven instructions.',
+    ],
+  },
+  de: {
+    title: 'Phase C: Teilen, Endgare und Backen',
+    steps: [
+      'Lassen Sie den Teig während der restlichen Gare abgedeckt als eine Masse; formen Sie keine Teiglinge.',
+      'Ölen Sie die Bleche entsprechend der berechneten Anzahl und Maße. Teilen Sie den Teig in das berechnete Gewicht pro Blech und drücken Sie ihn vorsichtig bis zum Rand. Zieht er sich zurück, decken Sie ihn ab und lassen Sie ihn vor dem Weiterdrücken bis zu 15 Minuten entspannen.',
+      'Decken Sie die Bleche ab und lassen Sie den Teig nach dem Eindrücken 60–120 Minuten endgaren; richten Sie sich nach Zeitplan und Teigzustand. Er ist bereit, wenn er sichtbar aufgegangen und blasig ist. Lässt der Zeitplan weniger als 75 Minuten für Vorbereitung und Gare, verschieben Sie den Backzeitpunkt.',
+      'Geben Sie den Belag darauf und backen Sie nach den Anweisungen für den ausgewählten Ofen.',
+    ],
+  },
+  sl: {
+    title: 'Faza C: Razdelitev, končno vzhajanje in peka',
+    steps: [
+      'Testo med preostalo fermentacijo pusti pokrito kot eno maso; ne oblikuj kroglic.',
+      'Pekače naolji glede na izračunano število in mere. Testo razdeli na izračunano maso za posamezen pekač in ga nežno vtisni do robov. Če se krči, ga pokrij in pred nadaljevanjem pusti počivati do 15 minut.',
+      'Pekače pokrij in po vtiskovanju pusti testo končno vzhajati 60–120 minut; upoštevaj načrt in stanje testa. Pripravljeno je, ko je vidno napihnjeno in mehurčkasto. Če načrt ne omogoča vsaj 75 minut za pripravo in vzhajanje, prestavi peko.',
+      'Dodaj nadev in peci po navodilih za izbrano pečico.',
+    ],
+  },
+};
+
+export function labelSelectedYeast(text: string, lang: Lang, yeastType: PreferredYeastType): string {
+  const labels = {
+    hr: { fresh: 'svježeg kvasca', activeDry: 'aktivnog suhog kvasca', dry: 'instant suhog kvasca' },
+    en: { fresh: 'fresh yeast', activeDry: 'active dry yeast', dry: 'instant dry yeast' },
+    de: { fresh: 'Frischhefe', activeDry: 'Aktiv-Trockenhefe', dry: 'Instant-Trockenhefe' },
+    sl: { fresh: 'svežega kvasa', activeDry: 'aktivnega suhega kvasa', dry: 'instant suhega kvasa' },
+  }[lang];
+  const patterns = {
+    hr: /svjež(?:eg kvasca|i kvasac)|aktivn(?:og suhog kvasca|i suhi kvasac)|instant su(?:hog kvasca|hi kvasac)/gi,
+    en: /fresh yeast|active dry yeast|instant dry yeast/gi,
+    de: /Frischhefe|Aktiv-Trockenhefe|Instant-Trockenhefe/gi,
+    sl: /svež(?:ega kvasa|i kvas)|aktivn(?:ega suhega kvasa|i suhi kvas)|instant su(?:hega kvasa|hi kvas)/gi,
+  }[lang];
+  return text.replace(patterns, labels[yeastType]);
+}
+
+export function adaptDirectYeastStep(text: string, lang: Lang, yeastType: PreferredYeastType): string {
+  const dissolvePattern = {
+    hr: /[^.!?]*(?:otopite|rastopite)[^.!?]*kvasac[^.!?]*[.!?]?/i,
+    en: /[^.!?]*dissolv(?:e|ed|ing)[^.!?]*yeast[^.!?]*[.!?]?/i,
+    de: /[^.!?]*(?:lösen|aufgelöst|auflösen)[^.!?]*Hefe[^.!?]*[.!?]?/i,
+    sl: /[^.!?]*(?:raztopite|raztopljen)[^.!?]*kvas[^.!?]*[.!?]?/i,
+  }[lang];
+  const lockedDirectHydrationPattern = {
+    hr: /U približno\s*(80|90)% vode,\s*odnosno\s*\d+(?:[.,]\d+)?\s*g,\s*otopite kvasac\./i,
+    en: /$^/,
+    de: /$^/,
+    sl: /$^/,
+  }[lang];
+  const yeastWaterPattern = {
+    hr: /vodu s (?:otopljenim )?kvascem|voda s kvascem|kvasnu vodu/gi,
+    en: /water with (?:the )?(?:dissolved )?yeast|yeast water/gi,
+    de: /Wasser mit (?:der aufgelösten )?Hefe|Hefewasser/gi,
+    sl: /vodo z (?:raztopljenim )?kvasom|voda s kvasom/gi,
+  }[lang];
+  const handling = {
+    hr: {
+      fresh: 'Svježi kvasac razmrvite ili otopite u dijelu izmjerene vode.',
+      activeDry: 'Aktivni suhi kvas najprije otopite u dijelu tople izmjerene vode prema uputama na pakiranju; tu vodu uračunajte u ukupnu količinu.',
+      dry: 'Instant suhi kvas ravnomjerno umiješajte u brašno; uz ledeno hladnu vodu dodajte ga nakon 1–2 minute početnog miješanja.',
+    },
+    en: {
+      fresh: 'Crumble or dissolve fresh yeast in part of the measured water.',
+      activeDry: 'First dissolve active dry yeast in part of the measured warm water according to the package directions; count that water toward the total.',
+      dry: 'Mix instant dry yeast evenly into the flour; with ice-cold water, add it after 1–2 minutes of initial mixing.',
+    },
+    de: {
+      fresh: 'Frischhefe in einem Teil des abgemessenen Wassers zerbröseln oder auflösen.',
+      activeDry: 'Aktiv-Trockenhefe zunächst nach Packungsanleitung in einem Teil des abgemessenen warmen Wassers auflösen; dieses Wasser zur Gesamtmenge zählen.',
+      dry: 'Instant-Trockenhefe gleichmäßig unter das Mehl mischen; bei eiskaltem Wasser erst nach 1–2 Minuten des anfänglichen Mischens zugeben.',
+    },
+    sl: {
+      fresh: 'Sveži kvas nadrobite ali raztopite v delu odmerjene vode.',
+      activeDry: 'Aktivni suhi kvas najprej raztopite v delu odmerjene tople vode po navodilih na embalaži; to vodo vštejte v skupno količino.',
+      dry: 'Instant suhi kvas enakomerno vmešajte v moko; pri ledeno mrzli vodi ga dodajte po 1–2 minutah začetnega mešanja.',
+    },
+  }[lang];
+  const labelled = labelSelectedYeast(text, lang, yeastType);
+  if (lockedDirectHydrationPattern.test(labelled)) {
+    return labelled;
+  }
+  const dissolveInstruction = labelled.match(dissolvePattern)?.[0];
+  const measuredWater = dissolveInstruction?.match(/(\d+(?:[.,]\d+)?)\s*g/i)?.[1];
+  const firstWaterNote = measuredWater
+    ? {
+      hr: ` Prvi dodani dio vode iznosi ${measuredWater} g; uračunajte ga u ukupnu količinu vode.`,
+      en: ` The first water addition is ${measuredWater} g; count it toward the total water.`,
+      de: ` Die erste Wasserzugabe beträgt ${measuredWater} g und wird zur Gesamtwassermenge gezählt.`,
+      sl: ` Prvi dodani del vode znaša ${measuredWater} g; vštejte ga v skupno količino vode.`,
+    }[lang]
+    : '';
+  const prepared = labelled.replace(dissolvePattern, `${handling[yeastType]}${firstWaterNote}`);
+  return (yeastType === 'dry' ? prepared.replace(yeastWaterPattern, ({
+    hr: 'vodo',
+    en: 'water',
+    de: 'Wasser',
+    sl: 'vodo',
+  }[lang])) : prepared);
+}
+
+export function adaptDirectMixingSteps(
+  steps: string[],
+  lang: Lang,
+  yeastType: PreferredYeastType,
+  mixing: 'hand' | 'mixer' | 'spiral',
+  hasOil = false,
+): string[] {
+  if (mixing === 'spiral') {
+    return getSpiralMixingSteps(lang, yeastType, { method: 'direct', hasOil });
+  }
+  return steps.map((step, index) => {
+    if (mixing === 'hand' && index === 0) {
+      return {
+        hr: yeastType === 'fresh'
+          ? 'Svježi kvasac otopite u dijelu izmjerene vode.'
+          : yeastType === 'activeDry'
+            ? 'Aktivni suhi kvas otopite u dijelu tople izmjerene vode prema uputama na pakiranju; tu vodu uračunajte u ukupnu količinu.'
+            : 'Nemojte otapati instant suhi kvas u hladnoj vodi; umiješajte ga nakon početnog povezivanja brašna i vode.',
+        en: yeastType === 'fresh'
+          ? 'Dissolve fresh yeast in part of the measured water.'
+          : yeastType === 'activeDry'
+            ? 'Dissolve active dry yeast in part of the measured warm water according to the package directions; count that water toward the total.'
+            : 'Do not dissolve instant dry yeast in cold water; add it after the flour and water have first come together.',
+        de: yeastType === 'fresh'
+          ? 'Frischhefe in einem Teil des abgemessenen Wassers auflösen.'
+          : yeastType === 'activeDry'
+            ? 'Aktiv-Trockenhefe nach Packungsanleitung in einem Teil des abgemessenen warmen Wassers auflösen; dieses Wasser zur Gesamtmenge zählen.'
+            : 'Instant-Trockenhefe nicht in kaltem Wasser auflösen; erst zugeben, nachdem sich Mehl und Wasser zunächst verbunden haben.',
+        sl: yeastType === 'fresh'
+          ? 'Sveži kvas raztopite v delu odmerjene vode.'
+          : yeastType === 'activeDry'
+            ? 'Aktivni suhi kvas raztopite v delu odmerjene tople vode po navodilih na embalaži; to vodo vštejte v skupno količino.'
+            : 'Instant suhega kvasa ne raztapljajte v hladni vodi; dodajte ga, ko se moka in voda najprej povežeta.',
+      }[lang];
+    }
+    if (mixing === 'hand' && yeastType === 'dry' && index === 1) {
+      return {
+        hr: 'Postupno dodajte polovicu brašna u vodu i povežite; nakon 1–2 minute početnog miješanja dodajte instant suhi kvas i umiješajte ga.',
+        en: 'Gradually add half the flour to the water and combine; after 1–2 minutes of initial mixing, add and incorporate the instant dry yeast.',
+        de: 'Die Hälfte des Mehls nach und nach zum Wasser geben und vermengen; nach 1–2 Minuten anfänglichem Mischen die Instant-Trockenhefe zugeben und einarbeiten.',
+        sl: 'Postopoma dodajte polovico moke v vodo in povežite; po 1–2 minutah začetnega mešanja dodajte instant suhi kvas in ga vmešajte.',
+      }[lang];
+    }
+    if (mixing === 'mixer' && index === 2) {
+      return {
+        hr: yeastType === 'fresh'
+          ? 'U posudi miksera 10 sekundi promiješajte brašno sa svježim kvascem.'
+          : yeastType === 'activeDry'
+            ? 'Aktivni suhi kvas pripremite u dijelu tople izmjerene vode prema uputama na pakiranju i sačuvajte do dodavanja.'
+            : 'U posudi miksera miješajte samo brašno 10 sekundi; instant suhi kvas dodajte nakon početnog miješanja s vodom.',
+        en: yeastType === 'fresh'
+          ? 'Mix the flour and fresh yeast in the mixer bowl for 10 seconds.'
+          : yeastType === 'activeDry'
+            ? 'Prepare active dry yeast in part of the measured warm water according to the package directions and set it aside.'
+            : 'Mix the flour alone in the mixer bowl for 10 seconds; add instant dry yeast after the initial mixing with water.',
+        de: yeastType === 'fresh'
+          ? 'Mehl und Frischhefe 10 Sekunden in der Mixerschüssel mischen.'
+          : yeastType === 'activeDry'
+            ? 'Aktiv-Trockenhefe nach Packungsanleitung in einem Teil des abgemessenen warmen Wassers vorbereiten und beiseitestellen.'
+            : 'Das Mehl 10 Sekunden allein in der Mixerschüssel mischen; Instant-Trockenhefe erst nach dem ersten Mischen mit Wasser zugeben.',
+        sl: yeastType === 'fresh'
+          ? 'Moko in sveži kvas 10 sekund mešajte v posodi mešalnika.'
+          : yeastType === 'activeDry'
+            ? 'Aktivni suhi kvas pripravite v delu odmerjene tople vode po navodilih na embalaži in ga odložite do dodajanja.'
+            : 'Moko v posodi mešalnika mešajte 10 sekund brez kvasa; instant suhi kvas dodajte po začetnem mešanju z vodo.',
+      }[lang];
+    }
+    if (mixing === 'mixer' && yeastType === 'activeDry' && index === 3) {
+      const preparedYeast = {
+        hr: 'Dodajte pripremljenu otopinu aktivnog suhog kvasca; uračunajte je u količinu izmjerene vode.',
+        en: 'Add the prepared active dry yeast solution; count it toward the measured water.',
+        de: 'Die vorbereitete Aktiv-Trockenhefe-Lösung zugeben und zur abgemessenen Wassermenge zählen.',
+        sl: 'Dodajte pripravljeno raztopino aktivnega suhega kvasa in jo vštejte v odmerjeno vodo.',
+      }[lang];
+      return `${step} ${preparedYeast}`;
+    }
+    if (mixing === 'mixer' && yeastType === 'dry' && index === 3) {
+      const afterWater = {
+        hr: 'Miješajte 1–2 minute, zatim dodajte instant suhi kvas i umiješajte ga prije preostale vode.',
+        en: 'Mix for 1–2 minutes, then add and incorporate the instant dry yeast before adding the remaining water.',
+        de: '1–2 Minuten mischen, dann die Instant-Trockenhefe zugeben und einarbeiten, bevor das restliche Wasser dazukommt.',
+        sl: 'Mešajte 1–2 minuti, nato dodajte in vmešajte instant suhi kvas, preden dodate preostalo vodo.',
+      }[lang];
+      return `${step} ${afterWater}`;
+    }
+    return adaptDirectYeastStep(step, lang, yeastType);
+  });
+}
+
+export function getYeastAwarePrefermentSteps(
+  lang: Lang,
+  method: 'biga' | 'poolish',
+  mixing: 'hand' | 'mixer' | 'spiral',
+  yeastType: PreferredYeastType,
+  teglia = false,
+  hasOil = false,
+): Path {
+  const path = (method === 'biga' ? BIGA_STEPS : POOLISH_STEPS)[lang][mixing === 'spiral' ? 'mixer' : mixing];
+  const p1 = { ...path.p1, steps: [...path.p1.steps] };
+  const p2 = { ...path.p2, steps: [...path.p2.steps] };
+  const copy = {
+    hr: {
+      bigaFresh: 'U brašno ravnomjerno izmrvite svježi kvasac.',
+      bigaActiveDry: 'Aktivni suhi kvas otopite u dijelu tople vode prema uputama na pakiranju; tu vodu oduzmite od izmjerene vode.',
+      bigaDry: 'Instant suhi kvasac ravnomjerno umiješajte u brašno.',
+      bigaFinalFresh: 'Preostali svježi kvasac otopite u manjem dijelu izmjerene hladne vode pa ga dodajte s većim dijelom te vode.',
+      bigaFinalActiveDry: 'Preostali aktivni suhi kvas otopite u dijelu tople vode prema uputama na pakiranju; tu vodu uračunajte u izmjerenu vodu za završni zamjes.',
+      bigaFinalDry: 'Preostali instant suhi kvasac ravnomjerno umiješajte u dio preostalog brašna pa dodajte uz veći dio hladne vode.',
+      poolishFresh: 'Svježi kvasac otopite u izmjerenoj vodi za Poolish.',
+      poolishActiveDry: 'Aktivni suhi kvas pripremite u dijelu tople izmjerene vode prema uputama na pakiranju; tu vodu uračunajte u vodu za Poolish.',
+      poolishDry: 'Instant suhi kvasac ravnomjerno umiješajte u brašno za Poolish.',
+      poolishWater: 'Dodajte izmjerenu vodu uz miješanje pjenjačom ili vilicom dok ne dobijete glatku smjesu.',
+      poolishFinalFresh: 'Završni svježi kvasac otopite u dijelu izmjerene preostale vode; dodajte ga s preostalim brašnom i većim dijelom vode.',
+      poolishFinalActiveDry: 'Aktivni suhi kvasac za završno tijesto pripremite u dijelu tople preostale vode prema uputama na pakiranju; uračunajte je u vodu za završni zamjes.',
+      poolishFinalDry: 'Završni instant suhi kvasac ravnomjerno umiješajte u preostalo brašno pa dodajte veći dio preostale vode.',
+    },
+    en: {
+      bigaFresh: 'Evenly crumble the fresh yeast through the flour.',
+      bigaActiveDry: 'Dissolve active dry yeast in part of the warm water according to the package directions; subtract that water from the measured amount.',
+      bigaDry: 'Mix the instant dry yeast evenly into the flour.',
+      bigaFinalFresh: 'Dissolve the remaining fresh yeast in a small part of the measured cold water, then add it with most of that water.',
+      bigaFinalActiveDry: 'Dissolve the remaining active dry yeast in part of the warm water according to the package directions; count that water toward the measured final-mix water.',
+      bigaFinalDry: 'Mix the remaining instant dry yeast evenly into part of the remaining flour, then add it with most of the cold water.',
+      poolishFresh: 'Dissolve the fresh yeast in the measured Poolish water.',
+      poolishActiveDry: 'Prepare active dry yeast in part of the measured warm water according to the package directions; count that water toward the Poolish water.',
+      poolishDry: 'Mix the instant dry yeast evenly into the Poolish flour.',
+      poolishWater: 'Add the measured water while whisking or stirring with a fork until smooth.',
+      poolishFinalFresh: 'Dissolve the final-dough fresh yeast in part of the measured remaining water; add it with the remaining flour and most of the water.',
+      poolishFinalActiveDry: 'Prepare the final-dough active dry yeast in part of the warm remaining water according to the package directions; count it toward the final-mix water.',
+      poolishFinalDry: 'Mix the final-dough instant dry yeast evenly into the remaining flour, then add most of the remaining water.',
+    },
+    de: {
+      bigaFresh: 'Die frische Hefe gleichmäßig über das Mehl bröseln.',
+      bigaActiveDry: 'Aktiv-Trockenhefe nach Packungsanleitung in einem Teil des warmen Wassers auflösen; dieses Wasser von der abgemessenen Menge abziehen.',
+      bigaDry: 'Die Instant-Trockenhefe gleichmäßig unter das Mehl mischen.',
+      bigaFinalFresh: 'Die restliche Frischhefe in einem kleinen Teil des abgemessenen kalten Wassers auflösen und mit dem größten Teil dieses Wassers zugeben.',
+      bigaFinalActiveDry: 'Die restliche Aktiv-Trockenhefe nach Packungsanleitung in einem Teil des warmen Wassers auflösen; dieses Wasser zur abgemessenen Wassermenge für den Hauptteig zählen.',
+      bigaFinalDry: 'Die restliche Instant-Trockenhefe gleichmäßig unter einen Teil des restlichen Mehls mischen und mit dem größten Teil des kalten Wassers zugeben.',
+      poolishFresh: 'Die frische Hefe im abgemessenen Poolish-Wasser auflösen.',
+      poolishActiveDry: 'Aktiv-Trockenhefe nach Packungsanleitung in einem Teil des abgemessenen warmen Wassers vorbereiten; dieses Wasser zum Poolish-Wasser zählen.',
+      poolishDry: 'Die Instant-Trockenhefe gleichmäßig unter das Poolish-Mehl mischen.',
+      poolishWater: 'Das abgemessene Wasser unter Rühren mit dem Schneebesen oder einer Gabel zugeben, bis die Mischung glatt ist.',
+      poolishFinalFresh: 'Die Frischhefe für den Hauptteig in einem Teil des abgemessenen restlichen Wassers auflösen; mit dem restlichen Mehl und dem größten Teil des Wassers zugeben.',
+      poolishFinalActiveDry: 'Die Aktiv-Trockenhefe für den Hauptteig nach Packungsanleitung in einem Teil des warmen restlichen Wassers vorbereiten; dieses Wasser zur abgemessenen Menge für den Hauptteig zählen.',
+      poolishFinalDry: 'Die Instant-Trockenhefe für den Hauptteig gleichmäßig unter das restliche Mehl mischen und dann den größten Teil des restlichen Wassers zugeben.',
+    },
+    sl: {
+      bigaFresh: 'Sveži kvas enakomerno nadrobite po moki.',
+      bigaActiveDry: 'Aktivni suhi kvas raztopite v delu tople vode po navodilih na embalaži; to vodo odštejte od odmerjene količine.',
+      bigaDry: 'Instant suhi kvas enakomerno vmešajte v moko.',
+      bigaFinalFresh: 'Preostali sveži kvas raztopite v manjšem delu odmerjene hladne vode in ga dodajte z večino te vode.',
+      bigaFinalActiveDry: 'Preostali aktivni suhi kvas raztopite v delu tople vode po navodilih na embalaži; to vodo vštejte v odmerjeno vodo za končno gnetenje.',
+      bigaFinalDry: 'Preostali instant suhi kvas enakomerno vmešajte v del preostale moke in dodajte z večino hladne vode.',
+      poolishFresh: 'Sveži kvas raztopite v odmerjeni vodi za Poolish.',
+      poolishActiveDry: 'Aktivni suhi kvas pripravite v delu odmerjene tople vode po navodilih na embalaži; to vodo vštejte v vodo za Poolish.',
+      poolishDry: 'Instant suhi kvas enakomerno vmešajte v moko za Poolish.',
+      poolishWater: 'Med mešanjem z metlico ali vilicami dodajte odmerjeno vodo, da dobite gladko zmes.',
+      poolishFinalFresh: 'Sveži kvas za končno testo raztopite v delu odmerjene preostale vode; dodajte ga s preostalo moko in večino vode.',
+      poolishFinalActiveDry: 'Aktivni suhi kvas za končno testo pripravite v delu tople preostale vode po navodilih na embalaži; to vodo vštejte v vodo za končno gnetenje.',
+      poolishFinalDry: 'Instant suhi kvas za končno testo enakomerno vmešajte v preostalo moko, nato dodajte večino preostale vode.',
+    },
+  }[lang];
+
+  if (method === 'biga') {
+    p1.steps[0] = yeastType === 'fresh' ? copy.bigaFresh : yeastType === 'activeDry' ? copy.bigaActiveDry : copy.bigaDry;
+    p2.steps[1] = yeastType === 'fresh' ? copy.bigaFinalFresh : yeastType === 'activeDry' ? copy.bigaFinalActiveDry : copy.bigaFinalDry;
+  } else {
+    p1.steps[0] = yeastType === 'fresh' ? copy.poolishFresh : yeastType === 'activeDry' ? copy.poolishActiveDry : copy.poolishDry;
+    p1.steps[1] = yeastType === 'fresh' ? path.p1.steps[1] : copy.poolishWater;
+    p2.steps[1] = yeastType === 'fresh' ? copy.poolishFinalFresh : yeastType === 'activeDry' ? copy.poolishFinalActiveDry : copy.poolishFinalDry;
+  }
+
+  if (mixing === 'spiral') {
+    p2.title = getSpiralMixingTitle(lang, method);
+    p2.steps = getSpiralMixingSteps(lang, yeastType, { method, hasOil });
+  }
+
+  return { ...path, p1, p2, p3: teglia ? TEGLIA_P3[lang] : path.p3 };
+}
+
 // Localized "reset checked steps" button label
 export const RESET_LABEL: Record<Lang, string> = {
   hr: 'Poništi označene korake',
@@ -404,7 +705,12 @@ export const RESET_LABEL: Record<Lang, string> = {
 // =========================================================================
 export type TimerKind = 'rt' | 'fridge' | 'rest' | 'ballsRt' | 'ballsFridge' | 'preBake' | 'roomToBake' | 'preheat' | 'bake' | 'bakeFinish' | 'rotate' | 'preferment';
 
-export type BaseTimer = { id: string; seconds: number; kind: TimerKind };
+export type BaseTimer = {
+  id: string;
+  seconds: number;
+  kind: TimerKind;
+  plannedStartAt?: number;
+};
 
 // Duration recipes per phaseKey (same across all languages)
 export const PHASE_TIMER_DURATIONS: Record<string, BaseTimer[]> = {
@@ -527,15 +833,12 @@ export const TIMER_NOTIF: Record<Lang, { title: string; body: (label: string) =>
 
 // Human-readable duration ("8 h", "30 min")
 export function formatDuration(seconds: number, lang: Lang): string {
-  if (seconds >= 3600 && seconds % 3600 === 0) {
-    return `${seconds / 3600} h`;
-  }
-  if (seconds >= 3600) {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.round((seconds % 3600) / 60);
-    return m ? `${h} h ${m} min` : `${h} h`;
-  }
-  return `${Math.round(seconds / 60)} min`;
+  void lang;
+  const totalMinutes = Math.max(0, Math.round(seconds / 60));
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  if (h === 0) return `${m} min`;
+  return m ? `${h} h ${m} min` : `${h} h`;
 }
 
 // Countdown "HH:MM:SS" or "MM:SS"
@@ -545,5 +848,5 @@ export function formatCountdown(msRemaining: number): string {
   const m = Math.floor((total % 3600) / 60);
   const s = total % 60;
   const pad = (n: number) => String(n).padStart(2, '0');
-  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+  return `${pad(h)}:${pad(m)}:${pad(s)}`;
 }

@@ -7,14 +7,40 @@ const ts = require('typescript');
 const vm = require('vm');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'src', 'calculator.ts'), 'utf8');
+const preferencesSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'preferences.ts'), 'utf8');
 const translationsSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'i18n', 'translations.ts'), 'utf8');
 const bigaUiSource = fs.readFileSync(path.join(__dirname, '..', 'app', '(tabs)', 'index.tsx'), 'utf8');
+const prefermentStepsSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'i18n', 'prefermentSteps.ts'), 'utf8');
 const plannerUiSource = fs.readFileSync(path.join(__dirname, '..', 'app', '(tabs)', 'planner.tsx'), 'utf8');
 const compiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
+const compiledTranslations = ts.transpileModule(translationsSource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText;
+const compiledPreferences = ts.transpileModule(preferencesSource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText;
 const moduleRef = { exports: {} };
 vm.runInNewContext(compiled, { module: moduleRef, exports: moduleRef.exports }, { filename: 'calculator.ts' });
+const translationsModule = { exports: {} };
+vm.runInNewContext(compiledTranslations, { module: translationsModule, exports: translationsModule.exports }, { filename: 'translations.ts' });
+const productionTranslations = translationsModule.exports.translations;
+const preferencesModule = { exports: {} };
+vm.runInNewContext(compiledPreferences, {
+  module: preferencesModule,
+  exports: preferencesModule.exports,
+  require: (specifier) => {
+    if (specifier === './utils/storage') return { storage: {} };
+    throw new Error(`Unexpected preferences dependency: ${specifier}`);
+  },
+}, { filename: 'preferences.ts' });
+const { parsePreferredYeastType } = preferencesModule.exports;
+assert.equal(parsePreferredYeastType('fresh'), 'fresh');
+assert.equal(parsePreferredYeastType('activeDry'), 'activeDry');
+assert.equal(parsePreferredYeastType('dry'), 'dry');
+assert.equal(parsePreferredYeastType('unknown'), null);
+assert.equal(parsePreferredYeastType(null), null);
 
 const {
   getAvailableFermentationHours,
@@ -33,6 +59,7 @@ const {
   getSharedHomeBakeAt,
   setSharedHomeBakeAt,
   subscribeSharedHomeBakeAt,
+  selectPlannerHomeSchedules,
   getHomeFlourStrengthInput,
   getHomePlanLegacyFermentationHours,
   FLOUR_PROFILES,
@@ -53,27 +80,50 @@ const {
   selectDirectHomeCandidate,
   createDirectHomePizzaPlan,
   selectBeginnerDirectHomeStrategy,
-  MAX_BEGINNER_DIRECT_COLD_HOURS,
   createBigaHomePizzaPlan,
   createPoolishHomePizzaPlan,
   PIZZA_STYLE_PROFILES,
+  splitFlourBlend,
   doughCalc,
 } = moduleRef.exports;
+const roundedBlend = splitFlourBlend(531, 50);
+assert.deepEqual([roundedBlend.first, roundedBlend.second], [266, 265]);
+assert.equal(roundedBlend.first + roundedBlend.second, 531);
+assert.throws(() => splitFlourBlend(Number.NaN, 50), (error) => error.name === 'RangeError');
+assert.match(bigaUiSource, /splitFlourBlend\(dough\.main\.flour, blendPctA\)/);
+assert.match(bigaUiSource, /blendFlourAmounts\.first/);
+assert.match(bigaUiSource, /blendFlourAmounts\.second/);
 assert.match(bigaUiSource, /const method: Method = isBeginner \? 'direct' : selectedMethod/);
-assert.match(bigaUiSource, /saved\.mixing === 'hand' \|\| saved\.mixing === 'mixer'/);
+assert.match(bigaUiSource, /ovenTemp, mixing,\s*preferredYeastType,/);
+assert.match(bigaUiSource, /steps: phase\.steps\.map\(\(step\) => adaptDirectYeastStep\(step, lang, preferredYeastType\)\)/);
+assert.match(bigaUiSource, /parsePreferredYeastType\(settings\.preferredYeastType\)/);
+assert.match(bigaUiSource, /preferredYeastType,\s*\},\s*pizzas,/);
+assert.match(bigaUiSource, /^\s+adaptDirectMixingSteps,/m);
+assert.match(prefermentStepsSource, /export function adaptDirectMixingSteps\(/);
+assert.match(bigaUiSource, /getYeastAwarePrefermentSteps\(lang, 'biga', mixingForExperience, preferredYeastType, isRomanTeglia, dough\.main\.oil > 0\)/);
+assert.match(bigaUiSource, /getYeastAwarePrefermentSteps\(lang, 'poolish', mixingForExperience, preferredYeastType, isRomanTeglia, dough\.main\.oil > 0\)/);
+assert.match(plannerUiSource, /plannerStepCopy\.yeastHandling\[preferredYeastType\]/);
+assert.match(bigaUiSource, /const savedMixing = parseMixingSelection\(saved\.mixing\);[\s\S]*loadedIsBeginner && savedMixing === 'spiral' \? 'mixer' : savedMixing/);
 assert.match(bigaUiSource, /isBeginner \? m\.k === 'direct'/);
 assert.match(bigaUiSource, /setMixing\('hand'\)/);
 assert.match(bigaUiSource, /setMixing\('mixer'\)/);
-assert.match(bigaUiSource, /mixing: mixing === 'mixer' \? 'spiral' : 'hand'/);
+assert.match(bigaUiSource, /roomTemp, roomHours, fridgeTemp, fridgeHours, useIce, oven, ovenTemp, mixing,\s*preferredYeastType/);
 assert.match(bigaUiSource, /const beginnerDirectHome = isBeginner && method === 'direct' && !!directHomeSchedule/);
-assert.match(bigaUiSource, /!isPremiumUnlocked && !isBeginner && nextStyle !== FREE_PIZZA_STYLE/);
-assert.match(bigaUiSource, /const locked = !isPremiumUnlocked && !isBeginner && key !== FREE_PIZZA_STYLE/);
+assert.doesNotMatch(bigaUiSource, /isPremiumUnlocked|FREE_PIZZA_STYLE|FREE_FLOUR_TYPES|lock-closed|Pizzabook Premium|Otključaj Premium/);
+assert.match(plannerUiSource, /\(\['neapolitan', 'romana', 'ny_style'\] as PizzaStyle\[\]\)\.map/);
+assert.match(plannerUiSource, /\]\.filter\(\(m\) => isBeginner \? m\.key === 'direct' : true\)\.map/);
 assert.match(bigaUiSource, /!isBeginner \? \(/);
 assert.match(bigaUiSource, /isBeginner && index === 0 \? beginnerWaterInfo/);
 assert.match(bigaUiSource, /if \(index === 3 && schedule\.fridgeHours > 0\)/);
 assert.match(bigaUiSource, /const activePhases = schedule\.fridgeHours > 0\s*\?\s*phases\s*:\s*phases\.filter/);
 assert.match(bigaUiSource, /buildBeginnerRoomOnlyFinalStart\(lang, false\)/);
 assert.match(bigaUiSource, /const coldFinalStart = schedule\.fridgeHours > 0 \? buildBeginnerColdFinalStart\(schedule, lang, false\) : null/);
+assert.match(bigaUiSource, /function getBeginnerFridgeOutAt\(schedule: HomePizzaPlanSchedule\)/);
+assert.match(bigaUiSource, /const fridgeOutAt = getBeginnerFridgeOutAt\(schedule\);/);
+assert.match(bigaUiSource, /const fridgeAt = directHomeSchedule\.fridgeAt;/);
+assert.match(bigaUiSource, /fridgeAt && fridgeAt\.getTime\(\) > ballingAt\.getTime\(\)/);
+assert.match(bigaUiSource, /at: fridgeAt/);
+assert.match(source, /fridgeAt && fridgeAt\.getTime\(\) > ballingAt\.getTime\(\) && homeCopy\?\.fridgeIn/);
 assert.match(bigaUiSource, /coldFinalStart!\.step/);
 assert.match(bigaUiSource, /:\s*roomFinalStart!\.step/);
 assert.match(bigaUiSource, /if \(fridgeHours > 0\)[\s\S]*isRomanTeglia/);
@@ -81,19 +131,25 @@ assert.match(bigaUiSource, /isBeginner && \/\^\(biga\|poolish\)\[-_\]\//);
 assert.match(bigaUiSource, /formatTemperature\(dough\.waterTemp, temperatureUnit\)/);
 assert.match(bigaUiSource, /mix by hand until no dry flour remains/);
 assert.match(bigaUiSource, /mix on low speed until no dry flour remains/);
-assert.match(plannerUiSource, /reversePlan\(bakeAt, method, effectiveStyle, plannerStepCopy, directHomeSchedule, bigaHomeSchedule, poolishHomeSchedule, lang, formatTemperature\(directHomeSchedule\?\.ovenTemp/);
+assert.match(plannerUiSource, /reversePlan\(bakeAt, method, effectiveStyle, plannerStepCopy, plannerDirectHomeSchedule, plannerBigaHomeSchedule, plannerPoolishHomeSchedule, lang, formatTemperature\(plannerDirectHomeSchedule\?\.ovenTemp/);
 assert.match(plannerUiSource, /hasCurrentBeginnerDirectSchedule/);
 assert.match(plannerUiSource, /isBeginner \? m\.key === 'direct'/);
+assert.match(plannerUiSource, /const displayedBakeAt = bakeAt \?\? initial/);
+assert.match(plannerUiSource, /webDateDraft\s*\?\? `\$\{displayedBakeAt\.getFullYear\(\)\}/);
+assert.match(plannerUiSource, /webTimeDraft\s*\?\? `\$\{pad\(displayedBakeAt\.getHours\(\)\)\}/);
+assert.match(plannerUiSource, /setSharedHomeBakeAt\(d\);\s*setWebDateDraft\(null\);\s*setWebTimeDraft\(null\)/);
+assert.match(plannerUiSource, /isBeginner && bakeAt \? t\.planner\.beginnerScheduleUnavailable : t\.planner\.empty/);
 assert.match(plannerUiSource, /cancelPlannerNotificationsForMethods\(\['biga', 'poolish'\]\)/);
-assert.match(plannerUiSource, /await cancelPlannerNotificationsForMethods\(\['direct', 'biga', 'poolish'\]\)/);
-assert.match(plannerUiSource, /scheduleLocal\(`🍕 \$\{s\.title\}`, s\.desc, Math\.round\(trigger \/ 1000\), \{ source: 'pizza-planner', method \}\)/);
+assert.match(plannerUiSource, /scheduleLocal\(`🍕 \$\{s\.title\}`, s\.desc, Math\.round\(trigger \/ 1000\), \{\s*source: 'pizza-planner',\s*method,\s*planId: planKey,/);
+assert.match(plannerUiSource, /cancelObsoletePlannerNotifications\(planKey \|\| null\)/);
 const tegliaTranslationBlocks = [...translationsSource.matchAll(/directHomeTegliaCopy:\s*\{([\s\S]*?)\n\s*\},/g)].map((match) => match[1]);
 assert.equal(tegliaTranslationBlocks.length, 4);
+assert.equal([...translationsSource.matchAll(/beginnerScheduleUnavailable:/g)].length, 4);
 for (const block of tegliaTranslationBlocks) {
   assert.doesNotMatch(block, /kuglice|kroglice|balls\b|Kugeln/i);
   assert.match(block, /one mass|eine Masse|ena masa|jednu masu/i);
 }
-assert.match(bigaUiSource, /const finalMixSteps = mixing === 'mixer'\s*\?\s*mixerFinalMixSteps\s*:/);
+assert.match(bigaUiSource, /const finalMixSteps = mixingForExperience === 'spiral'\s*\?\s*getSpiralMixingSteps\(lang, preferredYeastType, \{ method: 'biga', hasOil: dough\.main\.oil > 0 \}\)\s*:\s*mixingForExperience === 'mixer'/);
 assert.match(bigaUiSource, /fit the dough hook, and start on speed 1/);
 assert.match(bigaUiSource, /switch the mixer to speed 2/);
 assert.match(bigaUiSource, /stop the mixer as soon as the dough absorbs it/);
@@ -345,27 +401,35 @@ assert.ok(calculateHomeFermentationStressSignal(stressInput(6, 12, 6, 20, 8)).co
 
 const requirement24 = calculateDirectHomeYeastRequirement({ ...roomOnlyExposure, totalExposure: 24 });
 assertClose(requirement24.freshYeastPct, 0.5 / 24);
+assertClose(requirement24.activeDryYeastPct, (0.5 / 24) * 0.4);
 assertClose(requirement24.dryYeastPct, (0.5 / 24) / 3);
 assertClose(requirement24.freshYeastGramsPer1000gFlour, (0.5 / 24) * 10);
+assertClose(requirement24.activeDryYeastGramsPer1000gFlour, ((0.5 / 24) * 0.4) * 10);
 assertClose(requirement24.dryYeastGramsPer1000gFlour, ((0.5 / 24) / 3) * 10);
 
 const requirementH2 = calculateDirectHomeYeastRequirement(hybridH2Exposure);
 assertClose(requirementH2.freshYeastPct, 0.5 / 13.44);
+assertClose(requirementH2.activeDryYeastPct, (0.5 / 13.44) * 0.4);
 assertClose(requirementH2.dryYeastPct, (0.5 / 13.44) / 3);
 assertClose(requirementH2.freshYeastGramsPer1000gFlour, (0.5 / 13.44) * 10);
+assertClose(requirementH2.activeDryYeastGramsPer1000gFlour, ((0.5 / 13.44) * 0.4) * 10);
 assertClose(requirementH2.dryYeastGramsPer1000gFlour, ((0.5 / 13.44) / 3) * 10);
 
 const requirementWarmH2 = calculateDirectHomeYeastRequirement(warmHybridExposure);
 assertClose(requirementWarmH2.freshYeastPct, 0.5 / 19.488);
+assertClose(requirementWarmH2.activeDryYeastPct, (0.5 / 19.488) * 0.4);
 assertClose(requirementWarmH2.dryYeastPct, (0.5 / 19.488) / 3);
 assertClose(requirementWarmH2.freshYeastGramsPer1000gFlour, (0.5 / 19.488) * 10);
+assertClose(requirementWarmH2.activeDryYeastGramsPer1000gFlour, ((0.5 / 19.488) * 0.4) * 10);
 assertClose(requirementWarmH2.dryYeastGramsPer1000gFlour, ((0.5 / 19.488) / 3) * 10);
 
 for (const totalExposure of [0, -5]) {
   const requirement = calculateDirectHomeYeastRequirement({ ...roomOnlyExposure, totalExposure });
   assertClose(requirement.freshYeastPct, 1);
+  assertClose(requirement.activeDryYeastPct, 0.4);
   assertClose(requirement.dryYeastPct, 1 / 3);
   assertClose(requirement.freshYeastGramsPer1000gFlour, 10);
+  assertClose(requirement.activeDryYeastGramsPer1000gFlour, 4);
   assertClose(requirement.dryYeastGramsPer1000gFlour, 10 / 3);
 }
 
@@ -615,7 +679,7 @@ const boundaryCases = [
   ['protein', 'protein', 16, 'proteinUnusual'],
   ['protein', 'protein', 16.01, 'proteinUnsupported'],
 ];
-for (const [kind, source, value, issue] of boundaryCases) {
+for (const [, source, value, issue] of boundaryCases) {
   const flour = source === 'w'
     ? { source, w: value, confidence: 'high' }
     : { source, proteinPct: value, confidence: 'medium' };
@@ -951,6 +1015,31 @@ const assertPlanMatchesSelectedCandidate = (plan, bakeAt, startAt) => {
 };
 
 const planNow = new Date('2026-09-28T10:00:00.000Z');
+const roomOnlyBakeAt = new Date(planNow.getTime() + 4 * 60 * 60 * 1000);
+const roomOnlyPlan = createDirectHomePizzaPlan(
+  { ...directPlanInput(roomOnlyBakeAt), mixing: 'hand', beginnerScheduleMode: 'roomOnly' },
+  { source: 'unknown' },
+  62,
+  'fresh',
+  planNow,
+  true,
+);
+assert.ok(roomOnlyPlan);
+assert.equal(roomOnlyPlan.schedule.phaseCMinutes, 5);
+assert.equal(
+  roomOnlyPlan.schedule.ballingAt.getTime(),
+  roomOnlyPlan.schedule.startAt.getTime()
+    + (roomOnlyPlan.schedule.phaseAMinutes + roomOnlyPlan.schedule.phaseBMinutes) * 60000,
+);
+assert.equal(isHomeScheduleDurationValid(roomOnlyPlan.schedule), true);
+assert.equal(selectPlannerHomeSchedules({
+  isBeginner: true,
+  bakeAt: roomOnlyBakeAt,
+  directSchedule: roomOnlyPlan.schedule,
+  directScheduleMode: 'beginner',
+  bigaSchedule: null,
+  poolishSchedule: null,
+}).direct, roomOnlyPlan.schedule);
 for (const availableHours of [24, 48, 72]) {
   const bakeAt = new Date(planNow.getTime() + availableHours * 60 * 60 * 1000);
   const planInput = { ...directPlanInput(bakeAt), pizzas: 6, ballWeight: 280 };
@@ -1065,6 +1154,10 @@ const plannerCopy = {
   directHomeCopy: {
     start: '{STRATEGY} bulk {ROOM_BEFORE}h at {ROOM_TEMP}C',
     ballingFridge: 'Ball now and refrigerate {HOURS}h at {FRIDGE_TEMP}C',
+    ballingTitle: 'Shape dough balls',
+    balling: 'Divide and shape {WEIGHT} g dough balls.',
+    fridgeInTitle: 'Refrigerate dough balls',
+    fridgeIn: 'Refrigerate the shaped dough balls for {HOURS} at {FRIDGE_TEMP}.',
     roomOnlyBalling: 'Ball now and room proof {ROOM_AFTER}h at {ROOM_TEMP}C',
     finalRoom: 'Room proof {ROOM_AFTER}h at {ROOM_TEMP}C',
     preheat: 'Preheat for {PREHEAT_MINUTES} min',
@@ -1073,7 +1166,206 @@ const plannerCopy = {
     bake: 'Launch at T',
   },
 };
+plannerCopy.directHomeTegliaCopy = {
+  ...plannerCopy.directHomeCopy,
+  ballingTitle: 'Prepare tray dough mass',
+  balling: 'Transfer the dough mass to its covered container.',
+  fridgeInTitle: 'Refrigerate the dough mass',
+  fridgeIn: 'Refrigerate the covered dough mass for {HOURS} at {FRIDGE_TEMP}.',
+};
 const styles = ['neapolitan', 'romana', 'ny_style'];
+
+const b2FridgeSchedule = {
+  startAt: new Date('2027-04-12T07:05:00.000Z'),
+  bakeAt: new Date('2027-04-12T19:00:00.000Z'),
+  ballingAt: new Date('2027-04-12T08:55:00.000Z'),
+  fridgeAt: new Date('2027-04-12T09:00:00.000Z'),
+  preheatAt: new Date('2027-04-12T18:00:00.000Z'),
+  roomBeforeFridgeHours: 115 / 60,
+  fridgeHours: 8,
+  roomAfterFridgeHours: 2,
+  phaseAMinutes: 20,
+  phaseBMinutes: 90,
+  phaseCMinutes: 5,
+  prefermentHours: 0,
+  strategy: 'hybrid',
+  style: 'neapolitan',
+  ovenType: 'homeStone',
+  roomTemp: 22,
+  fridgeTemp: 4,
+};
+const beginnerFridgeOutAt = new Date(
+  b2FridgeSchedule.startAt.getTime()
+    + (b2FridgeSchedule.roomBeforeFridgeHours + b2FridgeSchedule.fridgeHours) * 3600000,
+);
+const legacyPlannerFridgeOutAt = new Date(
+  b2FridgeSchedule.ballingAt.getTime() + b2FridgeSchedule.fridgeHours * 3600000,
+);
+assert.equal(beginnerFridgeOutAt.toISOString(), '2027-04-12T17:00:00.000Z');
+assert.equal(legacyPlannerFridgeOutAt.toISOString(), '2027-04-12T16:55:00.000Z');
+assert.equal(
+  b2FridgeSchedule.fridgeAt.getTime(),
+  b2FridgeSchedule.startAt.getTime() + b2FridgeSchedule.roomBeforeFridgeHours * 3600000,
+);
+assert.equal(
+  b2FridgeSchedule.fridgeAt.getTime() - b2FridgeSchedule.ballingAt.getTime(),
+  b2FridgeSchedule.phaseCMinutes * 60000,
+);
+const b2PlannerSteps = reversePlan(
+  b2FridgeSchedule.bakeAt,
+  'direct',
+  'neapolitan',
+  plannerCopy,
+  b2FridgeSchedule,
+);
+assert.equal(
+  b2PlannerSteps.find((step) => step.title === plannerCopy.warmTitle).at.toISOString(),
+  '2027-04-12T17:00:00.000Z',
+);
+assert.equal(
+  b2PlannerSteps.find((step) => step.title === 'Shape dough balls').at.toISOString(),
+  b2FridgeSchedule.ballingAt.toISOString(),
+);
+assert.equal(
+  b2PlannerSteps.find((step) => step.title === 'Refrigerate dough balls').at.toISOString(),
+  b2FridgeSchedule.fridgeAt.toISOString(),
+);
+assert.match(
+  b2PlannerSteps.find((step) => step.title === 'Refrigerate dough balls').desc,
+  /shaped dough balls/,
+);
+const teglia17Schedule = {
+  ...b2FridgeSchedule,
+  startAt: new Date('2027-04-12T14:00:00.000Z'),
+  bakeAt: new Date('2027-04-12T20:00:00.000Z'),
+  ballingAt: new Date('2027-04-12T14:55:00.000Z'),
+  fridgeAt: new Date('2027-04-12T15:00:00.000Z'),
+  preheatAt: new Date('2027-04-12T19:00:00.000Z'),
+  roomBeforeFridgeHours: 1,
+  fridgeHours: 4,
+  roomAfterFridgeHours: 1,
+  phaseAMinutes: 20,
+  phaseBMinutes: 30,
+  phaseCMinutes: 5,
+  style: 'romana',
+  romanFormat: 'teglia',
+};
+for (const lang of ['hr', 'en', 'de', 'sl']) {
+  assert.match(productionTranslations[lang].calc.activeDryYeast, /active|aktiv/i);
+  assert.match(productionTranslations[lang].profile.preferences.activeDry, /active|aktiv/i);
+  assert.match(productionTranslations[lang].planner.stepCopy.yeastHandling.activeDry, /active|aktiv/i);
+  assert.notEqual(
+    productionTranslations[lang].profile.preferences.activeDry,
+    productionTranslations[lang].profile.preferences.dry,
+    `${lang}: active dry and instant dry must have distinct setting labels`,
+  );
+  const productionCopy = productionTranslations[lang].planner.stepCopy;
+  const tegliaSteps = reversePlan(
+    teglia17Schedule.bakeAt,
+    'direct',
+    'romana',
+    productionCopy,
+    teglia17Schedule,
+    null,
+    null,
+    lang,
+  );
+  const fridgeInSteps = tegliaSteps.filter((step) => step.title === productionCopy.directHomeTegliaCopy.fridgeInTitle);
+  assert.equal(fridgeInSteps.length, 1, `${lang} production Teglia copy should render one fridge-in step`);
+  assert.equal(fridgeInSteps[0].at.getTime(), teglia17Schedule.fridgeAt.getTime(), `${lang} Planner fridge-in should use fridgeAt`);
+  assert.equal(
+    new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Vienna', hour: '2-digit', minute: '2-digit' }).format(fridgeInSteps[0].at),
+    '17:00',
+    `${lang} production Teglia fridge-in should display at 17:00 Europe/Vienna`,
+  );
+  assert.match(fridgeInSteps[0].desc, /mass|Masse|masu|maso/i, `${lang} production Teglia copy should refer to the dough mass`);
+}
+const romanBlendPlannerSteps = reversePlan(
+  b2FridgeSchedule.bakeAt,
+  'direct',
+  'romana',
+  plannerCopy,
+  { ...b2FridgeSchedule, style: 'romana', romanFormat: 'tonda' },
+);
+assert.equal(
+  romanBlendPlannerSteps.find((step) => step.title === 'Shape dough balls').at.toISOString(),
+  b2FridgeSchedule.ballingAt.toISOString(),
+);
+assert.equal(
+  romanBlendPlannerSteps.find((step) => step.title === 'Refrigerate dough balls').at.toISOString(),
+  b2FridgeSchedule.fridgeAt.toISOString(),
+);
+const generatedB2Plan = createDirectHomePizzaPlan({
+  style: 'neapolitan',
+  pizzas: 1,
+  ballWeight: 250,
+  method: 'direct',
+  mixing: 'hand',
+  beginnerScheduleMode: 'fridgeRoom',
+  bakeAt: b2FridgeSchedule.bakeAt,
+  roomTemp: 22,
+  fridgeTemp: 4,
+  ovenType: 'homeStone',
+  ovenTemp: 300,
+}, { source: 'unknown' }, 62, 'fresh', b2FridgeSchedule.startAt, true);
+assert.ok(generatedB2Plan, 'production Beginner plan should be generated');
+const generatedB2Schedule = generatedB2Plan.schedule;
+assert.deepEqual(
+  [generatedB2Schedule.phaseAMinutes, generatedB2Schedule.phaseBMinutes, generatedB2Schedule.phaseCMinutes],
+  [20, 90, 5],
+);
+assert.equal(generatedB2Schedule.bakeAt.getTime(), b2FridgeSchedule.bakeAt.getTime());
+assert.equal(generatedB2Schedule.ballingAt.toISOString(), b2FridgeSchedule.ballingAt.toISOString());
+assert.equal(generatedB2Schedule.fridgeAt.toISOString(), b2FridgeSchedule.fridgeAt.toISOString());
+const generatedB2PlannerSteps = reversePlan(
+  generatedB2Schedule.bakeAt,
+  'direct',
+  'neapolitan',
+  plannerCopy,
+  generatedB2Schedule,
+);
+assert.equal(
+  generatedB2PlannerSteps.find((step) => step.title === plannerCopy.warmTitle).at.toISOString(),
+  beginnerFridgeOutAt.toISOString(),
+);
+const viennaMidnightBakeAt = new Date('2027-04-13T00:30:00.000Z');
+const viennaMidnightNow = new Date('2027-04-12T12:35:00.000Z');
+const viennaMidnightPlan = createDirectHomePizzaPlan({
+  style: 'neapolitan',
+  pizzas: 1,
+  ballWeight: 250,
+  method: 'direct',
+  mixing: 'hand',
+  beginnerScheduleMode: 'fridgeRoom',
+  bakeAt: viennaMidnightBakeAt,
+  roomTemp: 22,
+  fridgeTemp: 4,
+  ovenType: 'homeStone',
+  ovenTemp: 300,
+}, { source: 'unknown' }, 62, 'fresh', viennaMidnightNow, true);
+assert.ok(viennaMidnightPlan, 'production Beginner plan should cross local midnight');
+const viennaMidnightSchedule = viennaMidnightPlan.schedule;
+const viennaTime = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/Vienna',
+  dateStyle: 'short',
+  timeStyle: 'short',
+});
+const viennaFridgeOutAt = new Date(
+  viennaMidnightSchedule.startAt.getTime()
+    + (viennaMidnightSchedule.roomBeforeFridgeHours + viennaMidnightSchedule.fridgeHours) * 3600000,
+);
+assert.equal(viennaTime.format(viennaFridgeOutAt), '13/04/2027, 00:30');
+const viennaPlannerSteps = reversePlan(
+  viennaMidnightSchedule.bakeAt,
+  'direct',
+  'neapolitan',
+  plannerCopy,
+  viennaMidnightSchedule,
+);
+assert.equal(
+  viennaPlannerSteps.find((step) => step.title === plannerCopy.warmTitle).at.getTime(),
+  viennaFridgeOutAt.getTime(),
+);
 const beginnerStrategyTable = {
   18: ['roomOnly', 'roomOnly', 'roomOnly', 'hybrid', 'coldDominant', 'coldDominant', 'coldDominant'],
   22: ['hybrid', 'hybrid', 'hybrid', 'hybrid', 'coldDominant', 'coldDominant', 'coldDominant'],
@@ -1152,7 +1444,7 @@ for (const style of styles) {
     const schedules = [];
     const totalsByMixingAndYeast = new Map();
     for (const mixing of ['hand', 'mixer']) {
-      for (const yeastType of ['fresh', 'dry']) {
+      for (const yeastType of ['fresh', 'activeDry', 'dry']) {
         const plan = createDirectHomePizzaPlan({
           style, pizzas: 6, ballWeight: profile.ballWeight, method: 'direct', bakeAt,
           roomTemp: 22, fridgeTemp: 4, ovenType: 'homeStone',
@@ -1190,7 +1482,28 @@ for (const style of styles) {
         assert.equal(plannerSteps.at(-1).desc, 'Launch at T');
         const directMixTitle = style === 'neapolitan' ? plannerCopy.directTitle : plannerCopy.directMixTitle;
         assert.equal(plannerSteps.find((step) => step.title === directMixTitle).at.getTime(), plan.schedule.startAt.getTime());
-        assert.equal(plannerSteps.find((step) => step.title === plannerCopy.ballsTitle).at.getTime(), plan.schedule.ballingAt.getTime());
+        const separateFridgeIn = plan.schedule.fridgeAt
+          && plan.schedule.fridgeAt.getTime() > plan.schedule.ballingAt.getTime();
+        const selectedHomeCopy = style === 'romana' && plan.schedule.romanFormat === 'teglia'
+          ? plannerCopy.directHomeTegliaCopy
+          : plannerCopy.directHomeCopy;
+        const ballingTitle = selectedHomeCopy.ballingTitle ?? plannerCopy.ballsTitle;
+        const ballingStep = plannerSteps.find((step) => step.title === ballingTitle);
+        assert.ok(ballingStep, JSON.stringify({
+          style,
+          hours,
+          ballingTitle,
+          ballingAt: plan.schedule.ballingAt,
+          fridgeAt: plan.schedule.fridgeAt,
+          plannerSteps: plannerSteps.map((step) => step.title),
+        }));
+        assert.equal(ballingStep.at.getTime(), plan.schedule.ballingAt.getTime());
+        if (separateFridgeIn) {
+          assert.equal(
+            plannerSteps.find((step) => step.title === selectedHomeCopy.fridgeInTitle).at.getTime(),
+            plan.schedule.fridgeAt.getTime(),
+          );
+        }
         assert.equal(plannerSteps.find((step) => step.title === plannerCopy.ovenTitle).at.getTime(), plan.schedule.preheatAt.getTime());
         assert.equal(plannerSteps.find((step) => step.title === 'Shape and top').at.getTime(), bakeAt.getTime() - 15 * 60000);
         assert.equal(plan.schedule.ballingAt.getTime(), plan.schedule.startAt.getTime() + plan.schedule.roomBeforeFridgeHours * 3600000);
@@ -1202,13 +1515,21 @@ for (const style of styles) {
     assert.deepEqual(schedules[0], schedules[1]);
     assert.deepEqual(schedules[0], schedules[2]);
     assert.deepEqual(schedules[0], schedules[3]);
+    assert.deepEqual(schedules[0], schedules[4]);
+    assert.deepEqual(schedules[0], schedules[5]);
     const handFresh = totalsByMixingAndYeast.get('hand/fresh');
     const mixerFresh = totalsByMixingAndYeast.get('mixer/fresh');
+    const handActiveDry = totalsByMixingAndYeast.get('hand/activeDry');
+    const mixerActiveDry = totalsByMixingAndYeast.get('mixer/activeDry');
     const handDry = totalsByMixingAndYeast.get('hand/dry');
     const mixerDry = totalsByMixingAndYeast.get('mixer/dry');
     assert.equal(handFresh.eTotal, mixerFresh.eTotal);
+    assert.equal(handFresh.eTotal, handActiveDry.eTotal);
+    assert.equal(handFresh.eTotal, mixerActiveDry.eTotal);
     assert.equal(handFresh.eTotal, handDry.eTotal);
     assert.equal(handFresh.eTotal, mixerDry.eTotal);
+    assert.ok(Math.abs(handFresh.yeastPct * 0.4 - handActiveDry.yeastPct) <= 0.01);
+    assert.ok(Math.abs(mixerFresh.yeastPct * 0.4 - mixerActiveDry.yeastPct) <= 0.01);
     assert.ok(Math.abs(handFresh.yeastPct / 3 - handDry.yeastPct) <= 0.01);
     assert.ok(Math.abs(mixerFresh.yeastPct / 3 - mixerDry.yeastPct) <= 0.01);
   }
@@ -1218,7 +1539,7 @@ for (const hours of [24, 48, 72]) {
   const bakeAt = new Date(planNow.getTime() + hours * 60 * 60 * 1000);
   const schedules = [];
   for (const mixing of ['hand', 'mixer']) {
-    for (const yeastType of ['fresh', 'dry']) {
+    for (const yeastType of ['fresh', 'activeDry', 'dry']) {
       const plan = createBigaHomePizzaPlan({
         style: 'neapolitan', pizzas: 6, ballWeight: 280, bakeAt,
         roomTemp: 22, fridgeTemp: 4, ovenType: 'homeStone',
@@ -1249,15 +1570,18 @@ for (const hours of [24, 48, 72]) {
       assert.equal(result.preferment.water, 216);
       assert.ok(Math.abs(result.preferment.water / result.preferment.flour - 0.45) < 0.002);
       assert.ok(Math.abs(result.preferment.yeast + result.main.yeast - result.total.yeast) <= 0.01);
-      assert.ok(Math.abs(result.preferment.yeast - result.total.yeast * 7 / 12) <= 0.02);
-      assert.ok(Math.abs(result.main.yeast - result.total.yeast * 5 / 12) <= 0.02);
+      assert.ok(Math.abs(
+        result.preferment.yeast - result.total.yeast * result.preferment.flour / result.total.flour,
+      ) <= 0.02);
+      assert.ok(Math.abs(result.main.yeast + result.preferment.yeast - result.total.yeast) <= 0.01);
+      assert.ok(result.main.yeast > 0, 'Biga final dough must include its calculated yeast portion');
 
       const displayedMainFlour = Math.round((result.totalDough
         - result.preferment.flour - result.preferment.water - result.preferment.yeast
         - result.main.water - result.main.salt - result.main.oil - result.main.yeast) * 100) / 100;
       const displayedTotal = result.preferment.flour + result.preferment.water + result.preferment.yeast
         + displayedMainFlour + result.main.water + result.main.salt + result.main.oil + result.main.yeast;
-      assert.equal(displayedTotal, 1680);
+      assert.ok(Math.abs(displayedTotal - 1680) < 0.001);
     }
   }
   assert.deepEqual(schedules[0], schedules[1]);
@@ -1266,7 +1590,7 @@ for (const hours of [24, 48, 72]) {
 }
 
 for (const hours of [24, 48, 72]) {
-  for (const yeastType of ['fresh', 'dry']) {
+  for (const yeastType of ['fresh', 'activeDry', 'dry']) {
     const bakeAt = new Date(planNow.getTime() + hours * 60 * 60 * 1000);
     const input = {
       style: 'neapolitan', pizzas: 6, ballWeight: 280, method: 'direct', bakeAt,
@@ -1374,7 +1698,7 @@ for (const availableHours of [24, 48, 72]) {
         : 0.12 * (1 + 0.05 * (phase.temperature - 4));
       return total + phase.hours * rate;
     }, 0));
-    for (const yeastType of ['fresh', 'dry']) {
+    for (const yeastType of ['fresh', 'activeDry', 'dry']) {
       const result = doughCalc({
         pizzas: 2, ballWeight: 250, hydration: 65, saltPct: 2.9, oilPct: 2,
         method: 'poolish', poolishPct: 35, roomHours: 2, roomTemp: 22,
@@ -1383,8 +1707,11 @@ for (const availableHours of [24, 48, 72]) {
       });
       assert.equal(result.eTotal, Math.round(expectedExposure * 10) / 10);
       assert.ok(Math.abs(result.preferment.water - result.preferment.flour) <= 1);
-      assert.ok(Math.abs(result.preferment.yeast - result.total.yeast * 5 / 12) <= 0.02);
-      assert.ok(Math.abs(result.main.yeast - result.total.yeast * 7 / 12) <= 0.02);
+      assert.ok(Math.abs(
+        result.preferment.yeast - result.total.yeast * result.preferment.flour / result.total.flour,
+      ) <= 0.02);
+      assert.ok(Math.abs(result.main.yeast + result.preferment.yeast - result.total.yeast) <= 0.01);
+      assert.ok(result.main.yeast > 0, 'Poolish final dough must include its calculated yeast portion');
     }
   }
 }

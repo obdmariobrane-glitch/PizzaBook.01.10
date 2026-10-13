@@ -14,6 +14,11 @@ function isValidLevel(value: unknown): value is UserExperienceLevel {
 let cachedLevel: UserExperienceLevel | null | undefined;
 const listeners = new Set<() => void>();
 
+export function applyLoadedExperienceLevel(level: UserExperienceLevel | null): void {
+  cachedLevel = level;
+  listeners.forEach((listener) => listener());
+}
+
 export function getCachedExperienceLevel(): UserExperienceLevel | null | undefined {
   return cachedLevel;
 }
@@ -25,9 +30,9 @@ export function subscribeExperienceLevel(listener: () => void): () => void {
 
 export async function loadExperienceLevel(): Promise<UserExperienceLevel | null> {
   const raw = await storage.getItem<string | null>(EXPERIENCE_LEVEL_KEY, null);
-  cachedLevel = isValidLevel(raw) ? raw : null;
-  listeners.forEach((listener) => listener());
-  return cachedLevel;
+  const loadedLevel = isValidLevel(raw) ? raw : null;
+  applyLoadedExperienceLevel(loadedLevel);
+  return loadedLevel;
 }
 
 export async function setExperienceLevel(level: UserExperienceLevel): Promise<boolean> {

@@ -2,6 +2,7 @@
 
 /* global __dirname */
 const assert = require('node:assert/strict');
+process.env.TZ = 'Europe/Vienna';
 const fs = require('node:fs');
 const path = require('node:path');
 const ts = require('typescript');
@@ -62,16 +63,25 @@ assert.equal(getLocalDayOffset(firstDay, nextDay), 1, 'day offsets should use lo
 {
   const localDate = (hour, minute = 0) => new Date(2027, 3, 13, hour, minute);
   const event = (id, at, activeUntil) => ({ id, at, activeUntil, label: id, actionable: true });
+  const nighttimeBoundaryEvents = [
+    event('midnight', localDate(0)),
+    event('fivePastMidnight', localDate(0, 5)),
+    event('one', localDate(1)),
+    event('twoThirty', localDate(2, 30)),
+    event('four', localDate(4)),
+    event('five', localDate(5)),
+    event('fiveFiftyNine', localDate(5, 59)),
+    event('six', localDate(6)),
+  ];
   assert.deepEqual(
     getNighttimeActiveEvents([
-      event('midnight', localDate(0)),
-      event('six', localDate(6)),
+      ...nighttimeBoundaryEvents,
       event('day', localDate(12)),
       event('preheat', localDate(5, 30), localDate(6, 30)),
       { id: 'passive', at: localDate(2), label: 'passive', actionable: false },
     ]).map((item) => item.id),
-    ['midnight', 'preheat'],
-    'nighttime detection must include 00:00 and crossing intervals, but exclude 06:00 and passive waits',
+    ['midnight', 'fivePastMidnight', 'one', 'twoThirty', 'four', 'five', 'fiveFiftyNine', 'preheat'],
+    'nighttime detection must include every specified 00:00–05:59 boundary, cross-midnight intervals, and exclude 06:00 and passive waits',
   );
 }
 
@@ -103,6 +113,18 @@ assert.equal(getLocalDayOffset(firstDay, nextDay), 1, 'day offsets should use lo
   // Fridge mode has no roomFermentationEnd: preheat stays single.
   const fridge = [...base, ev('fridgeOut', 0), ev('preheat', 0)];
   assert.equal(ids(planGuidedNotifications(fridge, {}, now)), 'mix,balling,shape,bake,fridgeOut,preheat');
+
+  const teglia = [
+    ev('trayTop', 0),
+    ev('bake', 0),
+  ];
+  assert.equal(ids(planGuidedNotifications(teglia, {}, now)), 'bake+trayTop',
+    'same-time Teglia topping and baking must produce one actionable reminder');
+  assert.equal(ids(planGuidedNotifications([
+    ev('trayTop', 0),
+    ev('bake', 60_000),
+  ], {}, now)), 'trayTop,bake',
+  'Teglia topping and baking remain separate when their schedule times differ');
 }
 
 console.log('Guided recipe verification passed: local grouping, event order, progress, countdown, and plan identity.');

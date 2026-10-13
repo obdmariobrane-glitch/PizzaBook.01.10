@@ -27,7 +27,7 @@ assert.equal(JSON.stringify(BEGINNER_DIRECT_TARGET_DOUGH_TEMP_C), JSON.stringify
   romanaTonda: 22,
   romanaTeglia: 22,
 }));
-assert.equal(JSON.stringify(BEGINNER_DIRECT_MIXING_FRICTION_C), JSON.stringify({ hand: 2, home: 10, spiral: 7 }));
+assert.equal(JSON.stringify(BEGINNER_DIRECT_MIXING_FRICTION_C), JSON.stringify({ hand: 2, home: 10 }));
 assert.equal(JSON.stringify(BEGINNER_DIRECT_WATER_TEMP_LIMITS_C), JSON.stringify({ min: 2, max: 35 }));
 
 const styles = ['neapolitan', 'newYork', 'romanaTonda', 'romanaTeglia'];

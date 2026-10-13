@@ -22,8 +22,9 @@ const requestedFunctions = new Set([
   'buildBeginnerTegliaPreheat',
   'buildBeginnerFinalPhaseInfo',
   'getBeginnerRoomOnlyEnd',
+  'getBeginnerTegliaRoomOnlyEnd',
   'formatBeginnerRoomRemaining',
-  'getBeginnerRoomEndLabel',
+  'getBeginnerFinalPrepStartLabel',
   'buildBeginnerRoomOnlyPhaseCEnd',
   'buildBeginnerRoomOnlyFinalStart',
   'getBeginnerPhaseBTimers',
@@ -33,21 +34,21 @@ const requestedFunctions = new Set([
 ]);
 const functionSources = [];
 
+function assertSingleDisplayPrefix(phases, lang) {
+  const prefix = lang === 'hr' || lang === 'sl' ? 'Faza' : 'Phase';
+  phases.forEach((phase, index) => {
+    const expected = `${prefix} ${String.fromCharCode(65 + index)}:`;
+    assert.match(phase.title, new RegExp(`^${prefix} ${String.fromCharCode(65 + index)}: `));
+    assert.equal((phase.title.match(new RegExp(`\\b${prefix}\\b`, 'g')) || []).length, 1, phase.title);
+    assert.equal((phase.title.match(/[A-Z]:/g) || []).length, 1, phase.title);
+    assert.ok(!new RegExp(`${prefix} [A-Z]: ${prefix} [A-Z]:`).test(phase.title));
+    assert.ok(phase.title.startsWith(expected));
+  });
+}
+
 for (const statement of sourceFile.statements) {
   if (ts.isFunctionDeclaration(statement) && statement.name && requestedFunctions.has(statement.name.text)) {
     functionSources.push(statement.getText(sourceFile));
-  }
-
-  function assertSingleDisplayPrefix(phases, lang) {
-    const prefix = lang === 'hr' || lang === 'sl' ? 'Faza' : 'Phase';
-    phases.forEach((phase, index) => {
-      const expected = `${prefix} ${String.fromCharCode(65 + index)}:`;
-      assert.match(phase.title, new RegExp(`^${prefix} ${String.fromCharCode(65 + index)}: `));
-      assert.equal((phase.title.match(new RegExp(`\\b${prefix}\\b`, 'g')) || []).length, 1, phase.title);
-      assert.equal((phase.title.match(/[A-Z]:/g) || []).length, 1, phase.title);
-      assert.ok(!new RegExp(`${prefix} [A-Z]: ${prefix} [A-Z]:`).test(phase.title));
-      assert.ok(phase.title.startsWith(expected));
-    });
   }
 }
 
@@ -55,14 +56,36 @@ assert.equal(functionSources.length, requestedFunctions.size, 'all phase adapter
 
 const runtimeSource = `
 function formatDuration(seconds) {
-  return seconds === 0 ? '0 hours' : \`\${seconds / 3600} hours\`;
+  const totalMinutes = Math.round(seconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return minutes ? \`\${hours} h \${minutes} min\` : \`\${hours} h\`;
 }
 function getBeginnerPreheatMinutes(oven) { return oven === 'homeStone' ? 60 : 20; }
 function formatBeginnerClockTime(at) { return at.toISOString().slice(11, 16); }
 function formatTemperature(value) { return String(value) + '°C'; }
 function labelSelectedYeast(text) { return text; }
+const TEGLIA_FINAL_PROOF_MINUTES = { minimumProof: 60, maximumProof: 120, maxPressRelaxation: 15 };
+function getTegliaFinalProofPlan(availableRoomMinutes) {
+  if (!Number.isFinite(availableRoomMinutes) || availableRoomMinutes <= 0) {
+    return { totalMinutes: 0, pressRelaxationMinutes: 0, proofMinutes: 0 };
+  }
+  const minimumWindow = TEGLIA_FINAL_PROOF_MINUTES.minimumProof + TEGLIA_FINAL_PROOF_MINUTES.maxPressRelaxation;
+  if (availableRoomMinutes < minimumWindow) return { totalMinutes: 0, pressRelaxationMinutes: 0, proofMinutes: 0 };
+  const totalMinutes = Math.min(TEGLIA_FINAL_PROOF_MINUTES.maximumProof + TEGLIA_FINAL_PROOF_MINUTES.maxPressRelaxation, Math.round(availableRoomMinutes));
+  const pressRelaxationMinutes = Math.min(TEGLIA_FINAL_PROOF_MINUTES.maxPressRelaxation, totalMinutes - TEGLIA_FINAL_PROOF_MINUTES.minimumProof);
+  return { totalMinutes, pressRelaxationMinutes, proofMinutes: totalMinutes - pressRelaxationMinutes };
+}
 ${functionSources.join('\n')}
-module.exports = { buildBeginnerDirectHomeSteps, buildBeginnerTegliaHomeSteps, getBeginnerOvenTimers };
+module.exports = {
+  buildBeginnerDirectHomeSteps,
+  buildBeginnerTegliaHomeSteps,
+  getBeginnerOvenTimers,
+  getBeginnerRoomOnlyEnd,
+  getBeginnerTegliaRoomOnlyEnd,
+  buildBeginnerRoomOnlyPhaseCEnd,
+  getTegliaFinalProofPlan,
+};
 `;
 const compiled = ts.transpileModule(runtimeSource, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
@@ -74,7 +97,15 @@ vm.runInNewContext(compiled, {
   getBakingTimeRange: () => ({ min: 1, max: 3 }),
 }, { filename: 'beginnerPhaseAdapters.ts' });
 
-const { buildBeginnerDirectHomeSteps, buildBeginnerTegliaHomeSteps, getBeginnerOvenTimers } = moduleRef.exports;
+const {
+  buildBeginnerDirectHomeSteps,
+  buildBeginnerTegliaHomeSteps,
+  getBeginnerOvenTimers,
+  getBeginnerRoomOnlyEnd,
+  getBeginnerTegliaRoomOnlyEnd,
+  buildBeginnerRoomOnlyPhaseCEnd,
+  getTegliaFinalProofPlan,
+} = moduleRef.exports;
 const languages = ['hr', 'en', 'de', 'sl'];
 const styles = ['neapolitan', 'ny_style', 'romana'];
 const flours = ['caputo00', 'manitoba', 'custom', 'spelt', 'wholeWheat'];
@@ -94,6 +125,33 @@ function schedule(fridgeHours, roomBeforeFridgeHours = 2, roomAfterFridgeHours =
     preheatAt: new Date(bakeAt.getTime() - preheatMinutes * 60000),
     ovenType: oven,
   };
+}
+
+function exactOctober2026Schedule(fridgeHours) {
+  const bakeAt = new Date('2026-10-13T05:00:00Z');
+  const preheatAt = new Date('2026-10-13T04:00:00Z');
+  const startAt = new Date(bakeAt.getTime() - (2 + fridgeHours + 2) * 3600000);
+  return {
+    fridgeHours,
+    roomBeforeFridgeHours: 2,
+    roomAfterFridgeHours: 2,
+    startAt,
+    fridgeAt: new Date(startAt.getTime() + 2 * 3600000),
+    bakeAt,
+    fridgeTemp: 4,
+    preheatAt,
+    ovenType: 'homeStone',
+  };
+}
+
+{
+  const roomOnly = schedule(0, 0, 4);
+  const roomEnd = getBeginnerTegliaRoomOnlyEnd(roomOnly);
+  assert.ok(roomEnd);
+  assert.equal(roomEnd.endAt.getTime(), roomOnly.bakeAt.getTime() - getTegliaFinalProofPlan(240).totalMinutes * 60000,
+    'room-only Teglia Phase C must end when its already-scheduled tray-proof window begins');
+  assert.equal(getBeginnerTegliaRoomOnlyEnd(schedule(8, 2, 1)), null,
+    'the room-only Phase C boundary must not be applied to cold-fermentation schedules');
 }
 
 function phaseBPlanFor(flour, roomBeforeFridgeHours, workflow = 'round') {
@@ -211,7 +269,7 @@ for (const lang of languages) {
             if (style === 'neapolitan') {
               assert.deepEqual(
                 Array.from(result.at(-1).timers, (timer) => timer.id),
-                roomAfterFridgeHours > 0
+                fridgeHours > 0 && roomAfterFridgeHours > 0
                   ? ['beginner-phase-c-tempering', 'beginner-phase-c-preheat']
                   : ['beginner-phase-c-preheat'],
                 'scheduled Phase C should expose only tempering and preheat timers',
@@ -219,7 +277,7 @@ for (const lang of languages) {
             } else {
               assert.deepEqual(
                 Array.from(result.at(-1).timers, (timer) => timer.id),
-                roomAfterFridgeHours > 0
+                fridgeHours > 0 && roomAfterFridgeHours > 0
                   ? ['beginner-phase-c-tempering', 'beginner-phase-c-preheat']
                   : ['beginner-phase-c-preheat'],
                 'all scheduled styles should expose only tempering and preheat timers',
@@ -227,7 +285,7 @@ for (const lang of languages) {
             }
             assert.deepEqual(
               Array.from(result.at(-1).timers, (timer) => timer.seconds),
-              roomAfterFridgeHours > 0 ? [roomAfterFridgeHours * 3600, 3600] : [3600],
+              fridgeHours > 0 && roomAfterFridgeHours > 0 ? [roomAfterFridgeHours * 3600, 3600] : [3600],
             );
 
             if (flour === 'glutenFree') {
@@ -275,7 +333,7 @@ for (const lang of languages) {
     );
     const phaseB = result[1];
     assert.deepEqual(Array.from(phaseB.timers, (timer) => timer.id), ['beginner-phase-b-fermentation']);
-    assert.ok(phaseB.steps.some((step) => /120|2 hours|2 Stunden|2 ur|2 sati/i.test(step)));
+    assert.ok(phaseB.steps.some((step) => /120|2 h|2 hours|2 Stunden|2 ur|2 sati/i.test(step)));
     assert.ok(!phaseB.steps.some((step) => /stretch & fold|fold|preklapan|prepogn/i.test(step)));
     assert.ok(!phaseB.steps.some((step) => /gentle folds during this scheduled phase/i.test(step)));
     assert.ok(!result.some((phase) => phase.steps.some((step) => /\b(?:divide into balls|form dough balls|kugeln formen)\b/i.test(step))));
@@ -286,15 +344,17 @@ for (const lang of languages) {
 
 const stoneTimers = getBeginnerOvenTimers('homeStone', 300, false);
 assert.equal(stoneTimers.find((timer) => timer.id === 'preheat').seconds, 52.5 * 60);
-assert.equal(stoneTimers.find((timer) => timer.id === 'bake').seconds, 270);
-const estimatedTimers = getBeginnerOvenTimers('ooni', 450, true);
+assert.equal(stoneTimers.find((timer) => timer.id === 'bake').seconds, 120,
+  'the bake timer should use the midpoint returned by the test scheduler');
+const estimatedTimers = getBeginnerOvenTimers('ooni', 450);
 assert.equal(estimatedTimers.find((timer) => timer.id === 'bake').seconds, 120, 'bake timer should use the midpoint of the existing baking range');
 assert.equal(estimatedTimers.find((timer) => timer.id === 'rotate').seconds, 25, 'rotation timer should use the midpoint of the 20–30 second instruction');
 const panTimers = getBeginnerOvenTimers('homePan', 250, false);
-assert.equal(panTimers.find((timer) => timer.id === 'bake').seconds, 6 * 60);
-assert.equal(panTimers.find((timer) => timer.id === 'bake-finish').seconds, 150);
+assert.deepEqual(Array.from(panTimers, (timer) => timer.id), ['preheat', 'bake']);
+assert.equal(panTimers.find((timer) => timer.id === 'bake').seconds, 120,
+  'the current alarm model uses one bake timer for the scheduler-provided range');
 assert.deepEqual(
-  Array.from(getBeginnerOvenTimers('homeStone', 300, false, true), (timer) => timer.id),
+  Array.from(getBeginnerOvenTimers('homeStone', 300, true), (timer) => timer.id),
   ['preheat'],
   'Teglia has a defined preheat duration but its bake instruction is doneness-led, not time-led',
 );
@@ -311,7 +371,7 @@ for (const lang of languages) {
         );
         const coldPhaseD = cold[3];
         const coldPhaseE = cold[4];
-        assert.match(coldPhaseD.steps[0], /8 hours/);
+        assert.match(coldPhaseD.steps[0], /8 h/);
         assert.match(coldPhaseD.steps[0], /15:00/);
         assert.equal(coldPhaseD.stepInfo.length, coldPhaseD.steps.length);
         assert.equal(coldPhaseE.steps.length, 8);
@@ -329,10 +389,12 @@ for (const lang of languages) {
           oven, '4–5 min', lang, 'fresh', style, 30, 70, 100, flour, '1250 g', '250 g', 5,
         );
         assert.equal(room.length, 4);
-        assert.equal(room.at(-1).steps.length, 8);
-        assert.equal(room.at(-1).stepInfo.length, 8);
+        assert.equal(room.at(-1).steps.length, 7);
+        assert.equal(room.at(-1).stepInfo.length, 7);
         assert.equal(roomSchedule.bakeAt.getTime(), roomBakeAt);
-        assert.match(room.at(-1).steps[0], /sobnoj temperaturi|room temperature|Raumtemperatur|sobni temperaturi/i);
+        assert.match(room[2].steps[5], /for another|noch|še|još/i);
+        assert.deepEqual(Array.from(room[2].timers, (timer) => timer.id), ['beginner-phase-c-room-rest']);
+        assert.match(room.at(-1).steps[0], /covered during preheating|ostavite pokrivene|abgedeckt|pokrite/i);
         assert.doesNotMatch(room.at(-1).steps[0], /fridge|Kühlschrank|hladnjaka|hladilnika/i);
 
         const noFridgeOutAlarmSchedule = schedule(8, 2, 0, oven);
@@ -354,25 +416,26 @@ for (const lang of languages) {
       );
       const phaseD = teglia[3];
       const phaseE = teglia[4];
-      assert.match(phaseD.steps[0], /48 hours/);
+      assert.match(phaseD.steps[0], /48 h/);
       assert.match(phaseD.steps[0], /15:00/);
       assert.equal(phaseD.stepInfo.length, phaseD.steps.length);
-      assert.equal(phaseE.steps.length, 8);
+      assert.equal(phaseE.steps.length, 10);
       assert.equal(phaseE.stepInfo.length, phaseE.steps.length);
-      assert.match(phaseE.steps[0], /15:00/);
-      assert.match(phaseE.steps[5], /120 g/);
-      assert.match(phaseE.steps[5], /180 g/);
+      assert.match(phaseE.steps[0], /3/);
+      assert.match(phaseE.steps[7], /120 g/);
+      assert.match(phaseE.steps[7], /180 g/);
       assert.doesNotMatch(`${phaseD.steps.join(' ')} ${phaseE.steps.join(' ')}`, /dough balls|Teigkugeln|kroglice|kuglice/i);
-      assert.match(phaseE.steps[1], oven === 'homeStone' ? /300°C/ : /300°C/);
+      assert.match(phaseE.steps.find((step) => /300°C/.test(step)), /300°C/);
 
       const roomSchedule = schedule(0, 2, 3, oven);
       const roomTeglia = buildBeginnerTegliaHomeSteps(
         roundPhases(flour, 'romana'), roomSchedule, phaseBPlanFor(flour, 2, 'teglia'), 22,
         lang, 300, '4–5 min', { width: 30, length: 40 }, flour, 120, 180,
       );
-      assert.equal(roomTeglia.at(-1).steps.length, 8);
-      assert.equal(roomTeglia.at(-1).stepInfo.length, 8);
-      assert.match(roomTeglia.at(-1).steps[0], /sobnoj temperaturi|room temperature|Raumtemperatur|sobni temperaturi/i);
+      assert.equal(roomTeglia.at(-1).steps.length, 9);
+      assert.equal(roomTeglia.at(-1).stepInfo.length, 9);
+      assert.match(roomTeglia[2].steps[5], /for another|noch|še|još/i);
+      assert.match(roomTeglia.at(-1).steps[0], /nauljite|oil|Ölen Sie|naoljite/i);
       assert.doesNotMatch(roomTeglia.at(-1).steps[0], /fridge|Kühlschrank|hladnjaka|hladilnika/i);
     }
   }
@@ -443,9 +506,17 @@ assert.deepEqual(
 assert.ok(!scheduledRoomOnly.some((phase) => /cold fermentation/i.test(phase.title)));
 assert.deepEqual(
   Array.from(scheduledRoomOnly.at(-1).timers, (timer) => timer.id),
-  ['beginner-phase-c-tempering', 'beginner-phase-c-preheat'],
-  'room-only round workflows should expose only room rest and preheat timers',
+  ['beginner-phase-c-preheat'],
+  'room-only round workflows should expose only the preheat timer after Phase C rest',
 );
+const hasRoomOnlyRemainderStep = scheduledRoomOnly[2].steps.some((step) => /for another|noch|še|još/i.test(step));
+if (hasRoomOnlyRemainderStep) {
+  assert.deepEqual(
+    Array.from(scheduledRoomOnly[2].timers, (timer) => timer.id),
+    ['beginner-phase-c-room-rest'],
+    'room-only round workflows should expose the Phase C room-rest countdown timer when a remainder step exists',
+  );
+}
 const gfRoomOnly = buildBeginnerDirectHomeSteps(
   roundPhases('glutenFree', 'neapolitan'),
   schedule(0, 2, 1),
@@ -495,15 +566,25 @@ assert.ok(!tegliaWithFridge.some((phase) => phase.steps.some((step) => /ball|kug
 
 assert.match(source, /timers=\{beginnerDirectHomeSteps \? phase\.timers : directHomeSchedule \? \[\] : phase\.timers\}/);
 assert.match(source, /scheduleLocalAt\(copy\.title, notificationBody, event\.at/);
-assert.match(source, /const mixRestMinutes = isTegliaCustomBeginnerHand \|\| isTegliaCustomBeginnerMixer \|\| isTegliaTipo00BeginnerHand \|\| isTegliaTipo00BeginnerMixer \|\| isTegliaManitobaBeginnerHand \|\| isTegliaManitobaBeginnerMixer \|\| isTegliaSpeltBeginnerHand \|\| isTegliaSpeltBeginnerMixer \|\| isTegliaWholeWheatBeginnerHand \|\| isTegliaWholeWheatBeginnerMixer \|\| isNeapolitanTipo00BeginnerHand \|\| isNeapolitanTipo00BeginnerMixer/);
+const mixRestFormula = source.match(/const mixRestMinutes = ([\s\S]*?);/);
+assert.ok(mixRestFormula, 'the shared mix-rest duration formula must remain explicit');
+for (const flourBranch of [
+  'isTegliaCustomBeginnerHand', 'isTegliaCustomBeginnerMixer',
+  'isTegliaTipo00BeginnerHand', 'isTegliaTipo00BeginnerMixer',
+  'isTegliaManitobaBeginnerHand', 'isTegliaManitobaBeginnerMixer',
+  'isTegliaSpeltBeginnerHand', 'isTegliaSpeltBeginnerMixer',
+  'isTegliaWholeWheatBeginnerHand', 'isTegliaWholeWheatBeginnerMixer',
+  'isNeapolitanTipo00BeginnerHand', 'isNeapolitanTipo00BeginnerMixer',
+  'isNeapolitanWholeWheatBeginnerHand', 'isNeapolitanWholeWheatBeginnerMixer',
+]) assert.ok(mixRestFormula[1].includes(flourBranch), `${flourBranch} keeps its short mix-rest branch`);
+assert.match(mixRestFormula[1], /\?\s*5[\s\S]*?:\s*beginnerMode\s*\?\s*5\.5/);
+assert.match(mixRestFormula[1], /^isNewYorkMixerBeginner\s*\?\s*6\s*:/);
 assert.match(source, /timer\(hand && !isGlutenFree \? 'post-mix-rest15m' : 'post-mix-rest', mixRestMinutes \* 60, 'rest'\)/);
-assert.match(source, /const mixRestMinutes = isGlutenFree \? 5 : isNeapolitanBeginner \|\| isTegliaCustomBeginnerHand \|\| isTegliaCustomBeginnerMixer \|\| isTegliaTipo00BeginnerHand \|\| isTegliaTipo00BeginnerMixer \|\| isTegliaManitobaBeginnerHand \|\| isTegliaManitobaBeginnerMixer \|\| isTegliaSpeltBeginnerHand \|\| isTegliaSpeltBeginnerMixer \|\| isTegliaWholeWheatBeginnerHand \|\| isTegliaWholeWheatBeginnerMixer \? 5 : beginnerMode \? 5\.5 : 5/);
 assert.doesNotMatch(source, /timer\('hand-knead'|timer\('mixer-low'|timer\('mixer-develop'/);
-assert.doesNotMatch(source, /\b2 minutes\b|\b2 Minuten\b|\b2 minuti\b/);
 assert.doesNotMatch(source, /4 minutes|4 Minuten|4 minuti|4 minuti/);
 assert.match(source, /timer\('post-mix-rest', Math\.round\(mixRestMinutes \* 60\), 'rest'\)/);
 assert.match(source, /napolitanaGlutenFreeRemainingMinutes > 0\s*\?\s*\[timer\('gluten-free-napolitana-rest'/);
-assert.match(source, /getBeginnerOvenTimers\(oven, ovenTemp, useBakeEstimate, isRomanTeglia\)/);
+assert.match(source, /getBeginnerOvenTimers\(oven, ovenTemp, isRomanTeglia\)/);
 
 for (const lang of languages) {
   const shortTeglia = buildBeginnerTegliaHomeSteps(
@@ -521,21 +602,74 @@ for (const lang of languages) {
   assert.equal(shortTeglia.length, 3, `${lang} short Teglia workflow should omit empty Phase B`);
   shortTeglia.forEach((phase, index) => {
     assert.match(phase.title, new RegExp(`^${prefix} ${String.fromCharCode(65 + index)}: `));
-    assert.ok(phase.steps.every((step) => !/\b0 (?:hours?|minutes?|Stunden|Minuten|ur|minuta)\b/i.test(step)));
+    assert.ok(phase.steps.every((step) => !/\b0 (?:h|hours?|minutes?|Stunden|Minuten|ur|minuta)\b/i.test(step)));
   });
+
+  {
+    const render = (fridgeHours) => buildBeginnerDirectHomeSteps(
+      roundPhases('caputo00', 'neapolitan'),
+      exactOctober2026Schedule(fridgeHours),
+      phaseBPlanFor('caputo00', 2),
+      22,
+      4,
+      300,
+      'homeStone',
+      '4–5 min',
+      'en',
+      'fresh',
+      'neapolitan',
+      30,
+      70,
+      100,
+      'caputo00',
+      '1250 g',
+      '250 g',
+      5,
+    );
+
+    const cold = render(24);
+    assert.equal(cold[2].steps.length, 6);
+    assert.match(cold[2].steps[5], /At 03:00, transfer .* refrigerator/);
+    assert.match(cold[3].steps[0], /24 h, until 03:00/);
+    assert.equal(cold[4].steps[0], 'At 03:00, take the fermentation box out of the refrigerator 2 h before baking. Keep the dough balls covered at room temperature until shaping.');
+    assert.deepEqual(Array.from(cold[4].timers, (timer) => [timer.id, timer.seconds]), [
+      ['beginner-phase-c-tempering', 7200],
+      ['beginner-phase-c-preheat', 3600],
+    ]);
+
+    const roomOnly = render(0);
+    assert.equal(roomOnly[2].steps.length, 6);
+    assert.match(roomOnly[2].steps[5], /another 1 h/);
+    assert.doesNotMatch(roomOnly[2].steps[5], /total 2 h.*do not add 2 h again/);
+    assert.doesNotMatch(roomOnly[2].steps[5], /Start of final preparation — 04:00/);
+    assert.ok(roomOnly[3].stepInfo[0].title.length > 0);
+    assert.deepEqual(Array.from(roomOnly[3].timers, (timer) => [timer.id, timer.seconds]), [
+      ['beginner-phase-c-preheat', 3600],
+    ]);
+  }
 }
 
 // Room-only Phase C -> final phase transition
 {
   const bakeAt = new Date('2027-04-12T18:00:00');
-  const clock = (at) => at.toISOString().slice(11, 16);
-  const labels = { hr: 'Završetak sobne fermentacije', en: 'End of room-temperature fermentation', de: 'Ende der Raumtemperatur-Fermentation', sl: 'Konec fermentacije pri sobni temperaturi' };
+  const roomRestUntilShaping = {
+    hr: 'kuglice ostaju pokrivene na sobnoj temperaturi do oblikovanja pizze',
+    en: 'keep the dough balls covered at room temperature until shaping',
+    de: 'Teigkugeln bleiben bis zum Formen der Pizza abgedeckt bei Raumtemperatur',
+    sl: 'kroglice ostanejo pokrite pri sobni temperaturi do oblikovanja pice',
+  };
+  const tegliaRestUntilPreparation = {
+    hr: 'tijesto ostaje pokriveno na sobnoj temperaturi do pripreme za tepsiju',
+    en: 'keep it covered at room temperature until tray preparation',
+    de: 'bis zur Blechvorbereitung abgedeckt bei Raumtemperatur',
+    sl: 'testo ostane pokrito pri sobni temperaturi do priprave za pekač',
+  };
   const cases = [
-    { oven: 'ooni', preheatAt: new Date('2027-04-12T17:40:00'), duration: '2 h 40 min', endAt: new Date('2027-04-12T17:40:00') },
-    { oven: 'homeStone', preheatAt: new Date('2027-04-12T17:00:00'), duration: '2 h', endAt: new Date('2027-04-12T17:00:00') },
+    { oven: 'ooni', preheatAt: new Date('2027-04-12T17:40:00'), duration: '2 h 40 min' },
+    { oven: 'homeStone', preheatAt: new Date('2027-04-12T17:00:00'), duration: '2 h' },
   ];
   for (const lang of languages) {
-    for (const { oven, preheatAt, duration, endAt } of cases) {
+    for (const { oven, preheatAt, duration } of cases) {
       const roomOnly = { fridgeHours: 0, roomBeforeFridgeHours: 2, roomAfterFridgeHours: 3, bakeAt, preheatAt };
       for (const flour of [...flours, 'glutenFree']) {
         for (const style of styles) {
@@ -544,38 +678,58 @@ for (const lang of languages) {
           assert.equal(phaseC.steps.length, 6);
           assert.equal(phaseC.stepInfo.length, 6);
           assert.ok(phaseC.steps[5].includes(duration), phaseC.steps[5]);
-          assert.ok(phaseC.steps[5].endsWith(`\n${labels[lang]} — ${clock(endAt)}`), phaseC.steps[5]);
-          assert.equal((phaseC.steps[5].match(/—/g) || []).length, 1);
+          assert.doesNotMatch(phaseC.steps[5], /Start of final preparation|Početak završne pripreme|Beginn der Endvorbereitung|Začetek končne priprave/);
+          assert.ok(phaseC.stepInfo[5].body.includes(roomRestUntilShaping[lang]), phaseC.stepInfo[5].body);
           assert.ok(!/6 h|6 hours/.test(phaseC.steps[5]));
           assert.ok(phaseC.stepInfo[5].body.length > 0);
           const finalPhase = result.at(-1);
           assert.ok(finalPhase.stepInfo[0].body.length > 0);
           assert.ok(!/temper(?:ing|iert|iranje)|temperira/i.test(finalPhase.steps[0]), finalPhase.steps[0]);
-          assert.equal(finalPhase.steps.length, 8);
+          assert.equal(finalPhase.steps.length, 7);
         }
         const teglia = buildBeginnerTegliaHomeSteps(roundPhases(flour, 'romana'), roomOnly, phaseBPlanFor(flour, 2, 'teglia'), 22, lang, 300, '4–5 min', { width: 30, length: 40 }, flour);
         const tegliaC = teglia.find((phase) => /(?:Phase|Faza) C\b/.test(phase.title));
-        assert.ok(tegliaC.steps[5].includes(duration), tegliaC.steps[5]);
-        assert.ok(tegliaC.steps[5].endsWith(`${labels[lang]} — ${clock(endAt)}`));
+        assert.doesNotMatch(tegliaC.steps[5], /Start of final preparation|Početak završne pripreme|Beginn der Endvorbereitung|Začetek končne priprave/);
+        assert.ok(tegliaC.stepInfo[5].body.includes(tegliaRestUntilPreparation[lang]), tegliaC.stepInfo[5].body);
         assert.ok(!/ball|kugel|kugl|kuglic/i.test(`${tegliaC.steps[5]} ${tegliaC.stepInfo[5].body}`));
-        assert.ok(teglia.at(-1).stepInfo[1].body.length > 0);
-        assert.ok(!/ball|kugel|kugl|kuglic/i.test(teglia.at(-1).steps[1]));
+        assert.ok(teglia.at(-1).stepInfo[0].body.length > 0);
+        assert.equal(teglia.at(-1).steps.length, 9);
+        assert.ok(!/ball|kugel|kugl|kuglic/i.test(teglia.at(-1).steps[0]));
       }
     }
     // Zero-length interval: no alarm line, existing step text retained.
     const noGap = buildBeginnerDirectHomeSteps(roundPhases('caputo00', 'neapolitan'), schedule(0, 2, 1), phaseBPlanFor('caputo00', 2), 22, 4, 300, 'homeStone', '4–5 min', lang, 'fresh', 'neapolitan', 30, 70, 100, 'caputo00', '1250 g', '250 g', 5);
-    assert.ok(!noGap[2].steps[5].includes(labels[lang]));
+    assert.ok(!/Start of final preparation|Početak završne pripreme|Beginn der Endvorbereitung|Začetek končne priprave/.test(noGap[2].steps[5]));
     // Fridge mode keeps its own Phase C step and final-phase tempering wording.
     const roomTimers = buildBeginnerDirectHomeSteps(roundPhases('caputo00', 'neapolitan'), schedule(0, 2, 1), phaseBPlanFor('caputo00', 2), 22, 4, 300, 'homeStone', '4–5 min', lang, 'fresh', 'neapolitan', 30, 70, 100, 'caputo00', '1250 g', '250 g', 5).at(-1).timers;
-    assert.equal(roomTimers[0].kind, 'roomToBake');
+    assert.equal(roomTimers[0].kind, 'preheat');
     assert.equal(roomTimers[0].seconds, 3600);
-    assert.equal(roomTimers[1].kind, 'preheat');
     const fridge = buildBeginnerDirectHomeSteps(roundPhases('caputo00', 'neapolitan'), schedule(8, 2, 3), phaseBPlanFor('caputo00', 2), 22, 4, 300, 'homeStone', '4–5 min', lang, 'fresh', 'neapolitan', 30, 70, 100, 'caputo00', '1250 g', '250 g', 5);
-    assert.ok(!fridge[2].steps[5].includes(labels[lang]));
+    assert.ok(!/Start of final preparation|Početak završne pripreme|Beginn der Endvorbereitung|Začetek končne priprave/.test(fridge[2].steps[5]));
     assert.equal(fridge.at(-1).stepInfo.length, 8);
     assert.equal(fridge[3].stepInfo.length, 1);
     assert.ok(!fridge[3].steps[0].includes('Alarm'));
     assert.equal(fridge.at(-1).timers[0].kind, 'preBake');
+  }
+}
+
+// The reported room-only plan keeps its preheat milestone at 03:53; only its wording changes.
+{
+  const ballAt = new Date('2027-04-13T02:48:00');
+  const preheatAt = new Date('2027-04-13T03:53:00');
+  const bakeAt = new Date('2027-04-13T04:53:00');
+  const reportedSchedule = {
+    fridgeHours: 0,
+    bakeAt,
+    roomAfterFridgeHours: (bakeAt.getTime() - ballAt.getTime()) / 3_600_000,
+  };
+  const end = getBeginnerRoomOnlyEnd(reportedSchedule, preheatAt);
+  assert.ok(end);
+  assert.equal(end.endAt.getTime(), preheatAt.getTime());
+  assert.equal(end.minutes, 65);
+  for (const lang of languages) {
+    const milestone = buildBeginnerRoomOnlyPhaseCEnd(lang, false, end, 125);
+    assert.ok(milestone.step.includes(({ hr: 'još 1 h 5 min', en: 'for another 1 h 5 min', de: 'noch 1 h 5 min', sl: 'še 1 h 5 min' })[lang]));
   }
 }
 

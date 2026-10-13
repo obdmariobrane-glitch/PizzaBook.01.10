@@ -21,6 +21,7 @@ import {
   getColdStartData,
   getPermissionState,
   requestAndGetDeviceToken,
+  requestStartupNotificationPermissionIfNeeded,
   isPushSupported,
 } from '../src/notifications';
 
@@ -31,6 +32,7 @@ setupHandlerAndChannel();
 
 const PUSH_INSTALLATION_ID_KEY = 'pushInstallationId';
 const UPDATE_ALERT_SHOWN_KEY = 'updateAlertShownVersion';
+const STARTUP_NOTIFICATION_PERMISSION_REQUESTED_KEY = 'startupNotificationPermissionRequested';
 
 async function getPushInstallationId() {
   const stored = await AsyncStorage.getItem(PUSH_INSTALLATION_ID_KEY);
@@ -45,15 +47,56 @@ function AuthGate() {
   const segments = useSegments();
   const router = useRouter();
   const [animationDone, setAnimationDone] = useState(false);
+  const [storedSettingsLoadStatus, setStoredSettingsLoadStatus] = useState<'loading' | 'loaded' | 'failed'>('loading');
+  const [startupPermissionCheckFinished, setStartupPermissionCheckFinished] = useState(false);
   const experienceLevel = useSyncExternalStore(subscribeExperienceLevel, getCachedExperienceLevel, getCachedExperienceLevel);
   const finishSplashAnimation = useCallback(() => setAnimationDone(true), []);
+  const startupPermissionSettled = startupPermissionCheckFinished
+    || Platform.OS === 'web'
+    || !isPushSupported()
+    || storedSettingsLoadStatus === 'failed';
 
   useEffect(() => {
-    loadExperienceLevel();
-    loadTemperatureUnit();
-    loadMeasurementSystem();
-    loadPreferredYeastType();
+    let active = true;
+    const loads: Array<[string, Promise<unknown>]> = [
+      ['experience level', loadExperienceLevel()],
+      ['temperature unit', loadTemperatureUnit()],
+      ['measurement system', loadMeasurementSystem()],
+      ['preferred yeast type', loadPreferredYeastType()],
+    ];
+    void Promise.all(loads.map(async ([setting, load]) => {
+      try {
+        await load;
+        return false;
+      } catch (error) {
+        console.error(`Unable to load saved ${setting}:`, error);
+        return true;
+      }
+    })).then((failures) => {
+      if (active) setStoredSettingsLoadStatus(failures.some(Boolean) ? 'failed' : 'loaded');
+    });
+    return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' || !isPushSupported() || storedSettingsLoadStatus === 'failed') return;
+    if (!animationDone || experienceLevel === undefined || storedSettingsLoadStatus !== 'loaded') return;
+
+    let active = true;
+    void (async () => {
+      try {
+        const alreadyRequested = await AsyncStorage.getItem(STARTUP_NOTIFICATION_PERMISSION_REQUESTED_KEY) === 'true';
+        await requestStartupNotificationPermissionIfNeeded(alreadyRequested, async () => {
+          await AsyncStorage.setItem(STARTUP_NOTIFICATION_PERMISSION_REQUESTED_KEY, 'true');
+        });
+      } catch (error) {
+        console.error('Unable to complete the startup notification permission check:', error);
+      } finally {
+        if (active) setStartupPermissionCheckFinished(true);
+      }
+    })();
+    return () => { active = false; };
+  }, [animationDone, experienceLevel, storedSettingsLoadStatus]);
 
   const openUpdate = async (url: string) => {
     try {
@@ -171,7 +214,7 @@ function AuthGate() {
 
   // Register push for every installed device, then associate it with the user after login.
   useEffect(() => {
-    if (Platform.OS === 'web' || !isPushSupported()) return;
+    if (Platform.OS === 'web' || !isPushSupported() || !startupPermissionSettled) return;
     (async () => {
       const token = await requestAndGetDeviceToken();
       if (!token) return;
@@ -189,7 +232,7 @@ function AuthGate() {
         });
       } catch {}
     })();
-  }, [user]);
+  }, [user, startupPermissionSettled]);
 
   // Auth gate: allow anonymous browsing. Only redirect logged-in users off /login.
   useEffect(() => {
@@ -202,11 +245,12 @@ function AuthGate() {
   useEffect(() => {
     if (experienceLevel === undefined) return;
     const inOnboarding = segments[0] === 'onboarding';
-    if (experienceLevel === null && !inOnboarding) router.replace('/onboarding');
+    const inProGuide = segments[0] === 'pro-guide';
+    if (experienceLevel === null && !inOnboarding && !inProGuide) router.replace('/onboarding');
     else if (experienceLevel !== null && inOnboarding) router.replace('/(tabs)');
   }, [experienceLevel, segments, router]);
 
-  if (loading || !animationDone || experienceLevel === undefined) {
+  if (loading || !animationDone || experienceLevel === undefined || storedSettingsLoadStatus === 'loading') {
     return <AnimatedSplash onFinish={finishSplashAnimation} />;
   }
 

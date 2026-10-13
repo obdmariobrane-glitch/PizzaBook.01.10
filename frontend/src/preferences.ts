@@ -4,7 +4,17 @@ import { storage } from './utils/storage';
 
 export type TemperatureUnit = 'celsius' | 'fahrenheit';
 export type MeasurementSystem = 'metric' | 'us';
-export type PreferredYeastType = 'fresh' | 'dry';
+export type PreferredYeastType = 'fresh' | 'activeDry' | 'dry';
+
+export function parsePreferredYeastType(value: unknown): PreferredYeastType | null {
+  return value === 'fresh' || value === 'activeDry' || value === 'dry' ? value : null;
+}
+
+export type LoadedCalculatorPreferences = {
+  temperatureUnit: TemperatureUnit;
+  measurementSystem: MeasurementSystem;
+  preferredYeastType: PreferredYeastType;
+};
 
 function createPreference<T extends string>(key: string, validValues: readonly T[], defaultValue: T) {
   let cached: T | undefined;
@@ -23,6 +33,10 @@ function createPreference<T extends string>(key: string, validValues: readonly T
       listeners.forEach((listener) => listener());
       return cached;
     },
+    apply: (value: T): void => {
+      cached = value;
+      listeners.forEach((listener) => listener());
+    },
     set: async (value: T): Promise<boolean> => {
       cached = value;
       listeners.forEach((listener) => listener());
@@ -33,7 +47,7 @@ function createPreference<T extends string>(key: string, validValues: readonly T
 
 const temperatureUnitPref = createPreference<TemperatureUnit>('temperatureUnit', ['celsius', 'fahrenheit'], 'celsius');
 const measurementSystemPref = createPreference<MeasurementSystem>('measurementSystem', ['metric', 'us'], 'metric');
-const preferredYeastTypePref = createPreference<PreferredYeastType>('preferredYeastType', ['fresh', 'dry'], 'fresh');
+const preferredYeastTypePref = createPreference<PreferredYeastType>('preferredYeastType', ['fresh', 'activeDry', 'dry'], 'fresh');
 
 export const getCachedTemperatureUnit = temperatureUnitPref.getCached;
 export const subscribeTemperatureUnit = temperatureUnitPref.subscribe;
@@ -49,3 +63,9 @@ export const getCachedPreferredYeastType = preferredYeastTypePref.getCached;
 export const subscribePreferredYeastType = preferredYeastTypePref.subscribe;
 export const loadPreferredYeastType = preferredYeastTypePref.load;
 export const setPreferredYeastType = preferredYeastTypePref.set;
+
+export function applyLoadedCalculatorPreferences(preferences: LoadedCalculatorPreferences): void {
+  temperatureUnitPref.apply(preferences.temperatureUnit);
+  measurementSystemPref.apply(preferences.measurementSystem);
+  preferredYeastTypePref.apply(preferences.preferredYeastType);
+}

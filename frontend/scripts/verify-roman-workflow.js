@@ -19,6 +19,8 @@ const requiredMarkers = [
   "setOven('homePan')",
   'romanFormat, trayWidth, trayLength',
   'romanFormat: input.romanFormat',
+  'if (!isBeginner) setStyleExpanded(false);',
+  'styleExpanded && !isBeginner && pizzaStyle === \'romana\'',
 ];
 
 const missingMarkers = requiredMarkers.filter((marker) => !source.includes(marker) && !calculatorSource.includes(marker));

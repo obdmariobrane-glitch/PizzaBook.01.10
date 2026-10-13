@@ -1,5 +1,6 @@
 import { View, Text, StyleSheet, Pressable, ScrollView, Image, ImageSourcePropType } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import Icon from '@react-native-vector-icons/ionicons';
 
 import { useT } from '../src/i18n/LanguageProvider';
@@ -9,6 +10,7 @@ import { setExperienceLevel, UserExperienceLevel } from '../src/experienceLevel'
 export default function Onboarding() {
   const { t } = useT();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
 
   const choose = (level: UserExperienceLevel) => {
     void setExperienceLevel(level);
@@ -22,9 +24,17 @@ export default function Onboarding() {
       >
         <View style={styles.brandRow}>
           <View style={styles.brandMark}>
-            <Icon name="pizza-outline" size={20} color="#fff" />
+            <Image
+              source={require('../assets/images/pizza-slice-mark.png')}
+              style={styles.brandMarkImage}
+              resizeMode="contain"
+              accessibilityLabel="PizzaBook"
+            />
           </View>
-          <Text style={styles.brand}>PizzaBook</Text>
+          <Text style={styles.brand}>
+            <Text style={styles.brandPizza}>Pizza</Text>
+            <Text style={styles.brandBook}>Book</Text>
+          </Text>
         </View>
         <View style={styles.intro}>
           <Text style={styles.title}>{t.onboarding.title}</Text>
@@ -54,6 +64,16 @@ export default function Onboarding() {
             onPress={() => choose('pro')}
           />
         </View>
+        <GuideCard
+          testID="onboarding-pro-guide"
+          title={t.onboarding.guideTitle}
+          lead={t.onboarding.guideLead}
+          description={t.onboarding.guideDescription}
+          benefits={[t.onboarding.guideBenefit1, t.onboarding.guideBenefit2, t.onboarding.guideBenefit3]}
+          assetLabel={t.onboarding.proAssetLabel}
+          chefSource={require('../assets/images/chef-pro-guide.png')}
+          onPress={() => router.push('/pro-guide')}
+          />
       </ScrollView>
     </View>
   );
@@ -119,12 +139,57 @@ function ExperienceCard({
   );
 }
 
+type GuideCardProps = {
+  testID: string;
+  title: string;
+  lead: string;
+  description: string;
+  benefits: string[];
+  assetLabel: string;
+  chefSource: ImageSourcePropType;
+  onPress: () => void;
+};
+
+function GuideCard({ testID, title, lead, description, benefits, assetLabel, chefSource, onPress }: GuideCardProps) {
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={`${title}. ${lead} ${description} ${benefits.join('. ')}`}
+      onPress={onPress}
+      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+    >
+      <View style={styles.cardBody}>
+        <View style={styles.guideCopy}>
+          <Text style={styles.cardTitle}>{title}</Text>
+          <Text style={styles.cardLead}>{lead}</Text>
+          <Text style={styles.cardDesc}>{description}</Text>
+          <View style={styles.benefits}>
+            {benefits.map((benefit) => (
+              <View key={benefit} style={styles.benefitRow}>
+                <Icon name="checkmark" size={15} color={COLORS.success} />
+                <Text style={styles.benefitText}>{benefit}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+        <View style={styles.guideChefSlot} pointerEvents="none">
+          <Image source={chefSource} style={[styles.chefImage, styles.guideChefImage]} resizeMode="contain" accessibilityLabel={assetLabel} />
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.surface },
   content: { paddingHorizontal: SPACING.lg, gap: SPACING.lg },
   brandRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.sm },
-  brandMark: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center', borderRadius: RADIUS.md, backgroundColor: COLORS.brand },
-  brand: { color: COLORS.onSurface, fontSize: 20, fontWeight: '900' },
+  brandMark: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
+  brandMarkImage: { width: '100%', height: '100%' },
+  brand: { fontSize: 20, fontWeight: '900' },
+  brandPizza: { color: '#472212' },
+  brandBook: { color: '#FB5516' },
   intro: { gap: SPACING.xs, maxWidth: 360 },
   title: { fontSize: 28, lineHeight: 33, fontWeight: '800', color: COLORS.onSurface },
   subtitle: { fontSize: 15, lineHeight: 21, color: COLORS.muted },
@@ -136,6 +201,7 @@ const styles = StyleSheet.create({
   badgeText: { color: COLORS.onBrandTertiary, fontSize: 11, fontWeight: '900', letterSpacing: 0.4 },
   cardBody: { position: 'relative', flexDirection: 'row', alignItems: 'flex-start' },
   cardCopy: { width: '67%', minWidth: 0, gap: SPACING.xs, zIndex: 1 },
+  guideCopy: { width: '56%', minWidth: 0, gap: SPACING.xs, zIndex: 1 },
   cardTitle: { color: COLORS.onSurface, fontSize: 22, lineHeight: 27, fontWeight: '900' },
   cardLead: { color: COLORS.brand, fontSize: 15, lineHeight: 20, fontWeight: '800' },
   cardDesc: { color: COLORS.onSurfaceTertiary, fontSize: 13, lineHeight: 18, marginTop: 2 },
@@ -143,5 +209,7 @@ const styles = StyleSheet.create({
   benefitRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
   benefitText: { flex: 1, color: COLORS.onSurface, fontSize: 13, lineHeight: 17, fontWeight: '600' },
   chefSlot: { position: 'absolute', right: -8, bottom: -10, width: 148, height: 166, alignItems: 'center', justifyContent: 'center', zIndex: 0 },
+  guideChefSlot: { position: 'absolute', right: -8, bottom: -10, width: 148, height: 166, alignItems: 'center', justifyContent: 'center', zIndex: 0 },
+  guideChefImage: { transform: [{ scale: 1.2 }] },
   chefImage: { width: '100%', height: '100%' },
 });

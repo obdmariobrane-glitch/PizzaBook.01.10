@@ -235,11 +235,11 @@ assert.match(uiSource, /beginnerHydrationFor\(pizzaStyle, flour\)/);
 
 // Teglia ROOM_ONLY recipe: no refrigerator, authoritative final window, 15 min shaping explained
 assert.match(uiSource, /function buildBeginnerTegliaHomeSteps/);
-assert.match(uiSource, /buildBeginnerTegliaHomeSteps\(beginnerDirectRecipeSteps, directHomeSchedule, beginnerPhaseBPlan!, roomTemp, lang, ovenTemp, bakingTimeRange, \{ width: trayWidth, length: trayLength \}, flour, dims\.sauce, dims\.cheese, temperatureUnit\)/);
+assert.match(uiSource, /buildBeginnerTegliaHomeSteps\(beginnerDirectRecipeSteps, directHomeSchedule, beginnerPhaseBPlan!, roomTemp, lang, ovenTemp, bakingTimeRange, \{ width: trayWidth, length: trayLength \}, flour, dims\.sauce, dims\.cheese, temperatureUnit, pizzas, weight\(effectiveBall\), weight\(dough\.totalDough\)\)/);
 assert.match(uiSource, /phases\.filter\(\(phase\) => !coldTitle\.test\(phase\.title\)\)/);
 
 // Fridge-out is a scheduled timestamp, not a new duration or alarm.
-assert.match(uiSource, /const coldFinalStart = refrigerated \? buildBeginnerColdFinalStart\(schedule, lang, true\) : null/);
+assert.match(uiSource, /const coldFinalStart =\s*refrigerated\s*\?\s*\{\s*\.\.\.buildBeginnerColdFinalStart\(schedule, lang, true\)/);
 assert.match(uiSource, /coldFinalStart!\.step/);
 assert.match(uiSource, /buildBeginnerColdFinalStart\(schedule, lang, true\)/);
 
@@ -251,7 +251,7 @@ assert.match(units.formatUnitText('Mix 1000 g flour and 620 g water', 'fahrenhei
 
 // Saved-recipe load path reuses the authoritative Beginner normalization
 {
-  const m = uiSource.match(/const applyBeginnerNormalized = [\s\S]*?\n  \};/);
+  const m = uiSource.match(/function applyBeginnerNormalized\(saved: Record<string, any>\) \{[\s\S]*?\n  \}/);
   assert.ok(m, 'applyBeginnerNormalized');
   assert.equal((m[0].match(/normalizeBeginnerSavedState\(/g) ?? []).length, 1);
   const recipeFn = uiSource.match(/const applyRecipe = [\s\S]*?\n  \};/)[0];
@@ -276,16 +276,25 @@ assert.match(units.formatUnitText('Mix 1000 g flour and 620 g water', 'fahrenhei
   );
 }
 
-// ---- All six flours in Beginner ----
+// ---- All six flours stay available; Pro no longer has premium access gates ----
 {
   const { beginnerHydrationFor, doughCalc, BASE_FLOURS } = calculator;
-  // Source: Beginner is not blocked by the premium flour lock; Pro keeps it
-  assert.match(uiSource, /if \(!isPremiumUnlocked && !isBeginner && !FREE_FLOUR_TYPES\.includes\(f\)\)/);
-  assert.match(uiSource, /const locked = !isPremiumUnlocked && !isBeginner && !FREE_FLOUR_TYPES\.includes\(f\.key\)/);
+  assert.doesNotMatch(uiSource, /isPremiumUnlocked|FREE_PIZZA_STYLE|FREE_FLOUR_TYPES|lock-closed|Pizzabook Premium|Otključaj Premium/);
+  assert.match(uiSource, /const changeFlour = \(f: FlourType\) => \{\s*setFlour\(f\)/);
+  assert.match(uiSource, /const changeStyle = \(nextStyle: PizzaStyle\) => \{\s*const next = PIZZA_STYLE_PROFILES\[nextStyle\]/);
+  assert.match(uiSource, /\(\['neapolitan', 'romana', 'ny_style'\] as PizzaStyle\[\]\)\.map/);
+  assert.match(uiSource, /FLOURS_BY_LANG\[lang\]\.map\(\(f\) => \{/);
   assert.match(uiSource, /\{isCustom \? \(\s*<View style=\{styles\.blendPanel\}>/);
-  assert.match(uiSource, /restoreBeginnerStyles \? isFlourType\(saved\.flour\)/);
+  assert.match(uiSource, /if \(isFlourType\(saved\.flour\)\) setFlour\(saved\.flour\)/);
+  assert.match(uiSource, /if \(saved\.pizzaStyle === 'neapolitan' \|\| saved\.pizzaStyle === 'romana' \|\| saved\.pizzaStyle === 'ny_style'\)/);
+  assert.match(uiSource, /if \(settings\.method\) setMethod\(settings\.flour === 'glutenFree' \? 'direct' : settings\.method\)/);
+  assert.match(uiSource, /flour !== 'glutenFree' \|\| m\.k === 'direct'/);
   // Pro-only strength controls remain hidden in Beginner
   assert.match(uiSource, /\{!isBeginner \? \(\s*<View style=\{\{ gap: SPACING\.sm, marginTop: SPACING\.md \}\}>/);
+  assert.match(uiSource, /if \(!user && isBeginner\) \{ router\.push\('\/login'\); return; \}/);
+  assert.match(uiSource, /localOnly=\{!user\}/);
+  assert.match(uiSource, /!user\s*\?\s*await saveProRecipe\(name, recipe, recipeId\)/);
+  assert.match(uiSource, /localOnly \? getProSavedRecipes\(\) : api\('\/api\/recipes'\)/);
 
   // Flour ids and blend persist through the single normalization path
   for (const flour of ['caputo00', 'manitoba', 'spelt', 'wholeWheat', 'glutenFree', 'custom']) {
@@ -341,6 +350,10 @@ assert.match(units.formatUnitText('Mix 1000 g flour and 620 g water', 'fahrenhei
   }
   assert.doesNotMatch(localized, /If oil is used|Če uporabljate olje/);
   assert.match(uiSource, /if \(plan\.behavior === 'glutenFree'\) \{\s*return \[/);
+  assert.match(uiSource, /flour === 'glutenFree' && !isRomanTeglia && index === \(directRecipeFridgeHours > 0 \? 4 : 3\)[\s\S]*kind: 'bakingGlutenFree'/);
+  assert.match(uiSource, /mixingGuideKind === 'bakingGlutenFree'\s*\?\s*\(\{ hr: 'FAZA E', en: 'PHASE E', de: 'PHASE E', sl: 'FAZA E' \}\[lang\]\)/);
+  assert.match(uiSource, /mixingGuideKind === 'bakingGlutenFree'\s*\?\s*\(\{ hr: 'Temperiranje, oblikovanje i pečenje', en: 'Tempering, shaping and baking'/);
+  assert.match(uiSource, /phase-e-gluten-free-visual-guide-close-icon/);
   for (const lng of ['hr', 'en', 'de', 'sl']) {
     const dh = trs[lng].planner.stepCopy.directHomeCopy;
     assert.ok(dh.shapingGlutenFree && !/semol|zdrob|Semola/i.test(dh.shapingGlutenFree), lng);

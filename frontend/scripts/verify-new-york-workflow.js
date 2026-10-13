@@ -26,7 +26,11 @@ const profile = PIZZA_STYLE_PROFILES.ny_style;
 assert.equal(profile.defaultDiameter, 35);
 assert.equal(profile.ballWeight, 375);
 assert.match(uiSource, /if \(isBeginner && nextStyle === 'ny_style'\) setDiameter\(next\.defaultDiameter\)/);
-assert.match(uiSource, /pizzaStyle === 'ny_style' && isBeginner/);
+assert.match(uiSource, /isRomanTeglia, pizzaStyle === 'ny_style', pizzaStyle === 'neapolitan'/, 'Pro and Beginner Direct, Biga, and Poolish steps receive the New York protocol');
+assert.match(uiSource, /pizzaStyle === 'ny_style' \? 'newYork' : 'napolitana'/, 'localized Pro steps select New York rather than Neapolitan shaping');
+assert.match(uiSource, /Gently stretch the dough outward from the center to an even thickness; keep the center slightly thinner for a foldable slice/);
+assert.match(uiSource, /Večjo kepico oblikujte s tanko sredino in čim bolj enakomerno debelino/);
+assert.match(uiSource, /Testo nežno raztegnite od sredine navzven do enakomerne debeline/);
 
 const onePizza = doughCalc({
   pizzas: 1, ballWeight: profile.ballWeight, hydration: profile.hydration,
@@ -84,8 +88,19 @@ assert.equal(units.formatUnitText('300 g water', 'celsius', 'metric'), '300 g wa
 
 assert.equal((translations.match(/directNyBakeDesc:/g) ?? []).length, 4);
 assert.equal((translations.match(/\{OVEN_TEMP_DISPLAY\}/g) ?? []).length, 4);
-assert.match(uiSource, /Bake the New York pizza for \$\{bakingTimeRange\}/);
+assert.match(uiSource, /const bakingTimeRange = formatBakingTimeRange\(oven, ovenTemp, lang\)/, 'Recipe card, detailed steps, and timer share the selected oven/temperature bake range');
+assert.match(uiSource, /Bake \$\{bakingTimeRange\} at \$\{ovenTemp\} °C/);
+assert.match(uiSource, /t\.calc\.styleInfo\.baking\}: \{formatTemperature\(ovenTemp, temperatureUnit\)\} · \{bakingTimeRange\}/, 'Style information uses the same selected-oven bake values as the detailed steps');
 assert.match(uiSource, /!isRomanTonda && !isNewYork/);
+assert.match(uiSource, /Bake the pizza for \$\{bakingTimeRange\} total/);
+assert.match(uiSource, /Bake the pizza on the bottom rack for \$\{bakingTimeRange\} total/);
+assert.match(uiSource, /Bake for \$\{bakingTimeRange\} total, including any grill finish/);
+assert.doesNotMatch(uiSource, /Bake the pizza for approximately 60–90 seconds|Bake the pizza on the bottom of the oven for 5–7 minutes/);
+assert.match(uiSource, /const range = getBakingTimeRange\(oven, ovenTemp\)/, 'Beginner bake timer uses the same oven/temperature-derived range');
+assert.match(uiSource, /dims\.cheese, dims\.sauce/);
+assert.match(uiSource, /use approximately \$\{sauceAmount\} g sauce and \$\{cheeseAmount\} g mozzarella/);
+assert.match(uiSource, /Mijesite samo dok se sastojci povežu i ne ostanu suhi dijelovi; završite razvoj na radnoj površini/);
+assert.match(uiSource, /mijesite dlanovima 10–15 minuta dok površina ne postane glatka/);
 assert.match(translations, /A larger dough ball makes a thin center with even thickness for a foldable slice/);
 assert.match(translations, /Ein größerer Teigballen ergibt eine dünne Mitte mit gleichmäßiger Dicke/);
 assert.match(translations, /Večja kepica omogoča tanko sredino in enakomerno debelino/);

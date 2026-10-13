@@ -4,18 +4,21 @@ import { translations, Lang, Translation } from './translations';
 import { getCachedTemperatureUnit, subscribeTemperatureUnit, getCachedMeasurementSystem, subscribeMeasurementSystem } from '../preferences';
 import { formatUnitText } from '../units';
 
-type Ctx = { lang: Lang; setLang: (l: Lang) => void; t: Translation };
-const LanguageContext = createContext<Ctx>({ lang: 'hr', setLang: () => {}, t: translations.hr });
+type Ctx = { lang: Lang; languageLoaded: boolean; setLang: (l: Lang) => void; t: Translation };
+const LanguageContext = createContext<Ctx>({ lang: 'hr', languageLoaded: false, setLang: () => {}, t: translations.hr });
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [lang, setLangState] = useState<Lang>('hr');
+  const [languageLoaded, setLanguageLoaded] = useState(false);
   const temperatureUnit = useSyncExternalStore(subscribeTemperatureUnit, getCachedTemperatureUnit, getCachedTemperatureUnit) ?? 'celsius';
   const measurementSystem = useSyncExternalStore(subscribeMeasurementSystem, getCachedMeasurementSystem, getCachedMeasurementSystem) ?? 'metric';
 
   useEffect(() => {
     AsyncStorage.getItem('lang').then(v => {
       if (v === 'hr' || v === 'en' || v === 'de' || v === 'sl') setLangState(v);
-    });
+    }).catch((error) => {
+      console.error('Could not load the saved language preference.', error);
+    }).finally(() => setLanguageLoaded(true));
   }, []);
 
   const setLang = (l: Lang) => {
@@ -26,7 +29,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const t = useMemo(() => formatTranslationTree(translations[lang], temperatureUnit, measurementSystem) as Translation, [lang, temperatureUnit, measurementSystem]);
 
   return (
-    <LanguageContext.Provider value={{ lang, setLang, t }}>
+    <LanguageContext.Provider value={{ lang, languageLoaded, setLang, t }}>
       {children}
     </LanguageContext.Provider>
   );
