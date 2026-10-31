@@ -1,14 +1,15 @@
 import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@react-native-vector-icons/ionicons';
 
 import { useAuth } from '../src/auth';
 import { useT } from '../src/i18n/LanguageProvider';
 import { COLORS, SPACING, RADIUS } from '../src/theme';
+import { OFFLINE_ONLY_MODE } from '../src/offlineMode';
 
-export default function AccountDeletion() {
+function AccountDeletionContent() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t } = useT();
@@ -63,6 +64,11 @@ export default function AccountDeletion() {
       </ScrollView>
     </View>
   );
+}
+
+export default function AccountDeletion() {
+  if (OFFLINE_ONLY_MODE) return <Redirect href="/(tabs)" />;
+  return <AccountDeletionContent />;
 }
 
 const styles = StyleSheet.create({

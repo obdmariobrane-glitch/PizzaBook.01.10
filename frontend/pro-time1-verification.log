@@ -1,0 +1,60 @@
+$ npx tsc --noEmit
+PASS
+$ node scripts/verify-tempering-alignment.mjs
+Pro final-rest alignment passed. Direct 4×260 g @22°C, 2 h room + 24 h fridge: yeast 0.60 g -> 0.52 g (eTotal 5.2 -> 5.9; 38 min final rest).
+$ npm run check:dough-calc
+
+> frontend@1.0.0 check:dough-calc
+> node ./scripts/verify-dough-calc.js
+
+doughCalc profile compatibility checks passed.
+$ npm run check:home-pizza-plan
+
+> frontend@1.0.0 check:home-pizza-plan
+> node ./scripts/verify-home-pizza-plan.js
+
+Home Pizza schedule and fermentation window checks passed.
+$ npm run check:beginner-direct-schedule
+
+> frontend@1.0.0 check:beginner-direct-schedule
+> node ./scripts/verify-beginner-direct-schedule.js
+
+Beginner Direct cold cap and delayed-start checks passed.
+$ npm run check:beginner-plan-persistence
+
+> frontend@1.0.0 check:beginner-plan-persistence
+> node ./scripts/verify-beginner-plan-persistence.js
+
+Beginner plan persistence and async restore checks passed using production persistence, calculator, guided-plan, and restore-coordinator functions.
+$ npm run check:beginner-phase-sequence
+
+> frontend@1.0.0 check:beginner-phase-sequence
+> node ./scripts/verify-beginner-phase-sequence.js
+
+Beginner phase sequence and timer verification passed for HR/EN/DE/SL, styles, flour paths, and room/cold schedule variants.
+$ npm run check:beginner-recipe-gate
+
+> frontend@1.0.0 check:beginner-recipe-gate
+> node ./scripts/verify-beginner-recipe-gate.js
+
+Beginner recipe gate checks passed.
+$ npm run check:beginner-final-fixes
+
+> frontend@1.0.0 check:beginner-final-fixes
+> node ./scripts/verify-beginner-final-fixes.js
+
+Beginner Planner fold, ball-weight, and short-time warning checks passed.
+$ npm run check:roman-workflow
+
+> frontend@1.0.0 check:roman-workflow
+> node ./scripts/verify-roman-workflow.js
+
+Romana Tonda/Teglia workflow check passed.
+$ npm run check:pro-options
+
+> frontend@1.0.0 check:pro-options
+> node ./scripts/verify-pro-options.js
+
+Pro options and local saved-recipe access checks passed.
+$ git diff --check
+PASS

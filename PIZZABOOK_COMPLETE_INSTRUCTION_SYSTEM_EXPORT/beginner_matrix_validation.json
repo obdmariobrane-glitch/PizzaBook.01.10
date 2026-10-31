@@ -1,0 +1,37 @@
+{
+  "generated_at": "2026-10-13T08:21:11.555Z",
+  "total": 576,
+  "passed": 576,
+  "failed": 0,
+  "dimensions": {
+    "languages": [
+      "hr",
+      "en",
+      "de",
+      "sl"
+    ],
+    "styles": [
+      "neapolitan",
+      "romana",
+      "ny_style"
+    ],
+    "flours": [
+      "caputo00",
+      "manitoba",
+      "spelt",
+      "wholeWheat",
+      "glutenFree",
+      "custom"
+    ],
+    "mixings": [
+      "hand",
+      "mixer"
+    ],
+    "schedules": [
+      "unscheduled",
+      "roomOnly",
+      "fridgeRoom"
+    ]
+  },
+  "failures": []
+}

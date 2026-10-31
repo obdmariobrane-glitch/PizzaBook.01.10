@@ -1,0 +1,976 @@
+diff --git a/frontend/app/settings.tsx b/frontend/app/settings.tsx
+index 914ea9c..9d3c94b 100644
+--- a/frontend/app/settings.tsx
++++ b/frontend/app/settings.tsx
+@@ -1,15 +1,16 @@
+ import { useSyncExternalStore } from 'react';
+-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
++import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions } from 'react-native';
+ import { useSafeAreaInsets } from 'react-native-safe-area-context';
+ import { useRouter } from 'expo-router';
++import Constants from 'expo-constants';
+ import Icon from '@react-native-vector-icons/ionicons';
+ 
+ import { useT } from '../src/i18n/LanguageProvider';
+-import { LANGS, Lang } from '../src/i18n/translations';
++import { LANGS } from '../src/i18n/translations';
+ import { COLORS, SPACING, RADIUS } from '../src/theme';
+-import { UserExperienceLevel, getCachedExperienceLevel, setExperienceLevel, subscribeExperienceLevel } from '../src/experienceLevel';
++import { getCachedExperienceLevel, setExperienceLevel, subscribeExperienceLevel } from '../src/experienceLevel';
+ import {
+-  MeasurementSystem, PreferredYeastType,
++  MeasurementSystem,
+   setTemperatureUnit,
+   getCachedMeasurementSystem, setMeasurementSystem, subscribeMeasurementSystem,
+   getCachedPreferredYeastType, setPreferredYeastType, subscribePreferredYeastType,
+@@ -18,65 +19,121 @@ import {
+ export default function Settings() {
+   const insets = useSafeAreaInsets();
+   const router = useRouter();
++  const { width } = useWindowDimensions();
+   const { t, lang, setLang } = useT();
+   const experienceLevel = useSyncExternalStore(subscribeExperienceLevel, getCachedExperienceLevel, getCachedExperienceLevel);
+   const measurementSystem = useSyncExternalStore(subscribeMeasurementSystem, getCachedMeasurementSystem, getCachedMeasurementSystem) ?? 'metric';
+   const preferredYeastType = useSyncExternalStore(subscribePreferredYeastType, getCachedPreferredYeastType, getCachedPreferredYeastType) ?? 'fresh';
++  const isWide = width >= 640;
++  const appVersion = Constants.expoConfig?.version;
+ 
+-  // V1: Units also selects its normal temperature display; temperatureUnit stays a separate preference so it can be split later.
+   const chooseUnits = (system: MeasurementSystem) => {
+     void setMeasurementSystem(system);
+     void setTemperatureUnit(system === 'us' ? 'fahrenheit' : 'celsius');
+   };
+ 
+-  const chip = (active: boolean, label: string, onPress: () => void, testID: string) => (
+-    <Pressable key={testID} testID={testID} onPress={onPress} style={[styles.chip, active && styles.chipActive]}>
+-      <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
++  const choice = (active: boolean, label: string, onPress: () => void, testID: string) => (
++    <Pressable
++      key={testID}
++      testID={testID}
++      accessibilityRole="radio"
++      accessibilityLabel={label}
++      accessibilityState={{ checked: active, selected: active }}
++      aria-checked={active}
++      onPress={onPress}
++      style={[styles.choice, active && styles.choiceActive]}
++    >
++      <Text style={[styles.choiceText, active && styles.choiceTextActive]}>{label}</Text>
+     </Pressable>
+   );
+ 
++  const rowStyle = [styles.row, isWide ? styles.rowWide : styles.rowNarrow];
++  const choiceGroupStyle = [styles.choiceGroup, isWide && styles.choiceGroupWide];
++
+   return (
+     <View style={[styles.root, { paddingTop: insets.top }]} testID="settings-screen">
+-      <View style={styles.header}>
+-        <Text style={styles.title}>{t.profile.preferences.title}</Text>
+-        <Pressable testID="settings-close" onPress={() => router.back()} hitSlop={8} style={styles.closeBtn}>
+-          <Icon name="close" size={22} color={COLORS.onSurface} />
+-        </Pressable>
+-      </View>
+-      <ScrollView contentContainerStyle={{ padding: SPACING.lg, paddingBottom: insets.bottom + SPACING.xxl, gap: SPACING.lg }}>
+-        <View style={styles.card}>
+-          <Text style={styles.section}>{t.profile.language}</Text>
+-          <View style={styles.chipRow}>
+-            {LANGS.map((l) => chip(lang === l.code, l.label, () => setLang(l.code as Lang), `settings-lang-${l.code}`))}
+-          </View>
++      <View style={styles.headerOuter}>
++        <View style={styles.header}>
++          <Text style={styles.title}>{t.profile.preferences.title}</Text>
++          <Pressable
++            testID="settings-close"
++            accessibilityRole="button"
++            accessibilityLabel={t.common.close}
++            onPress={() => router.back()}
++            style={styles.closeBtn}
++          >
++            <Icon name="close" size={22} color={COLORS.onSurface} />
++          </Pressable>
+         </View>
++      </View>
++      <ScrollView
++        contentContainerStyle={[
++          styles.scrollContent,
++          { paddingBottom: insets.bottom + SPACING.xl },
++        ]}
++      >
++        <View style={styles.content}>
++          <View style={styles.card}>
++            <View style={[rowStyle, styles.rowDivider]}>
++              <Text style={styles.label}>{t.profile.language}</Text>
++              <View style={choiceGroupStyle} accessibilityRole="radiogroup" accessibilityLabel={t.profile.language}>
++                {LANGS.map((language) =>
++                  choice(
++                    lang === language.code,
++                    language.label,
++                    () => setLang(language.code),
++                    `settings-lang-${language.code}`,
++                  ),
++                )}
++              </View>
++            </View>
+ 
+-        <View style={styles.card}>
+-          <Text style={styles.section}>{t.profile.preferences.experienceLevel}</Text>
+-          <View style={styles.chipRow}>
+-            {chip(experienceLevel === 'beginner', t.profile.preferences.beginner, () => setExperienceLevel('beginner' as UserExperienceLevel), 'settings-experience-beginner')}
+-            {chip(experienceLevel === 'pro', t.profile.preferences.pro, () => setExperienceLevel('pro' as UserExperienceLevel), 'settings-experience-pro')}
+-          </View>
+-        </View>
++            <View style={[rowStyle, styles.rowDivider]}>
++              <Text style={styles.label}>{t.profile.preferences.experienceLevel}</Text>
++              <View style={choiceGroupStyle} accessibilityRole="radiogroup" accessibilityLabel={t.profile.preferences.experienceLevel}>
++                {choice(experienceLevel === 'beginner', t.profile.preferences.beginner, () => setExperienceLevel('beginner'), 'settings-experience-beginner')}
++                {choice(experienceLevel === 'pro', t.profile.preferences.pro, () => setExperienceLevel('pro'), 'settings-experience-pro')}
++              </View>
++            </View>
+ 
+-        <View style={styles.card}>
+-          <Text style={styles.section}>{t.profile.preferences.units}</Text>
+-          <View style={styles.chipRow}>
+-            {chip(measurementSystem === 'metric', t.profile.preferences.metric, () => chooseUnits('metric'), 'settings-units-metric')}
+-            {chip(measurementSystem === 'us', t.profile.preferences.us, () => chooseUnits('us'), 'settings-units-us')}
++            <View style={[rowStyle, styles.rowDivider]}>
++              <Text style={styles.label}>{t.profile.preferences.units}</Text>
++              <View style={choiceGroupStyle} accessibilityRole="radiogroup" accessibilityLabel={t.profile.preferences.units}>
++                {choice(measurementSystem === 'metric', t.profile.preferences.metric, () => chooseUnits('metric'), 'settings-units-metric')}
++                {choice(measurementSystem === 'us', t.profile.preferences.us, () => chooseUnits('us'), 'settings-units-us')}
++              </View>
++              <Text style={[styles.unitsHint, isWide && styles.unitsHintWide]}>
++                {measurementSystem === 'us' ? 'oz · lb · in · °F' : 'g · kg · cm · °C'}
++              </Text>
++            </View>
++
++            <View style={rowStyle}>
++              <Text style={styles.label}>{t.profile.preferences.yeast}</Text>
++              <View style={[styles.yeastOptions, isWide && styles.yeastOptionsWide]}>
++                <View style={choiceGroupStyle} accessibilityRole="radiogroup" accessibilityLabel={t.profile.preferences.yeast}>
++                  {choice(preferredYeastType === 'fresh', t.profile.preferences.fresh, () => setPreferredYeastType('fresh'), 'settings-yeast-fresh')}
++                  {choice(preferredYeastType === 'dry', t.profile.preferences.dry, () => setPreferredYeastType('dry'), 'settings-yeast-dry')}
++                </View>
++                <Text style={styles.yeastHint}>{t.profile.preferences.defaultYeastHint}</Text>
++              </View>
++            </View>
+           </View>
+-          <Text style={styles.hint}>
+-            {measurementSystem === 'us'
+-              ? 'oz · lb · °F'
+-              : 'g · kg · °C'}
+-          </Text>
+-        </View>
+ 
+-        <View style={styles.card}>
+-          <Text style={styles.section}>{t.profile.preferences.yeast}</Text>
+-          <View style={styles.chipRow}>
+-            {chip(preferredYeastType === 'fresh', t.profile.preferences.fresh, () => setPreferredYeastType('fresh' as PreferredYeastType), 'settings-yeast-fresh')}
+-            {chip(preferredYeastType === 'dry', t.profile.preferences.dry, () => setPreferredYeastType('dry' as PreferredYeastType), 'settings-yeast-dry')}
++          <View style={[styles.aboutRow, isWide && styles.aboutRowWide]}>
++            {appVersion ? (
++              <Text style={styles.versionText}>
++                {t.profile.preferences.version.replace('{VERSION}', appVersion)}
++              </Text>
++            ) : null}
++            <Pressable
++              testID="settings-privacy"
++              accessibilityRole="link"
++              onPress={() => router.push('/privacy')}
++              style={styles.privacyLink}
++            >
++              <Text style={styles.privacyText}>{t.profile.privacyPolicy}</Text>
++              <Icon name="chevron-forward" size={16} color={COLORS.brand} />
++            </Pressable>
+           </View>
+         </View>
+       </ScrollView>
+@@ -86,15 +143,85 @@ export default function Settings() {
+ 
+ const styles = StyleSheet.create({
+   root: { flex: 1, backgroundColor: COLORS.surface },
+-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md },
+-  title: { fontSize: 22, fontWeight: '800', color: COLORS.onSurface, letterSpacing: -0.5 },
+-  closeBtn: { width: 36, height: 36, borderRadius: RADIUS.pill, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.surfaceSecondary, borderWidth: 1, borderColor: COLORS.border },
+-  card: { backgroundColor: COLORS.surfaceSecondary, padding: SPACING.lg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.border, gap: SPACING.sm },
+-  section: { fontSize: 13, color: COLORS.muted, fontWeight: '700', textTransform: 'uppercase' },
+-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
+-  chip: { paddingHorizontal: SPACING.md, height: 40, borderRadius: RADIUS.pill, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' },
+-  chipActive: { backgroundColor: COLORS.brand, borderColor: COLORS.brand },
+-  chipText: { color: COLORS.onSurface, fontWeight: '600', fontSize: 14 },
+-  chipTextActive: { color: '#fff' },
+-  hint: { fontSize: 12, color: COLORS.muted },
++  headerOuter: { paddingHorizontal: SPACING.lg },
++  header: {
++    width: '100%',
++    maxWidth: 680,
++    minHeight: 64,
++    alignSelf: 'center',
++    flexDirection: 'row',
++    alignItems: 'center',
++    justifyContent: 'space-between',
++  },
++  title: { fontSize: 22, fontWeight: '800', color: COLORS.onSurface, letterSpacing: -0.5, flexShrink: 1 },
++  closeBtn: {
++    width: 48,
++    height: 48,
++    borderRadius: RADIUS.pill,
++    alignItems: 'center',
++    justifyContent: 'center',
++    backgroundColor: COLORS.surfaceSecondary,
++    borderWidth: 1,
++    borderColor: COLORS.border,
++  },
++  scrollContent: {
++    flexGrow: 1,
++    alignItems: 'center',
++    paddingHorizontal: SPACING.lg,
++    paddingTop: SPACING.md,
++  },
++  content: { width: '100%', maxWidth: 680, gap: SPACING.sm },
++  card: {
++    width: '100%',
++    backgroundColor: COLORS.surfaceSecondary,
++    paddingHorizontal: SPACING.lg,
++    paddingVertical: SPACING.xs,
++    borderRadius: RADIUS.lg,
++    borderWidth: 1,
++    borderColor: COLORS.border,
++  },
++  row: { gap: SPACING.md, paddingVertical: SPACING.md },
++  rowWide: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
++  rowNarrow: { flexDirection: 'column', alignItems: 'stretch' },
++  rowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: COLORS.divider },
++  label: { color: COLORS.onSurface, fontSize: 15, fontWeight: '700' },
++  choiceGroup: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: SPACING.sm },
++  choiceGroupWide: { flex: 1, justifyContent: 'flex-end' },
++  choice: {
++    minWidth: 88,
++    minHeight: 48,
++    paddingHorizontal: SPACING.md,
++    borderRadius: RADIUS.pill,
++    borderWidth: 1,
++    borderColor: COLORS.border,
++    backgroundColor: COLORS.surface,
++    alignItems: 'center',
++    justifyContent: 'center',
++  },
++  choiceActive: { backgroundColor: COLORS.brand, borderColor: COLORS.brand },
++  choiceText: { color: COLORS.onSurface, fontWeight: '600', fontSize: 14, textAlign: 'center' },
++  choiceTextActive: { color: '#fff' },
++  unitsHint: { color: COLORS.muted, fontSize: 12, lineHeight: 18 },
++  unitsHintWide: { minWidth: 124, textAlign: 'right' },
++  yeastOptions: { gap: SPACING.xs },
++  yeastOptionsWide: { flex: 1 },
++  yeastHint: { color: COLORS.muted, fontSize: 12, lineHeight: 18 },
++  aboutRow: {
++    minHeight: 56,
++    flexDirection: 'row',
++    flexWrap: 'wrap',
++    alignItems: 'center',
++    justifyContent: 'space-between',
++    gap: SPACING.sm,
++  },
++  aboutRowWide: { flexWrap: 'nowrap' },
++  versionText: { color: COLORS.muted, fontSize: 12 },
++  privacyLink: {
++    minHeight: 48,
++    flexDirection: 'row',
++    alignItems: 'center',
++    gap: SPACING.xs,
++    paddingHorizontal: SPACING.sm,
++  },
++  privacyText: { color: COLORS.brand, fontWeight: '600', fontSize: 13 },
+ });
+diff --git a/frontend/src/i18n/translations.ts b/frontend/src/i18n/translations.ts
+index 6f68f31..3f71bf5 100644
+--- a/frontend/src/i18n/translations.ts
++++ b/frontend/src/i18n/translations.ts
+@@ -71,12 +71,12 @@ export const translations = {
+     },
+     beginnerCalc: {
+       stepStyle: 'Kakvu pizzu želiš napraviti?', romanaQuestion: 'Koju Romanu želiš?', recommendedFlour: 'Preporučeno', stepPizzas: 'Koliko pizza?', stepBall: 'Veličina loptice',
+-      stepMethod: 'Kako ćeš zamijesiti tijesto?', stepFlour: 'Odaberi brašno', stepHydration: 'Hidracija', hydrationIdeal: 'Idealna', hydrationIdealState: 'Idealno',
++      stepMethod: 'Kako ćeš zamijesiti tijesto?', stepFlour: 'Odaberi brašno', stepHydration: 'Hidratacija', hydrationIdeal: 'Idealna', hydrationIdealState: 'Idealno',
+       stepOven: 'Koju pećnicu koristiš?', stepBake: 'Kada želiš pizzu peći?', stepConditions: 'Uvjeti kod kuće',
+       setBakeTime: 'Odaberi datum i vrijeme pečenja', bakeTime: 'Pečenje', homePlan: 'Tvoj plan za pizzu',
+       guidedProgress: 'Tvoj napredak', guidedNext: 'Sljedeći korak', guidedComplete: '✓ Gotovo', guidedCompleted: 'Gotovo',
+       guidedProgressCount: '{DONE}/{TOTAL} koraka', guidedNotifications: 'Obavijesti', guidedNotificationsOn: 'Uključene', guidedNotificationsOff: 'Isključene',
+-      guidedPermissionTitle: 'Obavijesti za tvoj recept', guidedPermissionBody: 'PizzaBook vas može obavijestiti kada je vrijeme za sljedeći korak.',
++      guidedPermissionTitle: 'Obavijesti za tvoj recept', guidedPermissionBody: 'PizzaBook te može obavijestiti kada je vrijeme za sljedeći korak.',
+       guidedAllow: 'Dopusti', guidedNotNow: 'Ne sada', guidedPermissionDenied: 'Obavijesti nisu dopuštene. Recept i odbrojavanje i dalje rade.',
+       guidedNotificationsUnavailable: 'Obavijesti nisu dostupne na ovom uređaju.', guidedNotificationError: 'Obavijesti se nisu mogle zakazati.',
+       guidedToday: 'Danas', guidedTomorrow: 'Sutra', guidedDue: 'Vrijeme je za ovaj korak.',
+@@ -89,7 +89,7 @@ export const translations = {
+         fold2Gentle: { title: 'Vrijeme je za drugi nježni Stretch & Fold', body: 'Napravite drugi nježni Stretch & Fold prema receptu.' },
+         fridgeIn: { title: 'Vrijeme je za hladnjak', body: 'Stavite pokriveno tijesto u hladnjak prema receptu.' },
+         fridgeInCombined: { title: 'Vrijeme je za dijeljenje, oblikovanje i hladnjak', body: 'Podijelite tijesto, oblikujte kuglice i stavite ih u hladnjak prema receptu.' },
+-        balling: { title: 'Vrijeme je za kuglanje 🍕', body: 'Podijelite i oblikujte tijesto prema receptu.' },
++        balling: { title: 'Vrijeme je za podjelu i oblikovanje kuglica 🍕', body: 'Podijelite i oblikujte tijesto prema receptu.' },
+         portioning: { title: 'Prva fermentacija je gotova', body: 'Pripremite bezglutenske porcije i stavite ih u hladnjak prema rasporedu.' },
+         trayPrepare: { title: 'Prva fermentacija je gotova', body: 'Pripremite tijesto kao jednu masu prema receptu.' },
+         doughRest: { title: 'Vrijeme je za odmor tijesta', body: 'Ostavite pokriveno tijesto da odmara prema receptu.' },
+@@ -195,7 +195,7 @@ export const translations = {
+       coldLong: 'Duga hladna (24-48h)',
+       results: 'Rezultati',
+       totalFlour: 'Ukupno brašno',
+-      totalWater: 'Ukupno voda',
++      totalWater: 'Ukupna voda',
+       waterTemp: 'Temp. vode',
+       yeastAmount: 'Kvasac',
+       saltAmount: 'Sol',
+@@ -251,7 +251,7 @@ export const translations = {
+           ],
+         },
+         C: {
+-          title: 'Faza C: Podjela i oblikovanje loptica (Bulice)',
++          title: 'Faza C: Podjela i oblikovanje kuglica',
+           steps: [
+             'Izrežite tijesto i precizno izmjerite komade željene gramaže iz kalkulatora.',
+             'Oblikujte čvrste, glatke loptice (bulice) i posložite ih u kutiju za tijesto.',
+@@ -259,7 +259,7 @@ export const translations = {
+           ],
+         },
+         D: {
+-          title: 'Faza D: Priprema, razvlačenje i nadijevanje',
++          title: 'Faza D: Oblikovanje i dodavanje nadjeva',
+           steps: [
+             'Izvadite loptice iz hladnjaka 15–20 minuta prije razvlačenja da malo omekšaju. Ako se približno udvostruče ranije, izvadite ih tada i pazite da ne predignu. Radnu površinu temeljito pospite semolom.',
+             'Prstima potiskujte zrak od središta prema rubovima, ostavljajući nedirnut rub širine cca 1 cm.',
+@@ -358,26 +358,26 @@ export const translations = {
+         ovenRomanDesc: 'Zagrij pećnicu prema Romana uputama 45-60 minuta prije pečenja.',
+         ovenNyDesc: 'Zagrij pećnicu prema New York Style uputama 35-50 minuta prije pečenja.',
+         warmTitle: 'Izvadi loptice iz hladnjaka',
+-        warmDesc: 'Izvadi {STYLE} loptice 1 sat i 15 minuta prije pečenja ili kada se približno udvostruče, ali ne dopusti predugu fermentaciju.',
++        warmDesc: 'Izvadi {STYLE} loptice {TEMPERING} prije pečenja ili kada se približno udvostruče, ali ne dopusti predugu fermentaciju.',
+         coldTitle: 'Hladna fermentacija kugli',
+-        coldDesc: 'Drži kugle {HOURS} sati u zatvorenoj kutiji na 4°C. Zatim ih izvadi 1 sat i 15 minuta prije pečenja ili kada se približno udvostruče.',
++        coldDesc: 'Drži kugle {HOURS} sati u zatvorenoj kutiji na {FRIDGE_TEMP}. Zatim ih izvadi {TEMPERING} prije pečenja ili kada se približno udvostruče.',
+         bulkTitle: 'Bulk fermentacija',
+-        bulkDesc: 'Ostavi {STYLE} tijesto 1 sat na sobnoj temperaturi, zatim podijeli i oblikuj kugle.',
++        bulkDesc: 'Ostavi {STYLE} tijesto {HOURS} na sobnoj temperaturi, zatim podijeli i oblikuj kugle.',
+         directMixTitle: 'Zamijesi tijesto',
+         directRomanDesc: 'Direktno: dodaj 90% vode s kvascem, zatim brašno, sol, ostatak vode i 3-5% ulja. Ručno mijesi 12-15 minuta ili mikserom 8-10 minuta.',
+         directNyDesc: 'Direktno: dodaj 90% vode s kvascem i šećerom, zatim brašno, sol, ostatak vode i 2-4% ulja. Ručno mijesi 12-15 minuta ili mikserom 8-10 minuta.',
+         directNyBakeDesc: 'Pecite New York pizzu {BAKE_TIME} na {OVEN_TEMP_DISPLAY}.',
+         finalBulkTitle: 'Bulk fermentacija nakon završnog zamjesa',
+-        finalBulkDesc: 'Ostavi završno tijesto 1 sat na sobnoj temperaturi, zatim oblikuj kugle.',
++        finalBulkDesc: 'Ostavi završno tijesto {HOURS} na sobnoj temperaturi, zatim oblikuj kugle.',
+         finalMixTitle: 'Završni zamjes ({PREFERMENT})',
+         bigaName: 'Biga',
+         poolishName: 'Poolish',
+         finalBigaDesc: 'Spoji Bigu s preostalim sastojcima; ručno mijesi 12-14 minuta ili radi mikserom oko 8 minuta.',
+         finalPoolishDesc: 'Spoji Poolish s preostalim sastojcima; ručno mijesi 10-12 minuta ili radi mikserom 7-9 minuta.',
+         bigaTitle: 'Izrada Bige',
+-        bigaDesc: 'Napravi bigu s 44% vode i ostavi 16-18 sati na 16-18°C.',
++        bigaDesc: 'Napravi bigu s 44% vode; ostavi je {ROOM_HOURS} na sobnoj temperaturi, zatim {FRIDGE_HOURS} u hladnjaku.',
+         poolishTitle: 'Izrada Poolisha',
+-        poolishDesc: 'Napravi Poolish s omjerom vode i brašna 1:1 i ostavi 16-24 sata u hladnjaku.',
++        poolishDesc: 'Napravi Poolish s omjerom vode i brašna 1:1; ostavi ga {ROOM_HOURS} na sobnoj temperaturi, zatim {FRIDGE_HOURS} u hladnjaku.',
+         ballsTitle: 'Formiranje bulica',
+         ballsDesc: 'Napravi loptice ({WEIGHT} g) i ostavi ih na sobnoj temperaturi da odstoje.',
+         refreshTitle: 'Završni zamjes (rinfresco)',
+@@ -391,13 +391,17 @@ export const translations = {
+           preheat: 'Zagrij odabranu pećnicu/kamen uz ovaj alarm; lansiraj pizzu u planirano vrijeme pečenja.',
+           bake: 'Lansiraj pizzu točno u planirano vrijeme pečenja.',
+         },
+-        poolishMixTitle: 'Zamijesi Poolish',
++        poolishMixTitle: 'Pripremi poolish',
+         poolishMixDesc: '35% brašna, 100% hidratacija, 0,1% kvasca. Ostavi 12-14 sati na sobnoj temperaturi.',
+         directTitle: 'Zamijesi tijesto',
+         directDesc: 'Direktna metoda za Napolitanu: zamijesi sve sastojke i stavi tijesto na fermentaciju.',
+         directHomeCopy: {
+-          start: 'Započni direktno miješanje prema izračunatim količinama; bulk na {ROOM_TEMP} traje do planiranog alarma za kuglanje.',
++          start: 'Započni direktni zamjes prema izračunatim količinama; prva fermentacija na {ROOM_TEMP} traje do planiranog podsjetnika za oblikovanje kuglica.',
+           ballingFridge: 'Sada podijeli tijesto na kuglice od {WEIGHT} g, oblikuj ih i odmah stavi u hladnjak na {HOURS} pri {FRIDGE_TEMP}.',
++          ballingTitle: 'Oblikuj kuglice',
++          balling: 'Podijeli tijesto na kuglice od {WEIGHT} g i oblikuj ih.',
++          fridgeInTitle: 'Stavi kuglice u hladnjak',
++          fridgeIn: 'Stavi oblikovane kuglice u hladnjak na {HOURS} pri {FRIDGE_TEMP}.',
+           roomOnlyBalling: 'Sada podijeli tijesto na kuglice od {WEIGHT} g i oblikuj ih; do pečenja ih ostavi pokrivene na {ROOM_TEMP} ukupno {ROOM_AFTER}, uključujući završnu pripremu.',
+           finalRoom: 'Izvadi kuglice iz hladnjaka i ostavi ih {ROOM_AFTER} na sobnoj temperaturi; oblikuj i nadjeni u zadnjih 15 minuta te lansiraj u planirano vrijeme.',
+           preheat: 'U {PREHEAT_TIME} uključi pećnicu/kamen i zagrij ga na najvišu temperaturu; predgrijavanje traje {PREHEAT_MINUTES} minuta.',
+@@ -410,6 +414,8 @@ export const translations = {
+           start: 'Zamijesi tijesto prema izračunatim količinama; ostavi ga kao jednu masu za tepsiju.',
+           ballingFridge: 'Prebaci tijesto kao jednu masu u pokrivenu posudu i stavi ga u hladnjak na {HOURS} pri {FRIDGE_TEMP}.',
+           ballingTitle: 'Stavi masu tijesta u hladnjak',
++          fridgeInTitle: 'Stavi masu tijesta u hladnjak',
++          fridgeIn: 'Stavi pokrivenu masu tijesta u hladnjak na {HOURS} pri {FRIDGE_TEMP}.',
+           roomOnlyBalling: 'Do pečenja ostavi tijesto kao jednu pokrivenu masu na {ROOM_TEMP} ukupno {ROOM_AFTER}, uključujući završnu pripremu.',
+           roomOnlyTitle: 'Ostavi masu tijesta da odmori',
+           finalRoom: 'Izvadi masu tijesta iz hladnjaka i ostavi je {ROOM_AFTER} na sobnoj temperaturi prije utiskivanja u tepsiju.',
+@@ -444,18 +450,20 @@ export const translations = {
+       reportSent: 'Hvala. Prijava je zaprimljena.',
+       preferences: {
+         title: 'Postavke aplikacije',
+-        experienceLevel: 'Razina iskustva',
++        experienceLevel: 'Način rada',
+         beginner: 'Početnik',
+         pro: 'Pro / Iskusan',
+         temperature: 'Temperatura',
+         celsius: 'Celzij (°C)',
+         fahrenheit: 'Fahrenheit (°F)',
+         units: 'Jedinice',
+-        metric: 'Metrika',
+-        us: 'SAD',
++        metric: 'Metričke',
++        us: 'Američke',
+         yeast: 'Kvasac',
+         fresh: 'Svježi',
+         dry: 'Suhi',
++        defaultYeastHint: 'Koristi se kao zadani odabir u kalkulatoru.',
++        version: 'Verzija {VERSION}',
+       },
+     },
+     legal: {
+@@ -493,7 +501,7 @@ export const translations = {
+       report: { violationReason: 'Kršenje pravila zajednice', error: 'Slanje prijave nije uspjelo.' },
+     },
+     school: {
+-      title: 'Škola pizze - Zlatna pravila',
++      title: 'Škola pizze – zlatna pravila',
+       subtitle: 'Kratka pravila za bolje tijesto, umak i pečenje.',
+       rules: [
+         {
+@@ -578,12 +586,12 @@ export const translations = {
+       extrasList: [
+         'Sol (morska, krupna)',
+         'Ekstra djevičansko maslinovo ulje',
+-        'Fior di Latte / mozzarella (80-100g po pizzi)',
+-        'San Marzano pelati (80-90g po pizzi)',
++        'Fior di Latte / mozzarella (80–100 g po pizzi)',
++        'San Marzano pelati (80–90 g po pizzi)',
+         'Bosiljak (svjež)',
+       ],
+     },
+-    common: { cancel: 'Odustani', ok: 'U redu', back: 'Natrag', minutes: 'min', seconds: 's', hours: 'h', grams: 'g' },
++    common: { cancel: 'Odustani', ok: 'U redu', back: 'Natrag', close: 'Zatvori', minutes: 'min', seconds: 's', hours: 'h', grams: 'g' },
+     flourSection: {
+       headerCollapsed: 'Vrste brašna',
+       blendTitle: 'Sastav mješavine',
+@@ -593,9 +601,9 @@ export const translations = {
+       blendIdealHint: 'Idealna hidracija mješavine: {N}%',
+     },
+     ballWeight: {
+-      label: 'Gramaža lopte',
+-      autoHint: 'Auto po promjeru: {N}g',
+-      manualHint: 'Ručno · zadano {N}g',
++      label: 'Težina kuglice tijesta',
++      autoHint: 'Automatski prema promjeru: {N} g',
++      manualHint: 'Ručno · zadano {N} g',
+       reset: 'Vrati automatski izračun',
+     },
+     pizzaPreview: { hint: 'Prava proporcija (referenca: 40 cm)' },
+@@ -681,7 +689,7 @@ export const translations = {
+         fold2Gentle: { title: 'Time for the second gentle Stretch & Fold', body: 'Perform the second gentle Stretch & Fold as described in your recipe.' },
+         fridgeIn: { title: 'Time to refrigerate the dough', body: 'Cover the dough and put it in the refrigerator as directed.' },
+         fridgeInCombined: { title: 'Time to divide, shape, and refrigerate', body: 'Divide the dough, shape the dough balls, and put them in the refrigerator as directed.' },
+-        balling: { title: 'Time to divide and ball the dough 🍕', body: 'Divide and shape the dough as described in your recipe.' },
++        balling: { title: 'Time to divide and shape the dough balls 🍕', body: 'Divide and shape the dough as described in your recipe.' },
+         portioning: { title: 'First fermentation is complete', body: 'Prepare the gluten-free portions and refrigerate them according to the schedule.' },
+         trayPrepare: { title: 'First fermentation is complete', body: 'Handle the dough as one mass as directed.' },
+         doughRest: { title: 'Time to rest the dough', body: 'Leave the covered dough to rest as directed.' },
+@@ -839,7 +847,7 @@ export const translations = {
+           ],
+         },
+         C: {
+-          title: 'Phase C: Divide & ball',
++          title: 'Phase C: Dividing and shaping dough balls',
+           steps: [
+             'Cut and precisely weigh pieces to the target ball weight from the calculator.',
+             'Shape tight, smooth balls and place them in a dough tray.',
+@@ -847,7 +855,7 @@ export const translations = {
+           ],
+         },
+         D: {
+-          title: 'Phase D: Stretch & top',
++          title: 'Phase D: Shaping and adding toppings',
+           steps: [
+             'Take the balls out 1 hour 15 minutes before baking or when they roughly double in size, but do not let them overproof. Dust the surface with semolina.',
+             'Press air from center outward, leaving a ~1 cm rim untouched.',
+@@ -946,26 +954,26 @@ export const translations = {
+         ovenRomanDesc: 'Preheat the oven according to the Romana instructions 45-60 minutes before baking.',
+         ovenNyDesc: 'Preheat the oven according to the New York Style instructions 35-50 minutes before baking.',
+         warmTitle: 'Remove dough balls from the fridge',
+-        warmDesc: 'Remove the {STYLE} dough balls 1 hour 15 minutes before baking or when they nearly double, but do not let them over-ferment.',
++        warmDesc: 'Remove the {STYLE} dough balls {TEMPERING} before baking or when they nearly double, but do not let them over-ferment.',
+         coldTitle: 'Cold fermentation of dough balls',
+-        coldDesc: 'Keep the balls in a covered box at 4°C for {HOURS} hours. Then remove them 1 hour 15 minutes before baking or when they nearly double.',
++        coldDesc: 'Keep the balls in a covered box at {FRIDGE_TEMP} for {HOURS} hours. Then remove them {TEMPERING} before baking or when they nearly double.',
+         bulkTitle: 'Bulk fermentation',
+-        bulkDesc: 'Leave the {STYLE} dough at room temperature for 1 hour, then divide and shape the balls.',
++        bulkDesc: 'Leave the {STYLE} dough at room temperature for {HOURS}, then divide and shape the balls.',
+         directMixTitle: 'Knead the dough',
+         directRomanDesc: 'Direct method: add 90% of the water with yeast, then flour, salt, remaining water, and 3-5% oil. Knead by hand 12-15 minutes or with a mixer 8-10 minutes.',
+         directNyDesc: 'Direct method: add 90% of the water with yeast and sugar, then flour, salt, remaining water, and 2-4% oil. Knead by hand 12-15 minutes or with a mixer 8-10 minutes.',
+         directNyBakeDesc: 'Bake the New York pizza for {BAKE_TIME} at {OVEN_TEMP_DISPLAY}.',
+         finalBulkTitle: 'Bulk fermentation after final mix',
+-        finalBulkDesc: 'Leave the final dough at room temperature for 1 hour, then shape the balls.',
++        finalBulkDesc: 'Leave the final dough at room temperature for {HOURS}, then shape the balls.',
+         finalMixTitle: 'Final mix ({PREFERMENT})',
+         bigaName: 'Biga',
+         poolishName: 'Poolish',
+         finalBigaDesc: 'Combine the biga with the remaining ingredients; knead by hand 12-14 minutes or with a mixer for about 8 minutes.',
+         finalPoolishDesc: 'Combine the poolish with the remaining ingredients; knead by hand 10-12 minutes or with a mixer 7-9 minutes.',
+         bigaTitle: 'Make the biga',
+-        bigaDesc: 'Make the biga with 44% water and leave it for 16-18 hours at 16-18°C.',
++        bigaDesc: 'Make the biga with 44% water; leave it for {ROOM_HOURS} at room temperature, then {FRIDGE_HOURS} in the fridge.',
+         poolishTitle: 'Make the poolish',
+-        poolishDesc: 'Make the poolish with a 1:1 water-to-flour ratio and leave it for 16-24 hours in the fridge.',
++        poolishDesc: 'Make the poolish with a 1:1 water-to-flour ratio; leave it for {ROOM_HOURS} at room temperature, then {FRIDGE_HOURS} in the fridge.',
+         ballsTitle: 'Shape the dough balls',
+         ballsDesc: 'Make {WEIGHT} g dough balls and leave them at room temperature to rest.',
+         refreshTitle: 'Final mix (rinfresco)',
+@@ -979,13 +987,17 @@ export const translations = {
+           preheat: 'Preheat the selected oven/stone with this alert; launch the pizza at the scheduled bake time.',
+           bake: 'Launch the pizza exactly at the scheduled bake time.',
+         },
+-        poolishMixTitle: 'Make the poolish',
++        poolishMixTitle: 'Prepare the poolish',
+         poolishMixDesc: '35% flour, 100% hydration, 0.1% yeast. Leave for 12-14 hours at room temperature.',
+         directTitle: 'Knead the dough',
+         directDesc: 'Direct method for Neapolitan pizza: knead all ingredients and start fermentation.',
+         directHomeCopy: {
+-          start: 'Start mixing the Direct dough using the calculated ingredient amounts; bulk at {ROOM_TEMP} continues until the scheduled Balling alarm.',
++          start: 'Start mixing the direct dough using the calculated ingredient amounts. The first fermentation at {ROOM_TEMP} continues until the scheduled reminder to shape the dough balls.',
+           ballingFridge: 'Divide and shape {WEIGHT} g dough balls now, then refrigerate them for {HOURS} at {FRIDGE_TEMP}.',
++          ballingTitle: 'Shape dough balls',
++          balling: 'Divide the dough into {WEIGHT} g portions and shape them into balls.',
++          fridgeInTitle: 'Refrigerate the dough balls',
++          fridgeIn: 'Put the shaped dough balls in the refrigerator for {HOURS} at {FRIDGE_TEMP}.',
+           roomOnlyBalling: 'Divide and shape {WEIGHT} g dough balls now; keep them covered at {ROOM_TEMP} for {ROOM_AFTER} in total until baking, including final preparation.',
+           finalRoom: 'Take the dough balls out of the fridge for {ROOM_AFTER} at room temperature; shape and top in the final 15 minutes, then launch at the scheduled time.',
+           preheat: 'At {PREHEAT_TIME}, turn on the selected oven/stone and preheat it; the scheduled duration is {PREHEAT_MINUTES} minutes.',
+@@ -998,6 +1010,8 @@ export const translations = {
+           start: 'Mix the dough using the calculated amounts; keep it as one mass for the tray.',
+           ballingFridge: 'Transfer the dough as one mass to a covered container and refrigerate for {HOURS} at {FRIDGE_TEMP}.',
+           ballingTitle: 'Refrigerate the dough mass',
++          fridgeInTitle: 'Refrigerate the dough mass',
++          fridgeIn: 'Put the covered dough mass in the refrigerator for {HOURS} at {FRIDGE_TEMP}.',
+           roomOnlyBalling: 'Keep the dough as one covered mass at {ROOM_TEMP} for {ROOM_AFTER} in total until baking, including final preparation.',
+           roomOnlyTitle: 'Rest the dough mass',
+           finalRoom: 'Take the dough mass out of the refrigerator and leave it at room temperature for {ROOM_AFTER} before pressing it into the tray.',
+@@ -1032,7 +1046,7 @@ export const translations = {
+       reportSent: 'Thank you. Your report was submitted.',
+       preferences: {
+         title: 'App settings',
+-        experienceLevel: 'Experience level',
++        experienceLevel: 'Mode',
+         beginner: 'Beginner',
+         pro: 'Pro / Experienced',
+         temperature: 'Temperature',
+@@ -1040,10 +1054,12 @@ export const translations = {
+         fahrenheit: 'Fahrenheit (°F)',
+         units: 'Units',
+         metric: 'Metric',
+-        us: 'US',
++        us: 'US customary',
+         yeast: 'Yeast',
+         fresh: 'Fresh',
+         dry: 'Dry',
++        defaultYeastHint: 'Used as the default selection in the calculator.',
++        version: 'Version {VERSION}',
+       },
+     },
+     legal: {
+@@ -1081,7 +1097,7 @@ export const translations = {
+       report: { violationReason: 'Community guidelines violation', error: 'Report submission failed.' },
+     },
+     school: {
+-      title: 'Pizza School - Golden Rules',
++      title: 'Pizza School – Golden Rules',
+       subtitle: 'Simple rules for better dough, sauce, and baking.',
+       rules: [
+         { title: 'Cheese (Fior di Latte)', body: 'Cut into thicker pieces/sticks, not fine. Fine cutting releases too much water and fat, burns easily.' },
+@@ -1127,12 +1143,12 @@ export const translations = {
+       extrasList: [
+         'Salt (sea, coarse)',
+         'Extra virgin olive oil',
+-        'Fior di Latte / mozzarella (80-100g per pizza)',
+-        'San Marzano peeled tomatoes (80-90g per pizza)',
++        'Fior di Latte / mozzarella (80–100 g per pizza)',
++        'San Marzano peeled tomatoes (80–90 g per pizza)',
+         'Fresh basil',
+       ],
+     },
+-    common: { cancel: 'Cancel', ok: 'OK', back: 'Back', minutes: 'min', seconds: 's', hours: 'h', grams: 'g' },
++    common: { cancel: 'Cancel', ok: 'OK', back: 'Back', close: 'Close', minutes: 'min', seconds: 's', hours: 'h', grams: 'g' },
+     flourSection: {
+       headerCollapsed: 'Flour types',
+       blendTitle: 'Blend composition',
+@@ -1143,8 +1159,8 @@ export const translations = {
+     },
+     ballWeight: {
+       label: 'Dough ball weight',
+-      autoHint: 'Auto by diameter: {N}g',
+-      manualHint: 'Manual · default {N}g',
++      autoHint: 'Automatically by diameter: {N} g',
++      manualHint: 'Manual · default {N} g',
+       reset: 'Reset automatic calculation',
+     },
+     pizzaPreview: { hint: 'True scale (reference: 40 cm)' },
+@@ -1224,19 +1240,19 @@ export const translations = {
+       guidedCountdown: 'in {DURATION}', guidedOverdue: '{DURATION} überfällig', guidedNoNext: 'Alle geplanten Schritte sind erledigt.',
+       guidedNotificationCopy: {
+         mix: { title: 'Zeit für den Teig 🍕', body: 'Mische und knete den Teig nach deinem Rezept.' },
+-        fold1: { title: 'Zeit für das erste Stretch & Fold', body: 'Führen Sie das erste Stretch & Fold wie im Rezept beschrieben durch.' },
+-        fold1Gentle: { title: 'Zeit für das erste sanfte Stretch & Fold', body: 'Führen Sie das erste sanfte Stretch & Fold wie im Rezept beschrieben durch.' },
+-        fold2: { title: 'Zeit für das zweite Stretch & Fold', body: 'Führen Sie das zweite Stretch & Fold wie im Rezept beschrieben durch.' },
+-        fold2Gentle: { title: 'Zeit für das zweite sanfte Stretch & Fold', body: 'Führen Sie das zweite sanfte Stretch & Fold wie im Rezept beschrieben durch.' },
++        fold1: { title: 'Zeit für das erste Stretch & Fold', body: 'Führe den ersten Stretch & Fold wie im Rezept beschrieben durch.' },
++        fold1Gentle: { title: 'Zeit für das erste sanfte Stretch & Fold', body: 'Führe den ersten sanften Stretch & Fold wie im Rezept beschrieben durch.' },
++        fold2: { title: 'Zeit für das zweite Stretch & Fold', body: 'Führe den zweiten Stretch & Fold wie im Rezept beschrieben durch.' },
++        fold2Gentle: { title: 'Zeit für das zweite sanfte Stretch & Fold', body: 'Führe den zweiten sanften Stretch & Fold wie im Rezept beschrieben durch.' },
+         fridgeIn: { title: 'Zeit für den Kühlschrank', body: 'Decke den Teig ab und stelle ihn wie im Rezept beschrieben kalt.' },
+-        fridgeInCombined: { title: 'Zeit zum Teilen, Formen und Kühlen', body: 'Teilen Sie den Teig, formen Sie die Teiglinge und stellen Sie sie wie im Rezept beschrieben in den Kühlschrank.' },
+-        balling: { title: 'Zeit zum Teilen und Formen 🍕', body: 'Teile und forme den Teig wie im Rezept beschrieben.' },
+-        portioning: { title: 'Die erste Fermentation ist abgeschlossen', body: 'Bereiten Sie die glutenfreien Portionen vor und stellen Sie sie nach Plan in den Kühlschrank.' },
+-        trayPrepare: { title: 'Die erste Fermentation ist abgeschlossen', body: 'Behandeln Sie den Teig als eine Masse wie beschrieben.' },
++        fridgeInCombined: { title: 'Zeit zum Teilen, Formen und Kühlen', body: 'Teile den Teig, forme die Teiglinge und stelle sie wie im Rezept beschrieben in den Kühlschrank.' },
++        balling: { title: 'Zeit zum Teilen und Formen der Teigkugeln 🍕', body: 'Teile und forme den Teig wie im Rezept beschrieben.' },
++        portioning: { title: 'Die erste Fermentation ist abgeschlossen', body: 'Bereite die glutenfreien Portionen vor und stelle sie nach Plan in den Kühlschrank.' },
++        trayPrepare: { title: 'Die erste Fermentation ist abgeschlossen', body: 'Behandle den Teig wie beschrieben als eine Masse.' },
+         doughRest: { title: 'Zeit für die Teigruhe', body: 'Lass den abgedeckten Teig wie beschrieben ruhen.' },
+         fridgeOut: { title: 'Nimm den Teig aus dem Kühlschrank', body: 'Lass den Teig wie im Rezept beschrieben temperieren.' },
+         roomFermentationEndPreheat: { title: 'Ende der Raumtemperatur-Fermentation und Ofen vorheizen', body: 'Die Fermentation bei Raumtemperatur ist abgeschlossen. Es ist Zeit, den Ofen vorzuheizen.' },
+-        roomFermentationEnd: { title: 'Ende der Fermentation bei Raumtemperatur', body: 'Die Fermentation bei Raumtemperatur ist abgeschlossen. Fahren Sie mit der finalen Pizzavorbereitung fort.' },
++        roomFermentationEnd: { title: 'Ende der Fermentation bei Raumtemperatur', body: 'Die Fermentation bei Raumtemperatur ist abgeschlossen. Fahre mit der finalen Pizzavorbereitung fort.' },
+         preheat: { title: 'Zeit zum Vorheizen', body: 'Beginne wie geplant mit dem Vorheizen.' },
+         shape: { title: 'Zeit, die Pizza zu formen', body: 'Forme und belege die Pizza nach deinem Rezept.' },
+         bake: { title: 'Zeit für Pizza 🍕', body: 'Backe die Pizza nach deinem Rezept.' },
+@@ -1334,7 +1350,7 @@ export const translations = {
+       coldLong: 'Kalt lang (24-48h)',
+       results: 'Ergebnisse',
+       totalFlour: 'Gesamt Mehl',
+-      totalWater: 'Gesamt Wasser',
++      totalWater: 'Wassermenge gesamt',
+       waterTemp: 'Wassertemp.',
+       yeastAmount: 'Hefe',
+       saltAmount: 'Salz',
+@@ -1388,7 +1404,7 @@ export const translations = {
+           ],
+         },
+         C: {
+-          title: 'Phase C: Teilen & Wirken',
++          title: 'Phase C: Teilen und Formen der Teigkugeln',
+           steps: [
+             'Teig präzise auf Zielgewicht abstechen.',
+             'Feste, glatte Kugeln formen und in die Teigwanne setzen.',
+@@ -1396,7 +1412,7 @@ export const translations = {
+           ],
+         },
+         D: {
+-          title: 'Phase D: Ausformen & Belegen',
++          title: 'Phase D: Formen und Belegen',
+           steps: [
+             'Die Kugeln 1 Stunde 15 Minuten vor dem Backen herausnehmen oder wenn sie sich etwa verdoppeln, aber nicht überfermentieren lassen. Fläche mit Semola bestäuben.',
+             'Luft von der Mitte nach außen drücken, 1 cm Rand unberührt lassen.',
+@@ -1495,26 +1511,26 @@ export const translations = {
+         ovenRomanDesc: 'Den Ofen nach den Romana-Anweisungen 45-60 Minuten vor dem Backen vorheizen.',
+         ovenNyDesc: 'Den Ofen nach den New-York-Style-Anweisungen 35-50 Minuten vor dem Backen vorheizen.',
+         warmTitle: 'Teiglinge aus dem Kühlschrank nehmen',
+-        warmDesc: 'Die {STYLE}-Teiglinge 1 Stunde 15 Minuten vor dem Backen oder bei fast doppeltem Volumen herausnehmen, aber nicht übergären lassen.',
++        warmDesc: 'Die {STYLE}-Teiglinge {TEMPERING} vor dem Backen oder bei fast doppeltem Volumen herausnehmen, aber nicht übergären lassen.',
+         coldTitle: 'Kalte Gare der Teiglinge',
+-        coldDesc: 'Die Teiglinge {HOURS} Stunden in einer geschlossenen Box bei 4°C lagern. Danach 1 Stunde 15 Minuten vor dem Backen herausnehmen oder bis sie sich fast verdoppelt haben.',
++        coldDesc: 'Die Teiglinge {HOURS} Stunden in einer geschlossenen Box bei {FRIDGE_TEMP} lagern. Danach {TEMPERING} vor dem Backen herausnehmen oder bis sie sich fast verdoppelt haben.',
+         bulkTitle: 'Stockgare',
+-        bulkDesc: 'Den {STYLE}-Teig 1 Stunde bei Raumtemperatur ruhen lassen, dann teilen und Teiglinge formen.',
++        bulkDesc: 'Den {STYLE}-Teig {HOURS} bei Raumtemperatur ruhen lassen, dann teilen und Teiglinge formen.',
+         directMixTitle: 'Teig kneten',
+         directRomanDesc: 'Direkte Methode: 90% des Wassers mit Hefe, dann Mehl, Salz, restliches Wasser und 3-5% Öl hinzufügen. Von Hand 12-15 Minuten oder mit der Maschine 8-10 Minuten kneten.',
+         directNyDesc: 'Direkte Methode: 90% des Wassers mit Hefe und Zucker, dann Mehl, Salz, restliches Wasser und 2-4% Öl hinzufügen. Von Hand 12-15 Minuten oder mit der Maschine 8-10 Minuten kneten.',
+         directNyBakeDesc: 'Backen Sie die New-York-Pizza {BAKE_TIME} bei {OVEN_TEMP_DISPLAY}.',
+         finalBulkTitle: 'Stockgare nach dem Schlusskneten',
+-        finalBulkDesc: 'Den fertigen Teig 1 Stunde bei Raumtemperatur ruhen lassen, dann Teiglinge formen.',
++        finalBulkDesc: 'Den fertigen Teig {HOURS} bei Raumtemperatur ruhen lassen, dann Teiglinge formen.',
+         finalMixTitle: 'Schlusskneten ({PREFERMENT})',
+         bigaName: 'Biga',
+         poolishName: 'Poolish',
+         finalBigaDesc: 'Die Biga mit den restlichen Zutaten verbinden; 12-14 Minuten von Hand oder etwa 8 Minuten mit der Maschine kneten.',
+         finalPoolishDesc: 'Den Poolish mit den restlichen Zutaten verbinden; 10-12 Minuten von Hand oder 7-9 Minuten mit der Maschine kneten.',
+         bigaTitle: 'Biga herstellen',
+-        bigaDesc: 'Die Biga mit 44% Wasser herstellen und 16-18 Stunden bei 16-18°C stehen lassen.',
++        bigaDesc: 'Die Biga mit 44% Wasser herstellen; {ROOM_HOURS} bei Raumtemperatur und danach {FRIDGE_HOURS} im Kühlschrank reifen lassen.',
+         poolishTitle: 'Poolish herstellen',
+-        poolishDesc: 'Den Poolish mit einem Wasser-Mehl-Verhältnis von 1:1 herstellen und 16-24 Stunden im Kühlschrank lagern.',
++        poolishDesc: 'Den Poolish im Verhältnis Wasser zu Mehl 1:1 herstellen; {ROOM_HOURS} bei Raumtemperatur und danach {FRIDGE_HOURS} im Kühlschrank reifen lassen.',
+         ballsTitle: 'Teiglinge formen',
+         ballsDesc: '{WEIGHT}-g-Teiglinge formen und bei Raumtemperatur ruhen lassen.',
+         refreshTitle: 'Schlusskneten (Rinfresco)',
+@@ -1528,13 +1544,17 @@ export const translations = {
+           preheat: 'Heizen Sie den ausgewählten Ofen/Stein mit diesem Alarm vor; schieben Sie die Pizza zur geplanten Backzeit hinein.',
+           bake: 'Schieben Sie die Pizza genau zur geplanten Backzeit in den Ofen.',
+         },
+-        poolishMixTitle: 'Poolish kneten',
++        poolishMixTitle: 'Poolish anrühren',
+         poolishMixDesc: '35% Mehl, 100% Hydration, 0,1% Hefe. 12-14 Stunden bei Raumtemperatur stehen lassen.',
+         directTitle: 'Teig kneten',
+         directDesc: 'Direkte Methode für neapolitanische Pizza: alle Zutaten verkneten und die Fermentation starten.',
+         directHomeCopy: {
+-          start: 'Beginnen Sie den direkten Hauptteig mit den berechneten Zutaten; die Stockgare bei {ROOM_TEMP} läuft bis zum geplanten Ball-Alarm.',
++          start: 'Beginne mit dem direkten Teig nach den berechneten Zutatenmengen. Die erste Teiggare bei {ROOM_TEMP} dauert bis zur geplanten Erinnerung zum Formen der Teigkugeln.',
+           ballingFridge: 'Teilen und formen Sie jetzt Teiglinge zu {WEIGHT} g und stellen Sie sie anschließend für {HOURS} bei {FRIDGE_TEMP} in den Kühlschrank.',
++          ballingTitle: 'Teiglinge formen',
++          balling: 'Teilen Sie den Teig in {WEIGHT} g schwere Stücke und formen Sie daraus Kugeln.',
++          fridgeInTitle: 'Teiglinge in den Kühlschrank stellen',
++          fridgeIn: 'Stellen Sie die geformten Teiglinge für {HOURS} bei {FRIDGE_TEMP} in den Kühlschrank.',
+           roomOnlyBalling: 'Teilen und formen Sie jetzt Teiglinge zu {WEIGHT} g; lassen Sie sie bis zum Backen insgesamt {ROOM_AFTER} bei {ROOM_TEMP} abgedeckt ruhen, einschließlich der Endvorbereitung.',
+           finalRoom: 'Nehmen Sie die Teiglinge für {ROOM_AFTER} bei Raumtemperatur aus dem Kühlschrank; formen und belegen Sie sie in den letzten 15 Minuten und backen Sie zur geplanten Zeit.',
+           preheat: 'Schalten Sie um {PREHEAT_TIME} den ausgewählten Ofen/Stein ein und heizen Sie ihn vor; die geplante Dauer beträgt {PREHEAT_MINUTES} Minuten.',
+@@ -1547,6 +1567,8 @@ export const translations = {
+           start: 'Kneten Sie den Teig mit den berechneten Mengen; lassen Sie ihn als eine Masse für das Blech.',
+           ballingFridge: 'Geben Sie die Teigmasse in einen abgedeckten Behälter und stellen Sie sie für {HOURS} bei {FRIDGE_TEMP} in den Kühlschrank.',
+           ballingTitle: 'Teigmasse in den Kühlschrank stellen',
++          fridgeInTitle: 'Teigmasse in den Kühlschrank stellen',
++          fridgeIn: 'Stellen Sie die abgedeckte Teigmasse für {HOURS} bei {FRIDGE_TEMP} in den Kühlschrank.',
+           roomOnlyBalling: 'Lassen Sie den Teig als eine abgedeckte Masse bis zum Backen insgesamt {ROOM_AFTER} bei {ROOM_TEMP} ruhen, einschließlich der Endvorbereitung.',
+           roomOnlyTitle: 'Teigmasse ruhen lassen',
+           finalRoom: 'Nehmen Sie die Teigmasse aus dem Kühlschrank und lassen Sie sie vor dem Drücken in das Blech {ROOM_AFTER} bei Raumtemperatur ruhen.',
+@@ -1581,7 +1603,7 @@ export const translations = {
+       reportSent: 'Danke. Deine Meldung wurde gesendet.',
+       preferences: {
+         title: 'App-Einstellungen',
+-        experienceLevel: 'Erfahrungsstufe',
++        experienceLevel: 'Modus',
+         beginner: 'Anfänger',
+         pro: 'Profi / Erfahren',
+         temperature: 'Temperatur',
+@@ -1589,10 +1611,12 @@ export const translations = {
+         fahrenheit: 'Fahrenheit (°F)',
+         units: 'Einheiten',
+         metric: 'Metrisch',
+-        us: 'US',
++        us: 'US-System',
+         yeast: 'Hefe',
+         fresh: 'Frisch',
+         dry: 'Trocken',
++        defaultYeastHint: 'Wird im Rechner als Standardauswahl verwendet.',
++        version: 'Version {VERSION}',
+       },
+     },
+     legal: {
+@@ -1630,7 +1654,7 @@ export const translations = {
+       report: { violationReason: 'Verstoß gegen die Community-Regeln', error: 'Die Meldung konnte nicht gesendet werden.' },
+     },
+     school: {
+-      title: 'Pizza-Schule - Goldene Regeln',
++      title: 'Pizzaschule – goldene Regeln',
+       subtitle: 'Einfache Regeln für besseren Teig, Sauce und Backen.',
+       rules: [
+         { title: 'Käse (Fior di Latte)', body: 'In dicke Stücke/Stäbchen schneiden, nicht fein. Fein geschnitten gibt zu viel Wasser und Fett ab, verbrennt leicht.' },
+@@ -1676,12 +1700,12 @@ export const translations = {
+       extrasList: [
+         'Salz (Meersalz, grob)',
+         'Olivenöl extra vergine',
+-        'Fior di Latte / Mozzarella (80-100g pro Pizza)',
+-        'San Marzano Pelati (80-90g pro Pizza)',
++        'Fior di Latte / Mozzarella (80–100 g pro Pizza)',
++        'San-Marzano-Tomaten, geschält (80–90 g pro Pizza)',
+         'Frisches Basilikum',
+       ],
+     },
+-    common: { cancel: 'Abbrechen', ok: 'OK', back: 'Zurück', minutes: 'Min', seconds: 's', hours: 'Std', grams: 'g' },
++    common: { cancel: 'Abbrechen', ok: 'OK', back: 'Zurück', close: 'Schließen', minutes: 'Min', seconds: 's', hours: 'Std', grams: 'g' },
+     flourSection: {
+       headerCollapsed: 'Mehlarten',
+       blendTitle: 'Zusammensetzung der Mischung',
+@@ -1691,9 +1715,9 @@ export const translations = {
+       blendIdealHint: 'Ideale Hydratisierung der Mischung: {N}%',
+     },
+     ballWeight: {
+-      label: 'Teigkugel-Gewicht',
+-      autoHint: 'Auto nach Durchmesser: {N}g',
+-      manualHint: 'Manuell · Standard {N}g',
++      label: 'Gewicht der Teigkugel',
++      autoHint: 'Automatisch nach Durchmesser: {N} g',
++      manualHint: 'Manuell · Standardwert {N} g',
+       reset: 'Automatische Berechnung zurücksetzen',
+     },
+     pizzaPreview: { hint: 'Echte Proportion (Referenz: 40 cm)' },
+@@ -1773,19 +1797,19 @@ export const translations = {
+       guidedCountdown: 'čez {DURATION}', guidedOverdue: 'Zamuja {DURATION}', guidedNoNext: 'Vsi načrtovani koraki so končani.',
+       guidedNotificationCopy: {
+         mix: { title: 'Čas je za testo 🍕', body: 'Zamesi testo po receptu.' },
+-        fold1: { title: 'Čas za prvi Stretch & Fold', body: 'Naredite prvi Stretch & Fold po navodilih recepta.' },
+-        fold1Gentle: { title: 'Čas za prvi nežni Stretch & Fold', body: 'Naredite prvi nežni Stretch & Fold po navodilih recepta.' },
+-        fold2: { title: 'Čas za drugi Stretch & Fold', body: 'Naredite drugi Stretch & Fold po navodilih recepta.' },
+-        fold2Gentle: { title: 'Čas za drugi nežni Stretch & Fold', body: 'Naredite drugi nežni Stretch & Fold po navodilih recepta.' },
++        fold1: { title: 'Čas za prvi Stretch & Fold', body: 'Naredi prvi Stretch & Fold po navodilih recepta.' },
++        fold1Gentle: { title: 'Čas za prvi nežni Stretch & Fold', body: 'Naredi prvi nežni Stretch & Fold po navodilih recepta.' },
++        fold2: { title: 'Čas za drugi Stretch & Fold', body: 'Naredi drugi Stretch & Fold po navodilih recepta.' },
++        fold2Gentle: { title: 'Čas za drugi nežni Stretch & Fold', body: 'Naredi drugi nežni Stretch & Fold po navodilih recepta.' },
+         fridgeIn: { title: 'Čas je za hladilnik', body: 'Pokrito testo postavi v hladilnik po navodilih recepta.' },
+         fridgeInCombined: { title: 'Čas za deljenje, oblikovanje in hladilnik', body: 'Testo razdeli, oblikuj kroglice in jih postavi v hladilnik po navodilih recepta.' },
+-        balling: { title: 'Čas je za deljenje in oblikovanje 🍕', body: 'Testo razdeli in oblikuj po receptu.' },
++        balling: { title: 'Čas za delitev in oblikovanje kroglic testa 🍕', body: 'Testo razdeli in oblikuj po receptu.' },
+         portioning: { title: 'Prva fermentacija je končana', body: 'Pripravi brezglutenske porcije in jih po načrtu postavi v hladilnik.' },
+         trayPrepare: { title: 'Prva fermentacija je končana', body: 'Testo obdelaj kot eno maso po navodilih.' },
+         doughRest: { title: 'Čas za počitek testa', body: 'Pokrito testo pusti počivati po navodilih.' },
+         fridgeOut: { title: 'Vzemi testo iz hladilnika', body: 'Testo temperiraj po navodilih recepta.' },
+         roomFermentationEndPreheat: { title: 'Konec fermentacije pri sobni temperaturi in segrevanje pečice', body: 'Fermentacija pri sobni temperaturi je končana. Čas je za segrevanje pečice.' },
+-        roomFermentationEnd: { title: 'Konec fermentacije pri sobni temperaturi', body: 'Fermentacija pri sobni temperaturi je končana. Nadaljujte z zaključno pripravo pice.' },
++        roomFermentationEnd: { title: 'Konec fermentacije pri sobni temperaturi', body: 'Fermentacija pri sobni temperaturi je končana. Nadaljuj z zaključno pripravo pice.' },
+         preheat: { title: 'Čas je za segrevanje pečice', body: 'Začni segrevati pečico po načrtu.' },
+         shape: { title: 'Čas je za oblikovanje pice', body: 'Pico oblikuj in obloži po receptu.' },
+         bake: { title: 'Čas je za pico 🍕', body: 'Pico speci po receptu.' },
+@@ -1883,7 +1907,7 @@ export const translations = {
+       coldLong: 'Hladno dolgo (24-48h)',
+       results: 'Rezultati',
+       totalFlour: 'Skupna moka',
+-      totalWater: 'Skupna voda',
++      totalWater: 'Skupna količina vode',
+       waterTemp: 'Temp. vode',
+       yeastAmount: 'Kvas',
+       saltAmount: 'Sol',
+@@ -1937,15 +1961,15 @@ export const translations = {
+           ],
+         },
+         C: {
+-          title: 'Faza C: Delitev in oblikovanje kepic',
++          title: 'Faza C: Delitev in oblikovanje kroglic testa',
+           steps: [
+             'Razreži in natančno stehtaj kose želene teže iz kalkulatorja.',
+             'Oblikuj čvrste, gladke kepice in jih zloži v posodo za testo.',
+-            'Kepice daj v hladilnik za izbrano časovno obdobje pri 4–6 °C. Vzemi jih 1 uro 15 minut pred peko ali ko se približno podvojijo, a pazite, da ne predignete.',
++            'Kepice daj v hladilnik za izbrano časovno obdobje pri 4–6 °C. Vzemi jih 1 uro 15 minut pred peko ali ko se približno podvojijo, a pazi, da jih ne predigneš.',
+           ],
+         },
+         D: {
+-          title: 'Faza D: Priprava, raztezanje in oblikovanje',
++          title: 'Faza D: Oblikovanje in dodajanje nadeva',
+           steps: [
+             'Vzemi kepice 1 uro 15 minut pred peko ali ko se približno podvojijo, a ne dovoli, da preveč fermentirajo. Površino posuj z zdrobom.',
+             'S prsti potiskaj zrak od sredine proti robovom in pusti rob širine ca. 1 cm.',
+@@ -1983,7 +2007,7 @@ export const translations = {
+           steps: [
+             'Odreži in stehtaj kose na ciljno težo kepice.',
+             'Oblikuj čvrste, gladke kepice v posodi za testo.',
+-            'Kepice daj v hladilnik za izbrano časovno obdobje pri 4–6°C. Vzemi jih 1 uro 15 minut pred peko ali ko se približno podvojijo, a pazite, da ne predignete.',
++            'Kepice daj v hladilnik za izbrano časovno obdobje pri 4–6°C. Vzemi jih 1 uro 15 minut pred peko ali ko se približno podvojijo, a pazi, da jih ne predigneš.',
+           ],
+         },
+         D: {
+@@ -2044,26 +2068,26 @@ export const translations = {
+         ovenRomanDesc: 'Pečico segrej po navodilih za Romano 45-60 minut pred peko.',
+         ovenNyDesc: 'Pečico segrej po navodilih za New York Style 35-50 minut pred peko.',
+         warmTitle: 'Vzemi kepice iz hladilnika',
+-        warmDesc: 'Kepice za {STYLE} vzemi iz hladilnika 1 uro in 15 minut pred peko ali ko se skoraj podvojijo, vendar jih ne pusti preveč fermentirati.',
++        warmDesc: 'Kepice za {STYLE} vzemi iz hladilnika {TEMPERING} pred peko ali ko se skoraj podvojijo, vendar jih ne pusti preveč fermentirati.',
+         coldTitle: 'Hladna fermentacija kepic',
+-        coldDesc: 'Kepice hrani {HOURS} ur v zaprti škatli pri 4°C. Nato jih vzemi ven 1 uro in 15 minut pred peko ali ko se skoraj podvojijo.',
++        coldDesc: 'Kepice hrani {HOURS} ur v zaprti škatli pri {FRIDGE_TEMP}. Nato jih vzemi ven {TEMPERING} pred peko ali ko se skoraj podvojijo.',
+         bulkTitle: 'Prva fermentacija',
+-        bulkDesc: 'Testo za {STYLE} pusti 1 uro pri sobni temperaturi, nato ga razdeli in oblikuj kepice.',
++        bulkDesc: 'Testo za {STYLE} pusti {HOURS} pri sobni temperaturi, nato ga razdeli in oblikuj kepice.',
+         directMixTitle: 'Zamesi testo',
+         directRomanDesc: 'Neposredna metoda: dodaj 90% vode s kvasom, nato moko, sol, preostalo vodo in 3-5% olja. Ročno gneti 12-15 minut ali z mešalnikom 8-10 minut.',
+         directNyDesc: 'Neposredna metoda: dodaj 90% vode s kvasom in sladkorjem, nato moko, sol, preostalo vodo in 2-4% olja. Ročno gneti 12-15 minut ali z mešalnikom 8-10 minut.',
+         directNyBakeDesc: 'Newyorško pico pecite {BAKE_TIME} pri {OVEN_TEMP_DISPLAY}.',
+         finalBulkTitle: 'Prva fermentacija po končnem mesenju',
+-        finalBulkDesc: 'Končno testo pusti 1 uro pri sobni temperaturi, nato oblikuj kepice.',
++        finalBulkDesc: 'Končno testo pusti {HOURS} pri sobni temperaturi, nato oblikuj kepice.',
+         finalMixTitle: 'Končno mesenje ({PREFERMENT})',
+         bigaName: 'Biga',
+         poolishName: 'Poolish',
+         finalBigaDesc: 'Bigo zmešaj s preostalimi sestavinami; ročno gneti 12-14 minut ali z mešalnikom približno 8 minut.',
+         finalPoolishDesc: 'Poolish zmešaj s preostalimi sestavinami; ročno gneti 10-12 minut ali z mešalnikom 7-9 minut.',
+         bigaTitle: 'Pripravi bigo',
+-        bigaDesc: 'Bigo pripravi s 44% vode in jo pusti 16-18 ur pri 16-18°C.',
++        bigaDesc: 'Bigo pripravi s 44% vode; pusti jo {ROOM_HOURS} pri sobni temperaturi, nato {FRIDGE_HOURS} v hladilniku.',
+         poolishTitle: 'Pripravi poolish',
+-        poolishDesc: 'Poolish pripravi v razmerju voda:moka 1:1 in ga pusti 16-24 ur v hladilniku.',
++        poolishDesc: 'Poolish pripravi v razmerju voda:moka 1:1; pusti ga {ROOM_HOURS} pri sobni temperaturi, nato {FRIDGE_HOURS} v hladilniku.',
+         ballsTitle: 'Oblikuj kepice',
+         ballsDesc: 'Oblikuj kepice po {WEIGHT} g in jih pusti počivati pri sobni temperaturi.',
+         refreshTitle: 'Končno mesenje (rinfresco)',
+@@ -2077,13 +2101,17 @@ export const translations = {
+           preheat: 'Ob tem alarmu segrejte izbrano pečico/kamen; pico vstavite ob načrtovanem času peke.',
+           bake: 'Pico vstavite točno ob načrtovanem času peke.',
+         },
+-        poolishMixTitle: 'Zamesi poolish',
++        poolishMixTitle: 'Pripravi poolish',
+         poolishMixDesc: '35% moke, 100% hidracije, 0,1% kvasa. Pusti 12-14 ur pri sobni temperaturi.',
+         directTitle: 'Zamesi testo',
+         directDesc: 'Neposredna metoda za napolitansko pico: zamesi vse sestavine in začni fermentacijo.',
+         directHomeCopy: {
+-          start: 'Začni neposredno mešanje po izračunanih količinah; prva fermentacija pri {ROOM_TEMP} traja do načrtovanega alarma za oblikovanje kroglic.',
++          start: 'Začni neposredno pripravo testa po izračunanih količinah. Prva fermentacija pri {ROOM_TEMP} traja do načrtovanega opomnika za oblikovanje kroglic testa.',
+           ballingFridge: 'Testo zdaj razdeli na kroglice po {WEIGHT} g, jih oblikuj in prestavi v hladilnik za {HOURS} pri {FRIDGE_TEMP}.',
++          ballingTitle: 'Oblikuj kroglice',
++          balling: 'Testo razdeli na kose po {WEIGHT} g in jih oblikuj v kroglice.',
++          fridgeInTitle: 'Kroglice postavi v hladilnik',
++          fridgeIn: 'Oblikovane kroglice postavi v hladilnik za {HOURS} pri {FRIDGE_TEMP}.',
+           roomOnlyBalling: 'Testo zdaj razdeli na kroglice po {WEIGHT} g in jih oblikuj; do peke naj počivajo pokrite skupaj {ROOM_AFTER} pri {ROOM_TEMP}, vključno z zaključno pripravo.',
+           finalRoom: 'Kroglice vzemi iz hladilnika in jih pusti {ROOM_AFTER} na sobni temperaturi; oblikuj in obloži jih v zadnjih 15 minutah ter pico vstavi ob načrtovanem času.',
+           preheat: 'Ob {PREHEAT_TIME} vklopi izbrano pečico/kamen in ga segrej; predgretje traja {PREHEAT_MINUTES} minut.',
+@@ -2096,6 +2124,8 @@ export const translations = {
+           start: 'Testo zamesi po izračunanih količinah; za pekač naj ostane ena masa.',
+           ballingFridge: 'Testo kot eno maso prestavi v pokrito posodo in ga hladi {HOURS} pri {FRIDGE_TEMP}.',
+           ballingTitle: 'Testno maso postavi v hladilnik',
++          fridgeInTitle: 'Testno maso postavi v hladilnik',
++          fridgeIn: 'Pokrito testno maso postavi v hladilnik za {HOURS} pri {FRIDGE_TEMP}.',
+           roomOnlyBalling: 'Pokrito maso testa pusti do peke skupaj {ROOM_AFTER} pri {ROOM_TEMP}, vključno z zaključno pripravo.',
+           roomOnlyTitle: 'Pusti testno maso počivati',
+           finalRoom: 'Testno maso vzemi iz hladilnika in jo pred vtiskanjem v pekač pusti {ROOM_AFTER} na sobni temperaturi.',
+@@ -2130,18 +2160,20 @@ export const translations = {
+       reportSent: 'Hvala. Prijava je bila poslana.',
+       preferences: {
+         title: 'Nastavitve aplikacije',
+-        experienceLevel: 'Raven izkušenj',
++        experienceLevel: 'Način',
+         beginner: 'Začetnik',
+         pro: 'Profi / Izkušen',
+         temperature: 'Temperatura',
+         celsius: 'Celzij (°C)',
+         fahrenheit: 'Fahrenheit (°F)',
+         units: 'Enote',
+-        metric: 'Metrično',
+-        us: 'ZDA',
++        metric: 'Metrične',
++        us: 'Ameriške',
+         yeast: 'Kvas',
+         fresh: 'Svež',
+         dry: 'Suh',
++        defaultYeastHint: 'Uporablja se kot privzeta izbira v kalkulatorju.',
++        version: 'Različica {VERSION}',
+       },
+     },
+     legal: {
+@@ -2179,7 +2211,7 @@ export const translations = {
+       report: { violationReason: 'Kršitev pravil skupnosti', error: 'Pošiljanje prijave ni uspelo.' },
+     },
+     school: {
+-      title: 'Šola pizze - Zlata pravila',
++      title: 'Šola pice – zlata pravila',
+       subtitle: 'Preprosta pravila za boljše testo, omako in peko.',
+       rules: [
+         { title: 'Sir (Fior di Latte)', body: 'Reži na debelejše kose/paličice, ne drobno. Drobno rezano spusti preveč vode in maščobe ter zgori.' },
+@@ -2225,12 +2257,12 @@ export const translations = {
+       extrasList: [
+         'Sol (morska, groba)',
+         'Ekstra deviško oljčno olje',
+-        'Fior di Latte / mocarela (80-100g na pizzo)',
+-        'San Marzano pelati (80-90g na pizzo)',
++        'Fior di Latte / mocarela (80–100 g na pico)',
++        'Pelati San Marzano (80–90 g na pico)',
+         'Sveži bazilika',
+       ],
+     },
+-    common: { cancel: 'Prekliči', ok: 'V redu', back: 'Nazaj', minutes: 'min', seconds: 's', hours: 'h', grams: 'g' },
++    common: { cancel: 'Prekliči', ok: 'V redu', back: 'Nazaj', close: 'Zapri', minutes: 'min', seconds: 's', hours: 'h', grams: 'g' },
+     flourSection: {
+       headerCollapsed: 'Vrste moke',
+       blendTitle: 'Sestava mešanice',
+@@ -2240,9 +2272,9 @@ export const translations = {
+       blendIdealHint: 'Idealna hidracija mešanice: {N}%',
+     },
+     ballWeight: {
+-      label: 'Teža kroglice',
+-      autoHint: 'Samodejno po premeru: {N}g',
+-      manualHint: 'Ročno · privzeto {N}g',
++      label: 'Teža kroglice testa',
++      autoHint: 'Samodejno glede na premer: {N} g',
++      manualHint: 'Ročno · privzeto {N} g',
+       reset: 'Ponastavi samodejni izračun',
+     },
+     pizzaPreview: { hint: 'Pravo razmerje (referenca: 40 cm)' },

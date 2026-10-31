@@ -245,6 +245,51 @@ export async function cancelPlannerNotificationsForMethodsExcept(
   await Promise.all(cancellations);
 }
 
+export type PlannerPlanNotificationCancellation = {
+  supported: boolean;
+  cancelledCount: number;
+  remainingCount: number;
+  unassociatedCount: number;
+};
+
+export async function cancelPlannerNotificationsForPlan(
+  planIds: readonly string[],
+): Promise<PlannerPlanNotificationCancellation> {
+  if (!mod) {
+    return { supported: false, cancelledCount: 0, remainingCount: 0, unassociatedCount: 0 };
+  }
+  const planIdSet = new Set(planIds.filter(Boolean));
+  const scheduled = await mod.getAllScheduledNotificationsAsync();
+  const matching = scheduled.filter((request: any) => {
+    const data = request.content?.data ?? {};
+    return data.source === 'pizza-planner' && planIdSet.has(data.planId);
+  });
+  const unassociatedCount = scheduled.filter((request: any) => {
+    const content = request.content ?? {};
+    const data = content.data ?? {};
+    const legacyPlannerNotification = !data.source
+      && typeof content.title === 'string'
+      && content.title.startsWith('🍕 ');
+    const unscopedPlannerNotification = data.source === 'pizza-planner'
+      && (typeof data.planId !== 'string' || data.planId.length === 0);
+    return legacyPlannerNotification || unscopedPlannerNotification;
+  }).length;
+  await Promise.allSettled(
+    matching.map((request: any) => mod.cancelScheduledNotificationAsync(request.identifier)),
+  );
+  const remaining = await mod.getAllScheduledNotificationsAsync();
+  const remainingCount = remaining.filter((request: any) => {
+    const data = request.content?.data ?? {};
+    return data.source === 'pizza-planner' && planIdSet.has(data.planId);
+  }).length;
+  return {
+    supported: true,
+    cancelledCount: matching.length - remainingCount,
+    remainingCount,
+    unassociatedCount,
+  };
+}
+
 export function isObsoletePlannerNotification(
   request: { content?: { title?: unknown; data?: Record<string, unknown> } },
   currentPlanId: string | null,

@@ -10,6 +10,8 @@ import { useAuth } from '../../src/auth';
 import { useT } from '../../src/i18n/LanguageProvider';
 import { LANGS, Lang } from '../../src/i18n/translations';
 import { COLORS, SPACING, RADIUS } from '../../src/theme';
+import { COMMUNITY_ENABLED } from '../../src/communityFeature';
+import { OFFLINE_ONLY_MODE } from '../../src/offlineMode';
 
 export default function Profile() {
   const insets = useSafeAreaInsets();
@@ -61,16 +63,18 @@ export default function Profile() {
         <Text style={styles.linkText}>{t.profile.terms}</Text>
         <Icon name="chevron-forward" size={18} color={COLORS.muted} />
       </Pressable>
-      <Pressable style={styles.linkRow} onPress={() => router.push('/community-guidelines')}>
-        <Icon name="people-outline" size={20} color={COLORS.brand} />
-        <Text style={styles.linkText}>{t.profile.communityGuidelines}</Text>
-        <Icon name="chevron-forward" size={18} color={COLORS.muted} />
-      </Pressable>
+      {COMMUNITY_ENABLED ? (
+        <Pressable style={styles.linkRow} onPress={() => router.push('/community-guidelines')}>
+          <Icon name="people-outline" size={20} color={COLORS.brand} />
+          <Text style={styles.linkText}>{t.profile.communityGuidelines}</Text>
+          <Icon name="chevron-forward" size={18} color={COLORS.muted} />
+        </Pressable>
+      ) : null}
     </View>
   );
 
-  // Anonymous user view - login CTA + language picker
-  if (!user) {
+  // Offline/anonymous view keeps local settings and legal links available.
+  if (OFFLINE_ONLY_MODE || !user) {
     return (
       <View style={styles.root}>
         <ImageBackground
@@ -84,22 +88,9 @@ export default function Profile() {
               <Text style={styles.heroTitle}>{t.profile.title}</Text>
               <View />
             </View>
-            <View style={styles.avatarWrap}>
-              <View style={[styles.avatar, styles.avatarFallback]}>
-                <Text style={styles.avatarInitial}>?</Text>
-              </View>
-              <Text style={styles.heroName}>{t.login.title}</Text>
-            </View>
           </View>
         </ImageBackground>
         <ScrollView contentContainerStyle={{ padding: SPACING.lg, paddingBottom: insets.bottom + SPACING.xxxl, gap: SPACING.lg }}>
-          <View style={styles.card}>
-            <Text style={styles.section}>{t.login.title}</Text>
-            <Text style={styles.bodyText}>{t.login.subtitle}</Text>
-            <Pressable testID="profile-login-btn" style={styles.saveBtn} onPress={() => router.push('/login')}>
-              <Text style={styles.saveBtnText}>{t.login.google}</Text>
-            </Pressable>
-          </View>
           {legalLinks}
           <View style={styles.card}>
             <Text style={styles.section}>{t.profile.language}</Text>
@@ -134,9 +125,11 @@ export default function Profile() {
         <View style={[styles.heroInner, { paddingTop: insets.top + SPACING.lg }]}>
           <View style={styles.heroTop}>
             <Text style={styles.heroTitle}>{t.profile.title}</Text>
-            <Pressable onPress={() => setEdit(!edit)} testID="edit-profile" style={styles.editBtn}>
-              <Text style={styles.editBtnText}>{edit ? t.common.cancel : t.profile.edit}</Text>
-            </Pressable>
+            {!OFFLINE_ONLY_MODE ? (
+              <Pressable onPress={() => setEdit(!edit)} testID="edit-profile" style={styles.editBtn}>
+                <Text style={styles.editBtnText}>{edit ? t.common.cancel : t.profile.edit}</Text>
+              </Pressable>
+            ) : <View />}
           </View>
           <View style={styles.avatarWrap}>
             {user?.picture ? (
@@ -211,15 +204,19 @@ export default function Profile() {
           </View>
         </View>
 
-        <Pressable testID="logout-btn" onPress={logout} style={styles.logoutBtn}>
-          <Icon name="log-out-outline" size={20} color={COLORS.error} />
-          <Text style={styles.logoutText}>{t.profile.logout}</Text>
-        </Pressable>
+        {!OFFLINE_ONLY_MODE ? (
+          <Pressable testID="logout-btn" onPress={logout} style={styles.logoutBtn}>
+            <Icon name="log-out-outline" size={20} color={COLORS.error} />
+            <Text style={styles.logoutText}>{t.profile.logout}</Text>
+          </Pressable>
+        ) : null}
         {legalLinks}
-        <Pressable testID="delete-account-btn" onPress={removeAccount} style={styles.deleteBtn}>
-          <Icon name="trash-outline" size={20} color={COLORS.error} />
-          <Text style={styles.deleteText}>{t.profile.deleteAccount}</Text>
-        </Pressable>
+        {!OFFLINE_ONLY_MODE ? (
+          <Pressable testID="delete-account-btn" onPress={removeAccount} style={styles.deleteBtn}>
+            <Icon name="trash-outline" size={20} color={COLORS.error} />
+            <Text style={styles.deleteText}>{t.profile.deleteAccount}</Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
     </View>
   );

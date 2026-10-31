@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { readFile } from 'node:fs/promises';
+import ts from 'typescript';
 import {
   createDirectHomePizzaPlan,
   doughCalc,
@@ -12,7 +15,16 @@ import {
   toCalculatorMixing,
   toBeginnerDirectMixing,
 } from '../src/calculator.ts';
-import { getSpiralMixingSteps, getSpiralMixingTitle, getSpiralPlannerNote } from '../src/i18n/spiralMixing.ts';
+
+const require = createRequire(import.meta.url);
+require.extensions['.ts'] = (module, filename) => {
+  const source = readFileSync(filename, 'utf8');
+  const output = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  module._compile(output, filename);
+};
+const { getSpiralMixingSteps, getSpiralMixingTitle, getSpiralPlannerNote } = require('../src/i18n/spiralMixing.ts');
 
 const languages = ['hr', 'en', 'de', 'sl'];
 const mixingSelections = ['hand', 'mixer', 'spiral'];
@@ -224,6 +236,8 @@ setSharedCalculatorPlanSettings({
   romanFormat: 'tonda',
   method: 'direct',
   mixing: 'spiral',
+  oven: 'homeStone',
+  ovenTemp: 280,
   roomTemp: 26,
   roomHours: 2,
   fridgeTemp: 4,
@@ -253,12 +267,22 @@ assert.ok(
 assert.equal((calculatorSource.match(/hardware-chip-outline\.png/g) ?? []).length, 3, 'Beginner home and Pro home/spiral controls use the same icon');
 assert.match(calculatorSource, /getDetailedDirectSteps\(mixingForExperience/);
 assert.match(calculatorSource, /mixingForExperience === 'spiral'/);
+assert.match(
+  calculatorSource,
+  /const proHomeMixerDetailedSteps = proHomeMixerDirectSteps && proPhaseESteps\s*\?\s*proPhaseESteps\.map/,
+  'the Pro home mixer must render the final transformed phases, including replaced Phase E',
+);
+assert.match(
+  calculatorSource,
+  /mixing === 'mixer'\s*\?\s*\[copy\.temper, copy\.preheat, copy\.surface/,
+  'the Pro home mixer must temper before preheating in Phase E',
+);
 assert.doesNotMatch(calculatorSource, /name="sync-outline"/, 'the spiral option no longer uses the orange sync icon');
 assert.doesNotMatch(calculatorSource, /<Text style=\{styles\.hint\}>\{mixingInfo\}<\/Text>/, 'mixer explanations remain in the detailed steps/info dialog, not below the selector');
 assert.match(calculatorSource, /mixing,\s*preferredYeastType/);
 assert.match(calculatorSource, /parseMixingSelection\(settings\.mixing\)/);
 assert.match(prefermentSource, /mixing === 'spiral'/);
-assert.match(prefermentSource, /p2\.steps = getSpiralMixingSteps\(lang, yeastType, \{ method, hasOil \}\)/);
+assert.match(prefermentSource, /if \(mixing === 'spiral'\) \{[\s\S]*?p2\.steps = adaptSpiralMixerSourceSteps\(p2\.steps, lang\)[\s\S]*?if \(spiralRecipe\)/);
 assert.match(plannerSource, /activeMixing === 'spiral'/);
 assert.equal((translationsSource.match(/spiralMixer:/g) ?? []).length, 4, 'all four localized mixer labels exist');
 

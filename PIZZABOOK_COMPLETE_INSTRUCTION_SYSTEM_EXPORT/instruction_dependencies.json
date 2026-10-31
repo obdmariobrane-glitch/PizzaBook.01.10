@@ -1,0 +1,97 @@
+{
+  "schema": "pizzabook-instruction-system/dependencies/v1",
+  "roots": [
+    {
+      "source": "frontend/app/(tabs)/index.tsx",
+      "role": "active UI assembler and Beginner local instruction functions"
+    },
+    {
+      "source": "frontend/src/calculator.ts",
+      "role": "numeric calculations and schedules"
+    },
+    {
+      "source": "frontend/src/i18n/prefermentSteps.ts",
+      "role": "Biga/Poolish/direct yeast-aware instructions, timers, notifications"
+    },
+    {
+      "source": "frontend/src/i18n/spiralMixing.ts",
+      "role": "spiral mixer instructions"
+    },
+    {
+      "source": "frontend/src/i18n/styleSteps.ts",
+      "role": "legacy/pro style-specific phases and baking instructions"
+    },
+    {
+      "source": "frontend/src/i18n/translations.ts",
+      "role": "translation catalog"
+    },
+    {
+      "source": "frontend/src/guidedRecipe.ts",
+      "role": "guided timeline and notification event assembly"
+    },
+    {
+      "source": "frontend/src/notifications.ts",
+      "role": "scheduled notifications"
+    },
+    {
+      "source": "frontend/src/proLearn/manualContent.generated.ts",
+      "role": "generated PRO Learn manual"
+    }
+  ],
+  "edges": [
+    [
+      "index.tsx",
+      "calculator.ts"
+    ],
+    [
+      "index.tsx",
+      "prefermentSteps.ts"
+    ],
+    [
+      "index.tsx",
+      "spiralMixing.ts"
+    ],
+    [
+      "index.tsx",
+      "styleSteps.ts"
+    ],
+    [
+      "index.tsx",
+      "guidedRecipe.ts"
+    ],
+    [
+      "index.tsx",
+      "notifications.ts"
+    ],
+    [
+      "planner.tsx",
+      "calculator.ts"
+    ],
+    [
+      "planner.tsx",
+      "guidedRecipe.ts"
+    ],
+    [
+      "prefermentSteps.ts",
+      "translations.ts"
+    ],
+    [
+      "spiralMixing.ts",
+      "translations.ts"
+    ],
+    [
+      "styleSteps.ts",
+      "calculator.ts"
+    ]
+  ],
+  "boundary": {
+    "beginnerLocalAssemblers": "Executed from the original frontend/app/(tabs)/index.tsx through external runtime extraction; no production edits required.",
+    "reusableExportedGenerators": [
+      "calculator.ts",
+      "prefermentSteps.ts",
+      "spiralMixing.ts",
+      "styleSteps.ts",
+      "index.tsx Beginner local assemblers"
+    ]
+  }
+}

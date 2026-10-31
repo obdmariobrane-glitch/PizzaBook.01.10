@@ -1,6 +1,8 @@
 // Single source of truth for the user's onboarding experience-level selection.
 // Other screens (e.g. future Settings) should read/write via these exports only.
 import { storage } from './utils/storage';
+import { hasProAccess, loadProEntitlement, subscribeProEntitlement } from './proEntitlement';
+import { resolveExperienceLevel } from './proBillingCore';
 
 export type UserExperienceLevel = 'beginner' | 'pro';
 
@@ -20,7 +22,7 @@ export function applyLoadedExperienceLevel(level: UserExperienceLevel | null): v
 }
 
 export function getCachedExperienceLevel(): UserExperienceLevel | null | undefined {
-  return cachedLevel;
+  return resolveExperienceLevel(cachedLevel, hasProAccess());
 }
 
 export function subscribeExperienceLevel(listener: () => void): () => void {
@@ -28,7 +30,10 @@ export function subscribeExperienceLevel(listener: () => void): () => void {
   return () => listeners.delete(listener);
 }
 
+subscribeProEntitlement(() => listeners.forEach((listener) => listener()));
+
 export async function loadExperienceLevel(): Promise<UserExperienceLevel | null> {
+  await loadProEntitlement();
   const raw = await storage.getItem<string | null>(EXPERIENCE_LEVEL_KEY, null);
   const loadedLevel = isValidLevel(raw) ? raw : null;
   applyLoadedExperienceLevel(loadedLevel);
@@ -36,7 +41,11 @@ export async function loadExperienceLevel(): Promise<UserExperienceLevel | null>
 }
 
 export async function setExperienceLevel(level: UserExperienceLevel): Promise<boolean> {
-  cachedLevel = level;
-  listeners.forEach((listener) => listener());
-  return storage.setItem(EXPERIENCE_LEVEL_KEY, level);
+  if (level === 'pro' && !hasProAccess()) return false;
+  const saved = await storage.setItem(EXPERIENCE_LEVEL_KEY, level);
+  if (saved) {
+    cachedLevel = level;
+    listeners.forEach((listener) => listener());
+  }
+  return saved;
 }

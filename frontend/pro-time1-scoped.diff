@@ -1,0 +1,2843 @@
+diff --git a/frontend/app/(tabs)/index.tsx b/frontend/app/(tabs)/index.tsx
+index ec82aa5..009cb10 100644
+--- a/frontend/app/(tabs)/index.tsx
++++ b/frontend/app/(tabs)/index.tsx
+@@ -13,16 +13,17 @@ import {
+ import { useT } from '../../src/i18n/LanguageProvider';
+ import type { Lang } from '../../src/i18n/translations';
+ import { scheduleLocal, cancelLocal, cancelGuidedNotificationForStep, cancelGuidedNotificationsForPlan, cancelPlannerNotificationsForMethods, isPushSupported, requestNotificationPermissions, scheduleLocalAt } from '../../src/notifications';
++import { runGuidedNotificationSync } from '../../src/notifications';
+ import { COLORS, SPACING, RADIUS } from '../../src/theme';
+-import { getCachedExperienceLevel, loadExperienceLevel, subscribeExperienceLevel } from '../../src/experienceLevel';
++import { applyLoadedExperienceLevel, getCachedExperienceLevel, subscribeExperienceLevel } from '../../src/experienceLevel';
+ import {
+   getCachedTemperatureUnit, subscribeTemperatureUnit,
+   getCachedMeasurementSystem, subscribeMeasurementSystem,
+-  getCachedPreferredYeastType, subscribePreferredYeastType,
++  getCachedPreferredYeastType, subscribePreferredYeastType, applyLoadedCalculatorPreferences,
+ } from '../../src/preferences';
+ import { displayTemperature, formatLength, formatTemperature, formatUnitText, formatWeight, temperatureInputToCelsius, weightInputToGrams } from '../../src/units';
+ import {
+-  dimensionsCalc, doughCalc, getFermentationSchedule, iceCalc, getBakingTimeRange, formatBakingTimeRange,
++  dimensionsCalc, doughCalc, getDirectHomeFermentationSchedule, getFermentationSchedule, getTemperingWindow, iceCalc, getBakingTimeRange, formatBakingTimeRange, isHomeScheduleDurationValid,
+   Method, OvenType, FlourType, PizzaStyle, HomeFlourStrengthSource, PIZZA_STYLE_PROFILES, FLOUR_PROFILES, BASE_FLOURS, normalizeBeginnerSavedState, beginnerHydrationFor, beginnerBallWeightForDiameter, beginnerDiameterForBallWeight, blendIdealHydration,
+   calculateBeginnerPhaseBPlan, createDirectHomePizzaPlan, createBigaHomePizzaPlan, createPoolishHomePizzaPlan, getBeginnerFlourGuidanceKind, getBeginnerPreheatMinutes, getHomeFlourStrengthInput, getHomePlanLegacyFermentationHours,
+   BeginnerPhaseBPlan, BeginnerDirectScheduleMode,
+@@ -30,8 +31,14 @@ import {
+   setSharedHomeBakeAt, setSharedHomeDirectSchedule, setSharedHomeBigaSchedule, setSharedHomePoolishSchedule,
+ } from '../../src/calculator';
+ import { api, useAuth } from '../../src/auth';
++import {
++  BEGINNER_PLAN_STORAGE_KEY, BEGINNER_PLAN_STORAGE_VERSION,
++  BeginnerPlanSnapshot, createBeginnerPlanInputKeyFromState, isBeginnerPlanActive,
++  parseBeginnerPlanSnapshot, serializeBeginnerSchedule,
++} from '../../src/beginnerPlanPersistence';
+ import GuidedRecipePanel, { GuidedRecipeSchedule } from '../../src/components/GuidedRecipePanel';
+ import MixingGuideCarousel, { MixingGuideKind } from '../../src/components/MixingGuideCarousel';
++import { createBeginnerPlanRestoreCoordinator, createBeginnerPlanRestoreLoaders, resolveBeginnerRestoreBakeAt, setPlannerNotificationRestoreStatus } from '../../src/beginnerPlanRestoreCoordinator';
+ import {
+   createGuidedPlanId,
+   getGuidedCountdown,
+@@ -43,21 +50,19 @@ import {
+   GuidedScheduleEvent,
+   planGuidedNotifications,
+ } from '../../src/guidedRecipe';
++import { deleteProRecipe, getProSavedRecipes, ProSavedRecipe, saveProRecipe } from '../../src/proSavedRecipes';
+ 
+ const DIAMETERS = [28, 30, 33, 35];
+ const CALCULATOR_SETTINGS_KEY = 'calculatorSettings';
+-const BEGINNER_BAKE_AT_KEY = 'beginnerBakeAt';
+ const GUIDED_NOTIFICATIONS_ENABLED_KEY = 'beginnerGuidedNotificationsEnabled';
+ const GUIDED_PROGRESS_STORAGE_PREFIX = 'beginnerGuidedProgress:';
+ const GUIDED_NIGHT_WARNING_CONFIRMED_PREFIX = 'beginnerNightWarningConfirmed:';
+-const FREE_PIZZA_STYLE: PizzaStyle = 'neapolitan';
+-const FREE_FLOUR_TYPES: FlourType[] = ['caputo00', 'manitoba', 'spelt'];
+ const ALL_FLOUR_TYPES: FlourType[] = ['caputo00', 'manitoba', 'spelt', 'wholeWheat', 'glutenFree', 'custom'];
+ const isFlourType = (value: unknown): value is FlourType => ALL_FLOUR_TYPES.includes(value as FlourType);
+ type RecipeVariant = 'napolitana' | 'romanaTonda' | 'romanaTeglia' | 'newYork';
+ type BeginnerSection = 'style' | 'flour' | 'quantity' | 'method' | 'oven' | 'bake' | 'plan';
+ type BeginnerPhaseAFlourBehavior = 'standard' | 'spelt' | 'wholeWheat';
+-type SavedRecipe = { recipe_id: string; name: string; recipe: any };
++type SavedRecipe = ProSavedRecipe;
+ type DetailedPhase = {
+   title: string;
+   steps: string[];
+@@ -216,6 +221,7 @@ type CalculatorSettings = {
+   oven: OvenType;
+   ovenTemp: number;
+   mixing: 'hand' | 'mixer';
++  beginnerScheduleMode?: BeginnerDirectScheduleMode;
+ };
+ 
+ type FlourEntry = { key: FlourType; label: string; suffix: string; info?: string };
+@@ -433,6 +439,13 @@ export default function CalculatorHome() {
+   const [quantityExpanded, setQuantityExpanded] = useState(false);
+   const [activeTimers, setActiveTimers] = useState<Record<string, { endsAt: number; label: string; notifId?: string | null }>>({});
+   const [settingsLoaded, setSettingsLoaded] = useState(false);
++  const [settingsLoadStatus, setSettingsLoadStatus] = useState<'pending' | 'loaded' | 'error'>('pending');
++  const [beginnerPlanHydrated, setBeginnerPlanHydrated] = useState(false);
++  const [restoredBeginnerSchedule, setRestoredBeginnerSchedule] = useState<HomePizzaPlanSchedule | null>(null);
++  const [restoredBeginnerPlanKey, setRestoredBeginnerPlanKey] = useState<string | null>(null);
++  const [restoredBeginnerCalculationNow, setRestoredBeginnerCalculationNow] = useState<Date | null>(null);
++  const pendingBeginnerPlanSnapshot = useRef<(BeginnerPlanSnapshot & { parsedSchedule: HomePizzaPlanSchedule; parsedCalculationNow: Date }) | null>(null);
++  const beginnerRestoreCoordinator = useRef(createBeginnerPlanRestoreCoordinator());
+   const beginnerSectionY = useRef<Partial<Record<BeginnerSection, number>>>({});
+   const beginnerSectionRefs = useRef<Partial<Record<BeginnerSection, View | null>>>({});
+   const beginnerScrollOffset = useRef(0);
+@@ -443,20 +456,6 @@ export default function CalculatorHome() {
+   // ticker: force re-render each second for countdowns AND check for expired timers
+   const [now, setNow] = useState(() => Date.now());
+ 
+-  useEffect(() => {
+-    AsyncStorage.getItem(BEGINNER_BAKE_AT_KEY).then((value) => {
+-      if (!value) return;
+-      const parsed = new Date(value);
+-      const availableHours = (parsed.getTime() - Date.now()) / 3600000;
+-      if (Number.isFinite(parsed.getTime()) && parsed.getTime() > Date.now()
+-        && (!isBeginner || availableHours >= 1)) {
+-        setSharedHomeBakeAt(parsed);
+-      }
+-    }).catch((error) => {
+-      console.error('Unable to restore the scheduled bake time:', error);
+-    });
+-  }, [isBeginner]);
+-
+   useEffect(() => {
+     AsyncStorage.getItem(GUIDED_NOTIFICATIONS_ENABLED_KEY).then((value) => {
+       setGuidedNotificationsEnabled(value === 'true');
+@@ -468,12 +467,40 @@ export default function CalculatorHome() {
+   }, []);
+ 
+   useEffect(() => {
+-    Promise.all([AsyncStorage.getItem(CALCULATOR_SETTINGS_KEY), loadExperienceLevel()]).then(([value]) => {
++    beginnerRestoreCoordinator.current.activate();
++    const generation = beginnerRestoreCoordinator.current.begin();
++    setPlannerNotificationRestoreStatus('pending');
++    setSettingsLoadStatus('pending');
++    setSettingsLoaded(false);
++    setBeginnerPlanHydrated(false);
++    pendingBeginnerPlanSnapshot.current = null;
++    setRestoredBeginnerSchedule(null);
++    setRestoredBeginnerPlanKey(null);
++    setRestoredBeginnerCalculationNow(null);
++    const restoreLoaders = createBeginnerPlanRestoreLoaders({
++      getItem: (key) => AsyncStorage.getItem(key),
++    });
++    void beginnerRestoreCoordinator.current.load(generation, restoreLoaders).then((restoreData) => {
++      if (!restoreData || !beginnerRestoreCoordinator.current.isCurrent(generation)) return;
++      applyLoadedExperienceLevel(restoreData.experienceLevel);
++      applyLoadedCalculatorPreferences(restoreData.preferences);
++      if (!beginnerRestoreCoordinator.current.isCurrent(generation)) return;
++      const { calculatorSettings: value, experienceLevel: loadedExperienceLevel, legacyBakeAt: legacyBakeAtValue, beginnerPlanSnapshot: beginnerPlanValue } = restoreData;
++      const loadedIsBeginner = loadedExperienceLevel !== 'pro';
++      const storedPlan = parseBeginnerPlanSnapshot<HomePizzaPlanSchedule>(beginnerPlanValue, isHomeScheduleDurationValid);
++      const storedPlanIsCurrent = loadedIsBeginner && storedPlan && isBeginnerPlanActive(storedPlan, new Date());
++      if (storedPlanIsCurrent && storedPlan) {
++        pendingBeginnerPlanSnapshot.current = storedPlan;
++        setRestoredBeginnerCalculationNow(storedPlan.parsedCalculationNow);
++        setBeginnerScheduleMode(storedPlan.mode);
++      }
++      const restoredBakeAt = resolveBeginnerRestoreBakeAt(restoreData, storedPlan, new Date());
++      if (restoredBakeAt !== undefined) setSharedHomeBakeAt(restoredBakeAt);
+       if (value) {
+         try {
+           const saved = JSON.parse(value) as Partial<CalculatorSettings>;
+           const restoreBeginnerStyles = getCachedExperienceLevel() !== 'pro';
+-          if (saved.pizzaStyle === FREE_PIZZA_STYLE || (restoreBeginnerStyles && (saved.pizzaStyle === 'romana' || saved.pizzaStyle === 'ny_style'))) {
++          if (saved.pizzaStyle === 'neapolitan' || saved.pizzaStyle === 'romana' || saved.pizzaStyle === 'ny_style') {
+             setPizzaStyle(saved.pizzaStyle);
+           }
+           if (saved.romanFormat) setRomanFormat(saved.romanFormat);
+@@ -485,7 +512,7 @@ export default function CalculatorHome() {
+             setTrayLength(saved.trayLength);
+             setTrayLengthInput(String(saved.trayLength));
+           }
+-          if (saved.flour && (restoreBeginnerStyles ? isFlourType(saved.flour) : FREE_FLOUR_TYPES.includes(saved.flour))) setFlour(saved.flour);
++          if (isFlourType(saved.flour)) setFlour(saved.flour);
+           if (saved.flourStrengthSource === 'w' || saved.flourStrengthSource === 'protein' || saved.flourStrengthSource === 'unknown') {
+             setFlourStrengthSource(saved.flourStrengthSource);
+           }
+@@ -496,7 +523,7 @@ export default function CalculatorHome() {
+           if (typeof saved.blendPctA === 'number') setBlendPctA(saved.blendPctA);
+           if (typeof saved.pizzas === 'number') setPizzas(saved.pizzas);
+           if (typeof saved.diameter === 'number') {
+-            setDiameter(restoreBeginnerStyles && (saved.pizzaStyle ?? FREE_PIZZA_STYLE) === 'neapolitan' ? PIZZA_STYLE_PROFILES.neapolitan.defaultDiameter : saved.diameter);
++            setDiameter(restoreBeginnerStyles && (saved.pizzaStyle ?? 'neapolitan') === 'neapolitan' ? PIZZA_STYLE_PROFILES.neapolitan.defaultDiameter : saved.diameter);
+           }
+           if (saved.customBallWeight !== undefined) setCustomBallWeight(saved.customBallWeight);
+           if (saved.method === 'direct' || saved.method === 'biga' || saved.method === 'poolish') {
+@@ -525,15 +552,28 @@ export default function CalculatorHome() {
+             setOvenTempInput('250');
+           }
+           if (saved.mixing === 'hand' || saved.mixing === 'mixer') setMixing(saved.mixing);
++          if (loadedIsBeginner && !storedPlanIsCurrent && (saved.beginnerScheduleMode === 'roomOnly' || saved.beginnerScheduleMode === 'fridgeRoom')) setBeginnerScheduleMode(saved.beginnerScheduleMode);
+           if (restoreBeginnerStyles) applyBeginnerNormalized(saved);
+         } catch {}
+       }
+       setSettingsLoaded(true);
++      setSettingsLoadStatus('loaded');
++      setPlannerNotificationRestoreStatus(loadedIsBeginner || restoredBakeAt !== undefined ? 'ready' : 'unavailable');
++    }).catch((error) => {
++      if (!beginnerRestoreCoordinator.current.isCurrent(generation)) return;
++      console.error('Unable to restore calculator settings and the Beginner plan:', error);
++      setSettingsLoaded(true);
++      setSettingsLoadStatus('error');
++      setBeginnerPlanHydrated(true);
++      setPlannerNotificationRestoreStatus('unavailable');
+     });
+-  }, []);
++    return () => beginnerRestoreCoordinator.current.invalidate(generation);
++  }, [isBeginner]);
++
++  useEffect(() => () => beginnerRestoreCoordinator.current.dispose(), []);
+ 
+   useEffect(() => {
+-    if (!settingsLoaded || !experienceLoaded) return;
++    if (!settingsLoaded || settingsLoadStatus !== 'loaded' || !experienceLoaded) return;
+     const parsedStrength = Number(flourStrengthValue);
+     const strengthIsValid = Number.isFinite(parsedStrength) && parsedStrength > 0;
+     const settings: CalculatorSettings = {
+@@ -542,10 +582,10 @@ export default function CalculatorHome() {
+       ...(flourStrengthSource === 'w' && strengthIsValid ? { flourW: parsedStrength } : {}),
+       ...(flourStrengthSource === 'protein' && strengthIsValid ? { flourProteinPct: parsedStrength } : {}),
+       customBallWeight, method, bigaPct, poolishPct, bigaHours, poolishHours, hydration, saltPct, oilPct,
+-      roomTemp, roomHours, fridgeTemp, fridgeHours, useIce, oven, ovenTemp, mixing,
++      roomTemp, roomHours, fridgeTemp, fridgeHours, useIce, oven, ovenTemp, mixing, beginnerScheduleMode,
+     };
+     AsyncStorage.setItem(CALCULATOR_SETTINGS_KEY, JSON.stringify(settings)).catch(() => {});
+-  }, [settingsLoaded, experienceLoaded, pizzaStyle, romanFormat, trayWidth, trayLength, flour, flourStrengthSource, flourStrengthValue, blendA, blendB, blendPctA, pizzas, diameter, customBallWeight, method, bigaPct, poolishPct, bigaHours, poolishHours, hydration, saltPct, oilPct, roomTemp, roomHours, fridgeTemp, fridgeHours, useIce, oven, ovenTemp, mixing]);
++  }, [settingsLoaded, settingsLoadStatus, experienceLoaded, pizzaStyle, romanFormat, trayWidth, trayLength, flour, flourStrengthSource, flourStrengthValue, blendA, blendB, blendPctA, pizzas, diameter, customBallWeight, method, bigaPct, poolishPct, bigaHours, poolishHours, hydration, saltPct, oilPct, roomTemp, roomHours, fridgeTemp, fridgeHours, useIce, oven, ovenTemp, mixing, beginnerScheduleMode]);
+ 
+   useEffect(() => {
+     if (experienceLoaded && isBeginner) void cancelPlannerNotificationsForMethods(['biga', 'poolish']);
+@@ -776,7 +816,6 @@ export default function CalculatorHome() {
+     ny_style: require('../../assets/images/pizza-new-york.png'),
+   };
+   const isCustom = flour === 'custom';
+-  const isPremiumUnlocked = false;
+   const customIdeal = useMemo(() => blendIdealHydration(blendA, blendB, blendPctA), [blendA, blendB, blendPctA]);
+   const idealHydration = isBeginner ? beginnerHydrationFor(pizzaStyle, flour) : flourProfile.ideal;
+   const isIdealHydration = hydration === idealHydration;
+@@ -786,10 +825,6 @@ export default function CalculatorHome() {
+ 
+   // Auto-adjust hydration when custom blend changes
+   const changeFlour = (f: FlourType) => {
+-    if (!isPremiumUnlocked && !isBeginner && !FREE_FLOUR_TYPES.includes(f)) {
+-      Alert.alert('Pizzabook Premium', 'Ova opcija je zaključana. Otključaj Premium jednokratnom kupovinom.');
+-      return;
+-    }
+     setFlour(f);
+     if (f === 'glutenFree') setMethod('direct');
+     if (isBeginner) {
+@@ -804,10 +839,6 @@ export default function CalculatorHome() {
+   };
+ 
+   const changeStyle = (nextStyle: PizzaStyle) => {
+-    if (!isPremiumUnlocked && !isBeginner && nextStyle !== FREE_PIZZA_STYLE) {
+-      Alert.alert('Pizzabook Premium', 'Ovaj stil pizze je zaključan. Otključaj Premium jednokratnom kupovinom.');
+-      return;
+-    }
+     const next = PIZZA_STYLE_PROFILES[nextStyle];
+     setPizzaStyle(nextStyle);
+     if (isBeginner && nextStyle === 'romana') setRomanFormat('tonda');
+@@ -842,7 +873,7 @@ export default function CalculatorHome() {
+       if (nextStyle === 'romana') transitionBeginnerTo('style');
+       else transitionBeginnerTo('flour');
+     } else {
+-      setStyleExpanded(false);
++      setStyleExpanded(nextStyle === 'romana');
+     }
+     try { Haptics.selectionAsync(); } catch {}
+   };
+@@ -899,11 +930,31 @@ export default function CalculatorHome() {
+       ? customBallWeight ?? beginnerBallWeightForDiameter(pizzaStyle, diameter)
+       : customBallWeight ?? (diameter === styleProfile.defaultDiameter ? styleProfile.ballWeight : dims.doughBall);
+   const prefermentHours = method === 'biga' ? bigaHours : method === 'poolish' ? poolishHours : 0;
++  const beginnerPlanInputKey = useMemo(() => createBeginnerPlanInputKeyFromState({
++    bakeAt: sharedBakeAt?.getTime() ?? null,
++    pizzaStyle, romanFormat, pizzas, effectiveBall, roomTemp, fridgeTemp, oven, ovenTemp,
++    flour, blendA: flour === 'custom' ? blendA : null, blendB: flour === 'custom' ? blendB : null,
++    blendPctA: flour === 'custom' ? blendPctA : null, mixing, explicitFlourStrength, hydration,
++    preferredYeastType, beginnerScheduleMode, diameter, isRomanTeglia, trayWidth, trayLength,
++  }), [sharedBakeAt, pizzaStyle, romanFormat, pizzas, effectiveBall, roomTemp, fridgeTemp, oven, ovenTemp, flour, blendA, blendB, blendPctA, mixing, explicitFlourStrength, hydration, preferredYeastType, beginnerScheduleMode, diameter, isRomanTeglia, trayWidth, trayLength]);
++  useEffect(() => {
++    if (!settingsLoaded || !experienceLoaded || sharedBakeAt === null) return;
++    const snapshot = pendingBeginnerPlanSnapshot.current;
++    const canRestore = !!snapshot
++      && snapshot.inputKey === beginnerPlanInputKey
++      && snapshot.parsedSchedule.bakeAt.getTime() === sharedBakeAt.getTime();
++    setRestoredBeginnerSchedule(canRestore ? snapshot.parsedSchedule : null);
++    setRestoredBeginnerPlanKey(canRestore ? snapshot.inputKey : null);
++    setBeginnerPlanHydrated(true);
++  }, [settingsLoaded, experienceLoaded, sharedBakeAt, beginnerPlanInputKey]);
+   const fermentationSchedule = useMemo(() => getFermentationSchedule({
+     method, prefermentHours, roomHours, roomTemp, fridgeHours, fridgeTemp,
+   }), [method, prefermentHours, roomHours, roomTemp, fridgeHours, fridgeTemp]);
++  const planCalculationNow = isBeginner && restoredBeginnerPlanKey === beginnerPlanInputKey && restoredBeginnerCalculationNow
++    ? restoredBeginnerCalculationNow
++    : scheduleCalculationNow;
+   const homePlan = useMemo(() => {
+-    if (method !== 'direct' || sharedBakeAt === null) return null;
++    if (!beginnerPlanHydrated || settingsLoadStatus !== 'loaded' || method !== 'direct' || sharedBakeAt === null) return null;
+     return createDirectHomePizzaPlan({
+       style: pizzaStyle,
+       pizzas,
+@@ -918,9 +969,11 @@ export default function CalculatorHome() {
+       flourType: flour,
+       mixing: mixing === 'hand' ? 'hand' : 'home',
+       beginnerScheduleMode,
+-    }, getHomeFlourStrengthInput(flour, explicitFlourStrength), hydration, preferredYeastType, scheduleCalculationNow, isBeginner);
+-  }, [isBeginner, method, sharedBakeAt, pizzaStyle, romanFormat, isRomanTeglia, pizzas, effectiveBall, roomTemp, fridgeTemp, oven, ovenTemp, flour, mixing, beginnerScheduleMode, explicitFlourStrength, hydration, preferredYeastType, scheduleCalculationNow]);
+-  const directHomeSchedule = method === 'direct' ? homePlan?.schedule ?? null : null;
++    }, getHomeFlourStrengthInput(flour, explicitFlourStrength), hydration, preferredYeastType, planCalculationNow, isBeginner);
++  }, [beginnerPlanHydrated, settingsLoadStatus, isBeginner, method, sharedBakeAt, pizzaStyle, romanFormat, isRomanTeglia, pizzas, effectiveBall, roomTemp, fridgeTemp, oven, ovenTemp, flour, mixing, beginnerScheduleMode, explicitFlourStrength, hydration, preferredYeastType, planCalculationNow]);
++  const directHomeSchedule = method === 'direct'
++    ? isBeginner && restoredBeginnerPlanKey === beginnerPlanInputKey ? restoredBeginnerSchedule : homePlan?.schedule ?? null
++    : null;
+   const beginnerCandidateEvaluations = isBeginner && method === 'direct' && (mixing === 'hand' || mixing === 'mixer')
+     ? (homePlan?.candidateEvaluations ?? [])
+     : [];
+@@ -962,13 +1015,14 @@ export default function CalculatorHome() {
+     && (mixing === 'hand' || mixing === 'mixer')
+     && sharedBakeAt !== null;
+   useEffect(() => {
++    if (!beginnerPlanHydrated || settingsLoadStatus !== 'loaded') return;
+     const current = beginnerCandidateEvaluations.find((evaluation) => (evaluation.candidate as unknown as { mode?: BeginnerDirectScheduleMode }).mode === beginnerScheduleMode);
+     if (current?.selectable) return;
+     if (beginnerSelectableModes.length === 0) return;
+     const fallback = beginnerSelectableModes.find((evaluation) => evaluation.recommended) ?? beginnerSelectableModes[0];
+     const mode = (fallback.candidate as unknown as { mode: BeginnerDirectScheduleMode }).mode;
+     if (mode && mode !== beginnerScheduleMode) setBeginnerScheduleMode(mode);
+-  }, [beginnerCandidateEvaluations, beginnerScheduleMode, beginnerSelectableModes]);
++  }, [beginnerPlanHydrated, settingsLoadStatus, beginnerCandidateEvaluations, beginnerScheduleMode, beginnerSelectableModes]);
+   const beginnerDirectHome = isBeginner && method === 'direct' && !!directHomeSchedule;
+   const beginnerPhaseBPlan: BeginnerPhaseBPlan | null = beginnerDirectHome && directHomeSchedule
+     ? calculateBeginnerPhaseBPlan({
+@@ -983,8 +1037,9 @@ export default function CalculatorHome() {
+     })
+     : null;
+   useEffect(() => {
+-    setSharedHomeDirectSchedule(directHomeSchedule && flour === 'glutenFree' ? { ...directHomeSchedule, glutenFree: true } : directHomeSchedule);
+-  }, [directHomeSchedule, flour]);
++    if (!beginnerPlanHydrated || settingsLoadStatus !== 'loaded') return;
++    setSharedHomeDirectSchedule(directHomeSchedule && flour === 'glutenFree' ? { ...directHomeSchedule, glutenFree: true } : directHomeSchedule, isBeginner ? 'beginner' : 'pro');
++  }, [beginnerPlanHydrated, settingsLoadStatus, directHomeSchedule, flour, isBeginner]);
+   const directRecipeRoomHours = directHomeSchedule?.roomAfterFridgeHours ?? roomHours;
+   const directRecipeFridgeHours = directHomeSchedule?.fridgeHours ?? fridgeHours;
+   const directHomeScheduleDisplay = directHomeSchedule ? formatDirectHomeSchedule(directHomeSchedule, roomTemp, fridgeTemp, lang) : null;
+@@ -1022,34 +1077,39 @@ export default function CalculatorHome() {
+     }
+     const ballingAt = directHomeSchedule.ballingAt ?? new Date(startAt.getTime() + roomBeforeFridgeHours * 3600000);
+     if (fridgeHours > 0) {
+-      steps.push({
+-        id: isGlutenFree
+-          ? 'portioning'
+-          : isRomanTeglia || isTargetBeginnerSchedule
+-            ? 'fridgeIn'
+-            : 'fridgeInCombined',
+-        label: isRomanTeglia
+-          ? t.beginnerCalc.timelineRefrigerateDough
+-          : isGlutenFree
+-            ? t.beginnerCalc.timelinePreparePortions
+-            : t.beginnerCalc.timelineDivideBallRefrigerate(
+-              pizzas,
+-              effectiveBall,
+-            ),
+-        at: ballingAt,
+-        actionable: true,
+-      });
+-      if (isTargetBeginnerSchedule && directHomeSchedule.fridgeAt) {
+-        steps[steps.length - 1] = {
+-          id: 'balling',
+-          label: t.beginnerCalc.timelineShapeBalls,
+-          at: ballingAt,
+-          actionable: true,
+-        };
++      const fridgeAt = directHomeSchedule.fridgeAt;
++      const separateFridgeIn = fridgeAt && fridgeAt.getTime() > ballingAt.getTime();
++      if (separateFridgeIn) {
++        if (!isRomanTeglia) {
++          steps.push({
++            id: isTargetBeginnerSchedule ? 'balling' : isGlutenFree ? 'portioning' : 'fridgeInCombined',
++            label: isGlutenFree ? t.beginnerCalc.timelinePreparePortions : t.beginnerCalc.timelineShapeBalls,
++            at: ballingAt,
++            actionable: true,
++          });
++        }
+         steps.push({
+           id: 'fridgeIn',
+           label: t.beginnerCalc.timelineRefrigerateDough,
+-          at: directHomeSchedule.fridgeAt,
++          at: fridgeAt,
++          actionable: true,
++        });
++      } else {
++        steps.push({
++          id: isGlutenFree
++            ? 'portioning'
++            : isRomanTeglia
++              ? 'fridgeIn'
++              : 'fridgeInCombined',
++          label: isRomanTeglia
++            ? t.beginnerCalc.timelineRefrigerateDough
++            : isGlutenFree
++              ? t.beginnerCalc.timelinePreparePortions
++              : t.beginnerCalc.timelineDivideBallRefrigerate(
++                pizzas,
++                effectiveBall,
++              ),
++          at: ballingAt,
+           actionable: true,
+         });
+       }
+@@ -1112,6 +1172,29 @@ export default function CalculatorHome() {
+     directHomeSchedule, beginnerPhaseBPlan, lang, t.beginnerCalc, isRomanTeglia, pizzaStyle, flour, blendA, blendB, mixing, oven, ovenTemp, temperatureUnit, beginnerDirectHome,
+   ]);
+   const legacyDoughHours = getHomePlanLegacyFermentationHours(homePlan, roomHours, fridgeHours);
++  const activeProDirectHomeSchedule = !isBeginner
++    && method === 'direct'
++    && !!sharedBakeAt
++    && !!directHomeSchedule
++    && directHomeSchedule.bakeAt.getTime() === sharedBakeAt.getTime()
++    && isHomeScheduleDurationValid(directHomeSchedule)
++    ? directHomeSchedule
++    : null;
++  const proFermentationSchedule = useMemo(() => {
++    if (isBeginner) return undefined;
++    if (method === 'direct' && activeProDirectHomeSchedule) {
++      return getDirectHomeFermentationSchedule(activeProDirectHomeSchedule, roomTemp, fridgeTemp);
++    }
++    return getFermentationSchedule({
++      method,
++      prefermentHours,
++      roomHours,
++      roomTemp,
++      fridgeHours,
++      fridgeTemp,
++      roomAfterFridgeHours: fridgeHours > 0 ? getTemperingWindow(roomTemp).initialMinutes / 60 : 0,
++    });
++  }, [isBeginner, method, activeProDirectHomeSchedule, prefermentHours, roomHours, roomTemp, fridgeHours, fridgeTemp]);
+   const bigaHomePlan = useMemo(() => {
+     if (!isBeginner || method !== 'biga' || sharedBakeAt === null) return null;
+     return createBigaHomePizzaPlan({
+@@ -1127,8 +1210,9 @@ export default function CalculatorHome() {
+   const bigaHomeSchedule = isBeginner && method === 'biga' ? bigaHomePlan?.schedule ?? null : null;
+   const beginnerNeapolitanBigaHome = isBeginner && pizzaStyle === 'neapolitan' && method === 'biga' && !!bigaHomeSchedule;
+   useEffect(() => {
++    if (!beginnerPlanHydrated || settingsLoadStatus !== 'loaded') return;
+     setSharedHomeBigaSchedule(bigaHomeSchedule);
+-  }, [bigaHomeSchedule]);
++  }, [beginnerPlanHydrated, settingsLoadStatus, bigaHomeSchedule]);
+   const bigaHomeScheduleDisplay = bigaHomeSchedule ? formatBigaHomeSchedule(bigaHomeSchedule, lang) : null;
+   const bigaHomeScheduleHint = beginnerNeapolitanBigaHome ? (() => {
+     const room = formatDuration(bigaHomeSchedule.bigaRoomHours * 3600, lang);
+@@ -1155,8 +1239,9 @@ export default function CalculatorHome() {
+   }, [isBeginner, method, sharedBakeAt, pizzaStyle, pizzas, effectiveBall, roomTemp, fridgeTemp, oven, poolishHours, scheduleCalculationNow]);
+   const poolishHomeSchedule = isBeginner && method === 'poolish' ? poolishHomePlan?.schedule ?? null : null;
+   useEffect(() => {
++    if (!beginnerPlanHydrated || settingsLoadStatus !== 'loaded') return;
+     setSharedHomePoolishSchedule(poolishHomeSchedule);
+-  }, [poolishHomeSchedule]);
++  }, [beginnerPlanHydrated, settingsLoadStatus, poolishHomeSchedule]);
+   const poolishHomeScheduleDisplay = poolishHomeSchedule ? formatPoolishHomeSchedule(poolishHomeSchedule, lang) : null;
+   const beginnerHomePlanMilestones = !directHomeSchedule
+     ? bigaHomeScheduleDisplay?.steps ?? poolishHomeScheduleDisplay?.steps ?? []
+@@ -1167,32 +1252,26 @@ export default function CalculatorHome() {
+     || (method === 'poolish' && poolishHomeSchedule)
+   );
+   const guidedPlanId = beginnerHomeRecipeLayout && directHomeSchedule && sharedBakeAt
+-    ? createGuidedPlanId([
+-      sharedBakeAt.getTime(),
+-      directHomeSchedule.startAt.getTime(),
+-      directHomeSchedule.roomBeforeFridgeHours,
+-      directHomeSchedule.fridgeHours,
+-      directHomeSchedule.roomAfterFridgeHours,
+-      roomTemp,
+-      fridgeTemp,
+-      pizzaStyle,
+-      isRomanTeglia ? romanFormat : null,
+-      flour,
+-      flour === 'custom' ? blendA : null,
+-      flour === 'custom' ? blendB : null,
+-      flour === 'custom' ? blendPctA : null,
+-      mixing,
+-      oven,
+-      ovenTemp,
+-      hydration,
+-      preferredYeastType,
+-      pizzas,
+-      effectiveBall,
+-      diameter,
+-      trayWidth,
+-      trayLength,
+-    ])
++    ? createGuidedPlanId([beginnerPlanInputKey])
+     : null;
++
++  useEffect(() => {
++    if (!beginnerPlanHydrated || settingsLoadStatus !== 'loaded' || !isBeginner || !sharedBakeAt || !directHomeSchedule || !beginnerScheduleMode) return;
++    const mode = beginnerScheduleMode;
++    const snapshot: BeginnerPlanSnapshot = {
++      version: BEGINNER_PLAN_STORAGE_VERSION,
++      inputKey: beginnerPlanInputKey,
++      bakeAt: sharedBakeAt.toISOString(),
++      calculationNow: (restoredBeginnerPlanKey === beginnerPlanInputKey && restoredBeginnerCalculationNow
++        ? restoredBeginnerCalculationNow
++        : scheduleCalculationNow).toISOString(),
++      mode,
++      schedule: serializeBeginnerSchedule(directHomeSchedule),
++    };
++    AsyncStorage.setItem(BEGINNER_PLAN_STORAGE_KEY, JSON.stringify(snapshot)).catch((error) => {
++      console.error('Unable to persist the Beginner plan snapshot:', error);
++    });
++  }, [beginnerPlanHydrated, settingsLoadStatus, isBeginner, sharedBakeAt, directHomeSchedule, beginnerScheduleMode, beginnerPlanInputKey, restoredBeginnerPlanKey, restoredBeginnerCalculationNow, scheduleCalculationNow]);
+   const guidedDateGroups = useMemo(() => groupGuidedEventsByLocalDate(beginnerScheduleSteps), [beginnerScheduleSteps]);
+   const nextGuidedEvent = useMemo(() => getNextGuidedEvent(beginnerScheduleSteps, guidedCompletedAt), [beginnerScheduleSteps, guidedCompletedAt]);
+   const guidedProgress = useMemo(() => getGuidedProgress(beginnerScheduleSteps, guidedCompletedAt), [beginnerScheduleSteps, guidedCompletedAt]);
+@@ -1306,11 +1385,12 @@ export default function CalculatorHome() {
+   }, [isBeginner, guidedPlanId, beginnerScheduleSteps, lang, router, nighttimeWarningRequest]);
+ 
+   useEffect(() => {
++    if (!beginnerPlanHydrated || settingsLoadStatus !== 'loaded') return;
+     if (!guidedPlanId) {
+       const previousPlanId = previousGuidedPlanId.current;
+       previousGuidedPlanId.current = null;
+       if (previousPlanId) {
+-        void cancelGuidedNotificationsForPlan(previousPlanId).catch((error) => {
++        void runGuidedNotificationSync(() => cancelGuidedNotificationsForPlan(previousPlanId)).catch((error) => {
+           console.error('Unable to cancel notifications for the previous guided plan:', error);
+         });
+       }
+@@ -1327,6 +1407,7 @@ export default function CalculatorHome() {
+         await cancelGuidedNotificationsForPlan(previousPlanId);
+       }
+       await cancelGuidedNotificationsForPlan(guidedPlanId);
++      if (generation !== notificationSyncGeneration.current) return;
+       if (!guidedNotificationsEnabled || !isPushSupported()) return;
+ 
+       for (const { event, combinedWith } of planGuidedNotifications(beginnerScheduleSteps, guidedCompletedAt, Date.now())) {
+@@ -1356,7 +1437,7 @@ export default function CalculatorHome() {
+       }
+     };
+ 
+-    void syncNotifications().catch((error) => {
++    void runGuidedNotificationSync(syncNotifications).catch((error) => {
+       console.error('Unable to synchronize guided recipe notifications:', error);
+       if (generation !== notificationSyncGeneration.current) return;
+       setGuidedNotificationsEnabled(false);
+@@ -1370,7 +1451,7 @@ export default function CalculatorHome() {
+       notificationSyncGeneration.current += 1;
+     };
+   }, [
+-    guidedPlanId, guidedEventScheduleKey, guidedNotificationPreferenceLoaded, guidedProgressPlanId,
++    beginnerPlanHydrated, settingsLoadStatus, guidedPlanId, guidedEventScheduleKey, guidedNotificationPreferenceLoaded, guidedProgressPlanId,
+     guidedNotificationsEnabled, guidedCompletedAt, pizzas, effectiveBall, t.beginnerCalc,
+   ]);
+ 
+@@ -1479,7 +1560,8 @@ export default function CalculatorHome() {
+     flourType: flour,
+     bigaHomeSchedule: bigaHomePlan?.schedule,
+     poolishHomeSchedule: poolishHomePlan?.schedule,
+-  }), [pizzas, effectiveBall, hydration, saltPct, oilPct, method, bigaPct, poolishPct, prefermentHours, legacyDoughHours.roomHours, roomTemp, legacyDoughHours.fridgeHours, fridgeTemp, mixing, flour, pizzaStyle, isRomanTeglia, isBeginner, preferredYeastType, bigaHomePlan, poolishHomePlan]);
++    fermentationSchedule: proFermentationSchedule,
++  }), [pizzas, effectiveBall, hydration, saltPct, oilPct, method, bigaPct, poolishPct, prefermentHours, legacyDoughHours.roomHours, roomTemp, legacyDoughHours.fridgeHours, fridgeTemp, mixing, flour, pizzaStyle, isRomanTeglia, isBeginner, preferredYeastType, bigaHomePlan, poolishHomePlan, proFermentationSchedule]);
+   const selectedPrefermentHours = fermentationSchedule.prefermentHours;
+   const prefermentRoomHours = fermentationSchedule.prefermentRoomHours;
+   const prefermentFridgeHours = fermentationSchedule.prefermentFridgeHours;
+@@ -1821,7 +1903,7 @@ export default function CalculatorHome() {
+     if (typeof settings.pizzas === 'number') setPizzas(settings.pizzas);
+     if (typeof settings.diameter === 'number') setDiameter(settings.diameter);
+     if (settings.customBallWeight !== undefined) setCustomBallWeight(settings.customBallWeight);
+-    if (settings.method) setMethod(settings.method);
++    if (settings.method) setMethod(settings.flour === 'glutenFree' ? 'direct' : settings.method);
+     if (typeof settings.bigaPct === 'number') setBigaPct(settings.bigaPct);
+     if (typeof settings.poolishPct === 'number') setPoolishPct(settings.poolishPct);
+     if (typeof settings.bigaHours === 'number') setBigaHours(settings.bigaHours);
+@@ -1842,15 +1924,17 @@ export default function CalculatorHome() {
+ 
+   const saveNamedRecipe = async (name: string, recipeId?: string | null) => {
+     const recipe = await saveRecipe();
+-    const saved = recipeId
+-      ? await api(`/api/recipes/${recipeId}`, { method: 'PATCH', body: JSON.stringify({ name: name.trim(), recipe }) })
+-      : await api('/api/recipes', { method: 'POST', body: JSON.stringify({ name: name.trim(), recipe }) });
++    const saved = !user
++      ? await saveProRecipe(name, recipe, recipeId)
++      : recipeId
++        ? await api(`/api/recipes/${recipeId}`, { method: 'PATCH', body: JSON.stringify({ name: name.trim(), recipe }) })
++        : await api('/api/recipes', { method: 'POST', body: JSON.stringify({ name: name.trim(), recipe }) });
+     setEditingRecipe({ id: saved.recipe_id, name: saved.name });
+     return saved as SavedRecipe;
+   };
+ 
+   const openSavedRecipes = () => {
+-    if (!user) { router.push('/login'); return; }
++    if (!user && isBeginner) { router.push('/login'); return; }
+     setMoreTool('savedRecipes');
+   };
+ 
+@@ -1871,8 +1955,11 @@ export default function CalculatorHome() {
+   const bakingDuration = `${formatTemperature(ovenTemp, temperatureUnit)} · ${bakingTimeRange}`;
+   const ovenTempLabel = { hr: 'Temperatura pećnice', en: 'Oven temperature', de: 'Ofentemperatur', sl: 'Temperatura pečice' }[lang];
+   const directStepIngredients = { ...dough.total, flour: beginnerDisplayFlour };
++  const proFinalRestMinutes = proFermentationSchedule?.phases
++    .filter((phase) => phase.kind === 'final-rest')
++    .reduce((total, phase) => total + phase.hours * 60, 0) ?? 0;
+   const detailedDirectSteps = method === 'direct' && lang === 'hr'
+-    ? getDetailedDirectSteps(mixing, directStepIngredients, dough.totalDough, pizzas, effectiveBall, diameter, directRecipeFridgeHours, directRecipeRoomHours, oven, ovenTemp, roomTemp, dims.cheese, undefined, undefined, flour, pizzaStyle === 'romana' && romanFormat === 'tonda', isRomanTeglia, pizzaStyle === 'ny_style' && isBeginner, pizzaStyle === 'neapolitan', { width: trayWidth, length: trayLength }, bakingTimeRange, isBeginner && pizzaStyle === 'neapolitan', waterTemperatureCalculation?.recommendedWaterTemp, isBeginner, isBeginner ? getBeginnerPhaseAFlourBehavior(flour, blendA, blendB) : undefined, waterTemperatureCalculation?.targetFinalDoughTemp)
++    ? getDetailedDirectSteps(mixing, directStepIngredients, dough.totalDough, pizzas, effectiveBall, diameter, directRecipeFridgeHours, directRecipeRoomHours, oven, ovenTemp, roomTemp, dims.cheese, undefined, undefined, flour, pizzaStyle === 'romana' && romanFormat === 'tonda', isRomanTeglia, pizzaStyle === 'ny_style' && isBeginner, pizzaStyle === 'neapolitan', { width: trayWidth, length: trayLength }, bakingTimeRange, isBeginner && pizzaStyle === 'neapolitan', waterTemperatureCalculation?.recommendedWaterTemp, isBeginner, isBeginner ? getBeginnerPhaseAFlourBehavior(flour, blendA, blendB) : undefined, waterTemperatureCalculation?.targetFinalDoughTemp, proFinalRestMinutes)
+     : method === 'biga' && lang === 'hr'
+       ? getDetailedDirectSteps(mixing, dough.total, dough.totalDough, pizzas, effectiveBall, diameter, fridgeHours, roomHours, oven, ovenTemp, roomTemp, dims.cheese, {
+         flour: dough.preferment?.flour ?? 0,
+@@ -1881,7 +1968,7 @@ export default function CalculatorHome() {
+         remainingFlour: dough.main.flour,
+         remainingWater: dough.main.water,
+         pct: bigaPct,
+-      }, undefined, flour, pizzaStyle === 'romana' && romanFormat === 'tonda', isRomanTeglia, false, pizzaStyle === 'neapolitan', { width: trayWidth, length: trayLength }, bakingTimeRange)
++      }, undefined, flour, pizzaStyle === 'romana' && romanFormat === 'tonda', isRomanTeglia, false, pizzaStyle === 'neapolitan', { width: trayWidth, length: trayLength }, bakingTimeRange, false, undefined, false, undefined, undefined, proFinalRestMinutes)
+     : method === 'poolish' && lang === 'hr'
+       ? getDetailedDirectSteps(mixing, dough.total, dough.totalDough, pizzas, effectiveBall, diameter, fridgeHours, roomHours, oven, ovenTemp, roomTemp, dims.cheese, undefined, {
+         flour: dough.preferment?.flour ?? 0,
+@@ -1890,9 +1977,9 @@ export default function CalculatorHome() {
+         remainingFlour: dough.main.flour,
+         remainingWater: dough.main.water,
+         pct: poolishPct,
+-      }, flour, pizzaStyle === 'romana' && romanFormat === 'tonda', isRomanTeglia, false, pizzaStyle === 'neapolitan', { width: trayWidth, length: trayLength }, bakingTimeRange)
++      }, flour, pizzaStyle === 'romana' && romanFormat === 'tonda', isRomanTeglia, false, pizzaStyle === 'neapolitan', { width: trayWidth, length: trayLength }, bakingTimeRange, false, undefined, false, undefined, undefined, proFinalRestMinutes)
+     : method === 'direct' && (lang === 'de' || lang === 'en' || lang === 'sl') && (oven === 'homeStone' || oven === 'ooni' || oven === 'homePan')
+-      ? getDetailedDirectStepsLocalized(lang, directStepIngredients, dough.totalDough, pizzas, effectiveBall, diameter, directRecipeFridgeHours, directRecipeRoomHours, roomTemp, dims.cheese, oven, ovenTemp, bakingTimeRange, mixing, isRomanTeglia ? 'romanaTeglia' : pizzaStyle === 'romana' ? 'romanaTonda' : pizzaStyle === 'ny_style' && isBeginner ? 'newYork' : 'napolitana', flour, { width: trayWidth, length: trayLength }, isBeginner && pizzaStyle === 'neapolitan', waterTemperatureCalculation?.recommendedWaterTemp, isBeginner, isBeginner ? getBeginnerPhaseAFlourBehavior(flour, blendA, blendB) : undefined, waterTemperatureCalculation?.targetFinalDoughTemp)
++      ? getDetailedDirectStepsLocalized(lang, directStepIngredients, dough.totalDough, pizzas, effectiveBall, diameter, directRecipeFridgeHours, directRecipeRoomHours, roomTemp, dims.cheese, oven, ovenTemp, bakingTimeRange, mixing, isRomanTeglia ? 'romanaTeglia' : pizzaStyle === 'romana' ? 'romanaTonda' : pizzaStyle === 'ny_style' && isBeginner ? 'newYork' : 'napolitana', flour, { width: trayWidth, length: trayLength }, isBeginner && pizzaStyle === 'neapolitan', waterTemperatureCalculation?.recommendedWaterTemp, isBeginner, isBeginner ? getBeginnerPhaseAFlourBehavior(flour, blendA, blendB) : undefined, waterTemperatureCalculation?.targetFinalDoughTemp, proFinalRestMinutes)
+     : null;
+   const beginnerDirectRecipeSteps = isBeginner && method === 'direct' && detailedDirectSteps
+     ? detailedDirectSteps.map((phase, phaseIndex) => ({
+@@ -2399,7 +2486,7 @@ export default function CalculatorHome() {
+             ) : null}
+             <Icon name={styleExpanded ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.brand} />
+           </Pressable>
+-          {styleExpanded ? isBeginner ? (
++          {styleExpanded ? (
+             <View style={styles.beginnerStylePicker}>
+               <View style={styles.beginnerStyleGrid}>
+                 {(['neapolitan', 'romana', 'ny_style'] as PizzaStyle[]).map((key) => {
+@@ -2427,7 +2514,7 @@ export default function CalculatorHome() {
+                   );
+                 })}
+               </View>
+-              {pizzaStyle === 'romana' ? (
++              {isBeginner && pizzaStyle === 'romana' ? (
+                 <View style={styles.beginnerSubtypeBlock}>
+                   <Text style={styles.beginnerSubtypeLabel}>{t.beginnerCalc.romanaQuestion}</Text>
+                   <View style={styles.beginnerSubtypeControl}>
+@@ -2469,28 +2556,48 @@ export default function CalculatorHome() {
+                 </View>
+               ) : null}
+             </View>
+-          ) : <View style={{ gap: 6 }}>
+-            {(['neapolitan', 'romana', 'ny_style'] as PizzaStyle[]).map((key) => {
+-              const active = pizzaStyle === key;
+-              const locked = !isPremiumUnlocked && !isBeginner && key !== FREE_PIZZA_STYLE;
+-              const item = t.calc.pizzaStyles[key];
+-              return (
+-                <View key={key} style={styles.styleRowWrap}>
+-                  <Pressable testID={`style-${key}`} onPress={() => changeStyle(key)} style={[styles.styleRow, active && styles.styleRowActive, locked && styles.lockedOption]}>
+-                    <Image source={styleImages[key]} style={styles.styleThumb} resizeMode="cover" />
+-                    <View style={{ flex: 1, minWidth: 0 }}>
+-                      <Text style={[styles.styleName, active && styles.styleNameActive]}>{item.name}</Text>
+-                      <Text style={[styles.styleDescription, active && styles.styleDescriptionActive]} numberOfLines={2}>{item.description}</Text>
+-                    </View>
+-                    {locked ? <Icon name="lock-closed" size={17} color={COLORS.muted} /> : active ? <Icon name="checkmark-circle" size={18} color="#fff" /> : null}
++          ) : null}
++          {styleExpanded && !isBeginner && pizzaStyle === 'romana' ? (
++            <View style={styles.beginnerSubtypeBlock}>
++              <Text style={[styles.label, { marginTop: SPACING.sm }]}>Romana</Text>
++              <View style={styles.pillGroup}>
++                <View style={[styles.pill, romanFormat === 'tonda' && styles.pillActive]}>
++                  <Pressable testID="romana-tonda" onPress={() => step(() => {
++                    setRomanFormat('tonda');
++                    if (isBeginner && romanFormat === 'teglia') {
++                      setCustomBallWeight(null);
++                      setCustomBallInput('');
++                      setOven('homeStone');
++                      setOvenTemp(300);
++                      setOvenTempInput('300');
++                    }
++                    if (!isBeginner) setStyleExpanded(false);
++                  })} style={styles.pillSelect}>
++                    <Text style={[styles.pillText, romanFormat === 'tonda' && styles.pillTextActive]}>Romana Tonda</Text>
+                   </Pressable>
+-                  <Pressable testID={`style-info-${key}`} onPress={() => setStyleInfo(key)} hitSlop={8} style={styles.infoBtn}>
+-                    <Icon name="information-circle-outline" size={19} color={active ? COLORS.brand : COLORS.muted} />
++                  <Pressable testID="romana-tonda-info" onPress={() => Alert.alert('Romana Tonda', ROMANA_FORMAT_INFO[lang].tonda)} hitSlop={8} style={styles.infoBtn}>
++                    <Icon name="information-circle-outline" size={18} color={romanFormat === 'tonda' ? '#fff' : COLORS.muted} />
+                   </Pressable>
+                 </View>
+-              );
+-            })}
+-            </View> : null}
++                <View style={[styles.pill, romanFormat === 'teglia' && styles.pillActive]}>
++                  <Pressable testID="romana-teglia" onPress={() => step(() => {
++                    setRomanFormat('teglia');
++                    setCustomBallWeight(null);
++                    setCustomBallInput('');
++                    setOven('homePan');
++                    setOvenTemp(250);
++                    setOvenTempInput('250');
++                    if (!isBeginner) setStyleExpanded(false);
++                  })} style={styles.pillSelect}>
++                    <Text style={[styles.pillText, romanFormat === 'teglia' && styles.pillTextActive]}>Romana Teglia</Text>
++                  </Pressable>
++                  <Pressable testID="romana-teglia-info" onPress={() => Alert.alert('Romana Teglia', ROMANA_FORMAT_INFO[lang].teglia)} hitSlop={8} style={styles.infoBtn}>
++                    <Icon name="information-circle-outline" size={18} color={romanFormat === 'teglia' ? '#fff' : COLORS.muted} />
++                  </Pressable>
++                </View>
++              </View>
++            </View>
++          ) : null}
+         </View>
+ 
+         {/* 2. FLOUR - collapsed header, expands on tap, auto-closes on select */}
+@@ -2507,22 +2614,21 @@ export default function CalculatorHome() {
+             <Icon name={flourExpanded ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.brand} />
+           </Pressable>
+ 
+-          {flourExpanded || !isBeginner ? (
+-            <View style={[{ gap: 6, marginTop: SPACING.md }, isBeginner && styles.beginnerFlourGrid]}>
++          {flourExpanded ? (
++            <View style={[{ gap: 6, marginTop: SPACING.md }, styles.beginnerFlourGrid]}>
+               {FLOURS_BY_LANG[lang].map((f) => {
+                 const active = flour === f.key;
+-                const locked = !isPremiumUnlocked && !isBeginner && !FREE_FLOUR_TYPES.includes(f.key);
+                 return (
+-                  <View key={f.key} style={[styles.flourRowWrap, isBeginner && styles.beginnerFlourCell]}>
++                  <View key={f.key} style={[styles.flourRowWrap, styles.beginnerFlourCell]}>
+                     <Pressable
+                       testID={`flour-${f.key}`}
+                       onPress={() => { changeFlour(f.key); if (isBeginner) transitionBeginnerTo('quantity'); else setFlourExpanded(false); }}
+-                      style={[styles.flourCompact, isBeginner && styles.beginnerFlourCard, active && (isBeginner ? styles.beginnerFlourCardActive : styles.flourCompactActive), locked && styles.lockedOption]}
++                      style={[styles.flourCompact, styles.beginnerFlourCard, active && styles.beginnerFlourCardActive]}
+                     >
+-                      <Image source={FLOUR_IMAGES[f.key]} style={[styles.flourIcon, isBeginner && styles.beginnerFlourImage]} resizeMode="contain" />
+-                      <Text style={[styles.flourCompactLabel, isBeginner && styles.beginnerFlourName, active && { color: isBeginner ? COLORS.onSurface : '#fff' }]} numberOfLines={isBeginner ? undefined : 1}>{f.label}</Text>
++                      <Image source={FLOUR_IMAGES[f.key]} style={[styles.flourIcon, styles.beginnerFlourImage]} resizeMode="contain" />
++                      <Text style={[styles.flourCompactLabel, styles.beginnerFlourName, active && { color: COLORS.onSurface }]}>{f.label}</Text>
+                       {isBeginner && f.key === PIZZA_STYLE_PROFILES[pizzaStyle].flourTypes[0] ? <Text style={styles.beginnerRecommendedBadge}>{t.beginnerCalc.recommendedFlour}</Text> : null}
+-                      {locked ? <Icon name="lock-closed" size={16} color={COLORS.muted} style={isBeginner ? styles.beginnerFlourStatus : { marginLeft: 4 }} /> : active ? <Icon name="checkmark-circle" size={16} color={isBeginner ? COLORS.brand : '#fff'} style={isBeginner ? styles.beginnerFlourStatus : { marginLeft: 4 }} /> : null}
++                      {active ? <Icon name="checkmark-circle" size={16} color={isBeginner ? COLORS.brand : '#fff'} style={isBeginner ? styles.beginnerFlourStatus : { marginLeft: 4 }} /> : null}
+                     </Pressable>
+                     {f.info ? (
+                       <Pressable
+@@ -2625,54 +2731,35 @@ export default function CalculatorHome() {
+           ) : null}
+         </View>
+ 
+-        {/* 2. VELIČINA PIZZE */}
++        {/* 3. VELIČINA PIZZE */}
+         <View ref={(node) => { beginnerSectionRefs.current.quantity = node; }} style={styles.card} onLayout={(event) => recordBeginnerSection('quantity', event.nativeEvent.layout.y)}>
+           {isBeginner ? (
+             <Pressable testID="quantity-header" onPress={() => toggleBeginnerSection('quantity')} style={styles.styleHeaderRow}>
+               <Text style={styles.cardTitle}>{t.beginnerCalc.stepPizzas}</Text>
+               <Icon name={quantityExpanded ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.brand} />
+             </Pressable>
+-          ) : <Text style={styles.cardTitle}>{`3 · ${t.calc.dimensions}`}</Text>}
+-          {(!isBeginner || quantityExpanded) ? <>
+-          {pizzaStyle === 'romana' && !isBeginner ? (
+-            <>
+-              <Text style={[styles.label, { marginTop: SPACING.sm }]}>Romana</Text>
+-              <View style={styles.pillGroup}>
+-                <View style={[styles.pill, romanFormat === 'tonda' && styles.pillActive]}>
+-                  <Pressable testID="romana-tonda" onPress={() => step(() => {
+-                    setRomanFormat('tonda');
+-                    if (isBeginner && romanFormat === 'teglia') {
+-                      setCustomBallWeight(null);
+-                      setCustomBallInput('');
+-                      setOven('homeStone');
+-                      setOvenTemp(300);
+-                      setOvenTempInput('300');
+-                    }
+-                  })} style={styles.pillSelect}>
+-                    <Text style={[styles.pillText, romanFormat === 'tonda' && styles.pillTextActive]}>Romana Tonda</Text>
+-                  </Pressable>
+-                  <Pressable testID="romana-tonda-info" onPress={() => Alert.alert('Romana Tonda', ROMANA_FORMAT_INFO[lang].tonda)} hitSlop={8} style={styles.infoBtn}>
+-                    <Icon name="information-circle-outline" size={18} color={romanFormat === 'tonda' ? '#fff' : COLORS.muted} />
+-                  </Pressable>
+-                </View>
+-                <View style={[styles.pill, romanFormat === 'teglia' && styles.pillActive]}>
+-                  <Pressable testID="romana-teglia" onPress={() => step(() => {
+-                    setRomanFormat('teglia');
+-                    setCustomBallWeight(null);
+-                    setCustomBallInput('');
+-                    setOven('homePan');
+-                    setOvenTemp(250);
+-                    setOvenTempInput('250');
+-                  })} style={styles.pillSelect}>
+-                    <Text style={[styles.pillText, romanFormat === 'teglia' && styles.pillTextActive]}>Romana Teglia</Text>
+-                  </Pressable>
+-                  <Pressable testID="romana-teglia-info" onPress={() => Alert.alert('Romana Teglia', ROMANA_FORMAT_INFO[lang].teglia)} hitSlop={8} style={styles.infoBtn}>
+-                    <Icon name="information-circle-outline" size={18} color={romanFormat === 'teglia' ? '#fff' : COLORS.muted} />
+-                  </Pressable>
+-                </View>
++          ) : (
++            <Pressable
++              testID="pro-quantity-header"
++              accessibilityRole="button"
++              accessibilityState={{ expanded: quantityExpanded }}
++              onPress={() => setQuantityExpanded((expanded) => !expanded)}
++              style={styles.styleHeaderRow}
++            >
++              <View style={{ flex: 1 }}>
++                <Text style={styles.cardTitle}>{`3 · ${t.calc.dimensions}`}</Text>
++                {!quantityExpanded ? (
++                  <Text testID="pro-quantity-summary" style={styles.hint}>
++                    {isRomanTeglia
++                      ? `${pizzas} × ${weight(effectiveBall)} · ${trayWidth} × ${trayLength} cm`
++                      : `${pizzas} × ${weight(effectiveBall)}`}
++                  </Text>
++                ) : null}
+               </View>
+-            </>
+-          ) : null}
++              <Icon name={quantityExpanded ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.brand} />
++            </Pressable>
++          )}
++          {quantityExpanded ? <>
+           <View style={styles.row}>
+             <Text style={styles.label}>{t.calc.pizzas}</Text>
+             <View style={styles.stepper}>
+@@ -2697,8 +2784,8 @@ export default function CalculatorHome() {
+               </View>
+               {!isBeginner || customBallWeight != null ? <Text style={styles.subLabel} numberOfLines={2}>
+                 {customBallWeight != null
+-                  ? t.ballWeight.manualHint.replace('{N}g', weight(dims.doughBall))
+-                  : t.ballWeight.autoHint.replace('{N}g', weight(dims.doughBall))}
++                  ? t.ballWeight.manualHint.replace('{N} g', weight(dims.doughBall))
++                  : t.ballWeight.autoHint.replace('{N} g', weight(dims.doughBall))}
+               </Text> : null}
+             </View>
+             <View style={styles.ballStepper}>
+@@ -2865,7 +2952,13 @@ export default function CalculatorHome() {
+           <Pressable testID="method-header" onPress={() => isBeginner ? toggleBeginnerSection('method') : setMethodExpanded((value) => !value)} style={styles.styleHeaderRow}>
+             <View style={{ flex: 1 }}>
+               <Text style={styles.cardTitle}>{isBeginner ? t.beginnerCalc.stepMethod : `4 · ${t.calc.method} + ${t.calc.hydration}`}</Text>
+-              {!methodExpanded ? <Text style={styles.hint}>{method === 'direct' ? t.calc.direct : method === 'biga' ? t.calc.biga : t.calc.poolish}</Text> : null}
++              {!methodExpanded ? isBeginner ? (
++                <Text style={styles.hint}>{method === 'direct' ? t.calc.direct : method === 'biga' ? t.calc.biga : t.calc.poolish}</Text>
++              ) : (
++                <Text testID="pro-method-summary" style={styles.hint}>
++                  {method === 'direct' ? t.calc.direct : method === 'biga' ? t.calc.biga : t.calc.poolish} · {hydration}%
++                </Text>
++              ) : null}
+             </View>
+             <Icon name={methodExpanded ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.brand} />
+           </Pressable>
+@@ -3036,6 +3129,17 @@ export default function CalculatorHome() {
+             ))}
+           </View>
+ 
++          <View style={styles.segmentedRow}>
++            <Pressable testID="mix-hand" onPress={() => step(() => { setMixing('hand'); setShowMixSteps(true); })} style={[styles.segBtn, mixing === 'hand' && styles.segBtnActive]}>
++              <Image source={require('../../assets/images/hand-left-outline.png')} style={styles.mixIcon} resizeMode="contain" />
++              <Text style={[styles.segText, mixing === 'hand' && { color: '#fff' }]}>{t.calc.handMixTitle}</Text>
++            </Pressable>
++            <Pressable testID="mix-mixer" onPress={() => step(() => { setMixing('mixer'); setShowMixSteps(true); })} style={[styles.segBtn, mixing === 'mixer' && styles.segBtnActive]}>
++              <Image source={require('../../assets/images/hardware-chip-outline.png')} style={styles.mixIcon} resizeMode="contain" />
++              <Text style={[styles.segText, mixing === 'mixer' && { color: '#fff' }]}>{t.calc.mixerTitle}</Text>
++            </Pressable>
++          </View>
++
+           {method === 'biga' ? (
+             <>
+             <View style={[styles.row, { marginTop: SPACING.md }] }>
+@@ -3209,7 +3313,7 @@ export default function CalculatorHome() {
+ 
+         <View ref={(node) => { beginnerSectionRefs.current.oven = node; }} style={styles.card} onLayout={(event) => recordBeginnerSection('oven', event.nativeEvent.layout.y)}>
+           <View style={styles.labelWithInfo}>
+-            <Text style={styles.cardTitle}>{isBeginner ? t.beginnerCalc.stepOven : `6 · ${t.calc.baking}`}</Text>
++            <Text style={styles.cardTitle}>{isBeginner ? t.beginnerCalc.stepOven : `5 · ${t.calc.baking}`}</Text>
+             {isBeginner ? (
+               <Pressable
+                 testID="beginner-oven-info"
+@@ -3344,30 +3448,96 @@ export default function CalculatorHome() {
+           />
+         ) : null}
+ 
+-        {/* 4. MIXING */}
++        {/* 6. INGREDIENTS AND DOUGH TOTAL */}
++        {!isBeginner ? (
++        <View style={styles.recipeCard}>
++          {dough.preferment ? (
++            <>
++              <Text style={styles.recipeSection}>
++                6 · {t.calc.preferment} · {method === 'biga' ? `BIGA ${bigaPct}%` : `POOLISH ${poolishPct}%`}
++              </Text>
++              <ResultRow label={t.calc.totalFlour} value={weight(dough.preferment.flour)} highlight />
++              <ResultRow label={t.calc.totalWater} value={weight(dough.preferment.water)} highlight />
++              <ResultRow label={t.calc.yeastAmount + ' (' + yeastShortLabel + ')'} value={weight(dough.preferment.yeast, true)} />
++              {method === 'poolish' ? (
++                <Text style={styles.hint}>{t.calc.poolishHint}</Text>
++              ) : (
++                <Text style={styles.hint}>{t.calc.bigaHint}</Text>
++              )}
++
++              <Text style={[styles.recipeSection, { marginTop: SPACING.md }]}>{t.calc.mainDough}</Text>
++              <ResultRow label={t.calc.remainingFlour} value={weight(dough.main.flour)} highlight />
++              {psylliumGrams > 0 ? <ResultRow label="Psyllium" value={weight(psylliumGrams)} highlight /> : null}
++              {ice ? (
++                <>
++                  <ResultRow label={`${t.calc.coldWater} (${t.calc.remainingLabel})`} value={weight(Math.max(0, dough.main.water - ice.ice))} />
++                  <ResultRow label={`🧊 ${t.calc.iceAmount}`} value={weight(ice.ice)} highlight />
++                </>
++              ) : (
++                <ResultRow label={`${t.calc.remainingWater} (${formatTemperature(dough.waterTemp, temperatureUnit)})`} value={weight(dough.main.water)} highlight />
++              )}
++              <ResultRow label={t.calc.saltAmount} value={weight(dough.main.salt, true)} />
++              <ResultRow label={t.calc.oilAmount} value={weight(dough.main.oil)} />
++              <ResultRow label={t.calc.yeastAmount + ' (' + yeastShortLabel + ')'} value={weight(dough.main.yeast, true)} />
++
++              <View style={styles.subBlock}>
++                <Text style={styles.subhead}>{t.calc.totals} · {pizzas} × {formatWeight(effectiveBall, measurementSystem)} = {formatWeight(dough.totalDough, measurementSystem)}</Text>
++                <ResultRow label={t.calc.totalFlour} value={weight(dough.total.flour)} />
++                {psylliumGrams > 0 ? <ResultRow label="Psyllium" value={weight(psylliumGrams)} /> : null}
++                <ResultRow label={t.calc.totalWater} value={weight(dough.total.water)} />
++                <ResultRow label={t.calc.saltAmount} value={weight(dough.total.salt, true)} />
++                <ResultRow label={t.calc.yeastAmount} value={weight(dough.total.yeast, true)} />
++              </View>
++            </>
++          ) : (
++            <>
++              <Text style={styles.recipeSection}>
++                6 · {t.calc.totalDough} · {pizzas} × {formatWeight(effectiveBall, measurementSystem)} = {formatWeight(dough.totalDough, measurementSystem)}
++              </Text>
++              {isCustom ? (
++                <>
++                  <ResultRow label={`${flourName(lang, blendA)} (${blendPctA}%)`} value={weight(Math.round(dough.main.flour * blendPctA / 100))} highlight />
++                  <ResultRow label={`${flourName(lang, blendB)} (${100 - blendPctA}%)`} value={weight(Math.round(dough.main.flour * (100 - blendPctA) / 100))} highlight />
++                  <ResultRow label={t.calc.totalFlour} value={weight(dough.main.flour)} />
++                </>
++              ) : (
++                <ResultRow label={`${t.calc.flourLabel} (${flourName(lang, flour)})`} value={weight(dough.main.flour)} highlight />
++              )}
++              {psylliumGrams > 0 ? <ResultRow label="Psyllium" value={weight(psylliumGrams)} highlight /> : null}
++              {ice ? (
++                <>
++                  <ResultRow label={t.calc.coldWater} value={weight(ice.water)} />
++                  <ResultRow label={`🧊 ${t.calc.iceAmount}`} value={weight(ice.ice)} highlight />
++                </>
++              ) : (
++                <ResultRow label={`${t.calc.totalWater} (${formatTemperature(dough.waterTemp, temperatureUnit)})`} value={weight(dough.main.water)} highlight />
++              )}
++              <ResultRow label={t.calc.saltAmount} value={weight(dough.main.salt, true)} />
++              <ResultRow label={`${t.calc.yeastAmount} (${yeastShortLabel}, ${dough.yeastPct}%)`} value={weight(dough.main.yeast, true)} />
++              <ResultRow label={t.calc.oilAmount} value={weight(dough.main.oil)} />
++            </>
++          )}
++
++          {/* Per-pizza normative — BELOW total */}
++          <Text style={[styles.recipeSection, { marginTop: SPACING.md, paddingTop: SPACING.md, borderTopWidth: 1, borderTopColor: COLORS.divider }]}>
++            {isBeginner && isRomanTeglia ? t.calc.perTray : `${t.calc.perPizza} · ${formatLength(diameter, measurementSystem)}`}
++          </Text>
++          <ResultRow label={isBeginner && isRomanTeglia ? t.calc.trayDoughMass : t.calc.doughBall} value={weight(effectiveBall)} />
++          <ResultRow label={t.calc.sauce} value={weight(dims.sauce)} />
++          <ResultRow label={t.calc.cheese} value={weight(dims.cheese)} />
++        </View>
++        ) : null}
++
++        {/* 7. RECIPE STEPS */}
+         {(!isBeginner || beginnerDirectHome) ? (
+         <View style={styles.card}>
+-          <Text style={styles.cardTitle}>{isBeginner ? (beginnerHomeRecipeLayout ? `3. ${t.beginnerCalc.recipeSteps}` : t.beginnerCalc.recipeSteps) : `5 · ${t.calc.mixingTitle}`}</Text>
+-          {!isBeginner ? (
+-          <>
+-          <View style={styles.segmentedRow}>
+-            <Pressable testID="mix-hand" onPress={() => step(() => { setMixing('hand'); setShowMixSteps(true); })} style={[styles.segBtn, mixing === 'hand' && styles.segBtnActive]}>
+-              <Image source={require('../../assets/images/hand-left-outline.png')} style={styles.mixIcon} resizeMode="contain" />
+-              <Text style={[styles.segText, mixing === 'hand' && { color: '#fff' }]}>{t.calc.handMixTitle}</Text>
+-            </Pressable>
+-            <Pressable testID="mix-mixer" onPress={() => step(() => { setMixing('mixer'); setShowMixSteps(true); })} style={[styles.segBtn, mixing === 'mixer' && styles.segBtnActive]}>
+-              <Image source={require('../../assets/images/hardware-chip-outline.png')} style={styles.mixIcon} resizeMode="contain" />
+-              <Text style={[styles.segText, mixing === 'mixer' && { color: '#fff' }]}>{t.calc.mixerTitle}</Text>
+-            </Pressable>
+-          </View>
++          <Text style={styles.cardTitle}>{isBeginner ? (beginnerHomeRecipeLayout ? `3. ${t.beginnerCalc.recipeSteps}` : t.beginnerCalc.recipeSteps) : `7 · ${t.beginnerCalc.recipeSteps}`}</Text>
+           {!isBeginner ? (
+             <Pressable testID="mix-toggle" onPress={() => setShowMixSteps(!showMixSteps)} style={styles.expandBtn}>
+               <Text style={styles.expandText}>{showMixSteps ? t.calc.hideSteps : t.calc.showSteps}</Text>
+               <Icon name={showMixSteps ? 'chevron-up' : 'chevron-down'} size={16} color={COLORS.brand} />
+             </Pressable>
+           ) : null}
+-          </>
+-          ) : null}
+           {showMixSteps || isBeginner ? (
+             <View style={styles.stepsBox}>
+               {directHomeScheduleDisplay && !beginnerHomeRecipeLayout ? (
+@@ -3483,9 +3653,11 @@ export default function CalculatorHome() {
+                     key={`detailed-direct-${pizzaStyle}-${mixing}-${index}`}
+                     title={phase.title}
+                     steps={beginnerDirectHomeSteps ? phase.steps : directHomeSchedule ? withoutDirectScheduleTiming(phase.steps) : phase.steps}
+-                    stepInfo={beginnerDirectHomeSteps
+-                      ? phase.stepInfo ?? (index === 1 && beginnerPhaseBPlan ? buildBeginnerPhaseBStepInfo(beginnerPhaseBPlan, lang, isRomanTeglia, flour) : undefined)
+-                      : undefined}
++                    stepInfo={isBeginner
++                      ? beginnerDirectHomeSteps
++                        ? phase.stepInfo ?? (index === 1 && beginnerPhaseBPlan ? buildBeginnerPhaseBStepInfo(beginnerPhaseBPlan, lang, isRomanTeglia, flour) : undefined)
++                        : undefined
++                      : phase.stepInfo}
+                     waterInfo={isBeginner && index === 0 ? beginnerWaterInfo : phase.waterInfo}
+                     waterInfoStepIndex={(isTargetNeapolitanHandPhaseA || isTargetNeapolitanGlutenFreeHandPhaseA || isTargetNeapolitanGlutenFreeMixerPhaseA || isTargetTegliaGlutenFreeHandPhaseA || isTargetTegliaGlutenFreeMixerPhaseA || isTargetNeapolitanCustomHandPhaseA || isTargetNeapolitanCustomMixerPhaseA || isTargetNeapolitanMixerPhaseA || isTargetNeapolitanManitobaHandPhaseA || isTargetNeapolitanManitobaMixerPhaseA || isTargetNeapolitanSpeltHandPhaseA || isTargetNeapolitanSpeltMixerPhaseA || isTargetNeapolitanWholeWheatHandPhaseA || isTargetNeapolitanWholeWheatMixerPhaseA || isTargetTegliaTipo00HandPhaseA || isTargetTegliaTipo00MixerPhaseA || isTargetTegliaManitobaHandPhaseA || isTargetTegliaManitobaMixerPhaseA || isTargetTegliaSpeltHandPhaseA || isTargetTegliaSpeltMixerPhaseA || isTargetTegliaWholeWheatHandPhaseA || isTargetTegliaWholeWheatMixerPhaseA || isTargetTegliaCustomHandPhaseA || isTargetTegliaCustomMixerPhaseA) && index === 0 ? 2 : undefined}
+                     containerOilInfo={phase.containerOilInfo}
+@@ -3506,23 +3678,23 @@ export default function CalculatorHome() {
+                     doughTemperatureStyle={beginnerDirectHome ? (isRomanTeglia ? 'romanaTeglia' : pizzaStyle === 'romana' ? 'romanaTonda' : pizzaStyle === 'ny_style' ? 'newYork' : 'napolitana') : undefined}
+                     phaseKey={`detailed-direct-${pizzaStyle}-${mixing}-${index}`}
+                     timers={beginnerDirectHomeSteps ? phase.timers : directHomeSchedule ? [] : phase.timers}
+-                    phaseGuide={isBeginner && flour === 'glutenFree' && !isRomanTeglia && index === (directRecipeFridgeHours > 0 ? 4 : 3)
++                    phaseGuide={flour === 'glutenFree' && !isRomanTeglia && index === (directRecipeFridgeHours > 0 ? 4 : 3)
+                       ? { kind: 'bakingGlutenFree', onPress: () => { setVisualGuideSlide(0); setMixingGuideKind('bakingGlutenFree'); } }
+-                      : isBeginner && flour !== 'glutenFree' && index === 0 && mixing === 'hand'
++                      : flour !== 'glutenFree' && index === 0 && mixing === 'hand'
+                         ? { kind: 'hand', onPress: () => { setVisualGuideSlide(0); setMixingGuideKind('hand'); } }
+-                      : isBeginner && flour !== 'glutenFree' && index === 0 && mixing === 'mixer'
++                      : flour !== 'glutenFree' && index === 0 && mixing === 'mixer'
+                         ? { kind: mixing, onPress: () => setMixingGuideKind(mixing) }
+-                      : isBeginner && flour !== 'glutenFree' && index === 1 && phase.steps.some((step) => /stretch\s*&?\s*fold|preklop|pregib|fold/i.test(step))
++                      : flour !== 'glutenFree' && index === 1 && phase.steps.some((step) => /stretch\s*&?\s*fold|preklop|pregib|fold/i.test(step))
+                         ? { kind: 'stretchFold', onPress: () => { setVisualGuideSlide(0); setMixingGuideKind('stretchFold'); } }
+-                        : isBeginner && flour !== 'glutenFree' && !isRomanTeglia && index === 2
++                        : flour !== 'glutenFree' && !isRomanTeglia && index === 2
+                           ? { kind: 'balling', onPress: () => { setVisualGuideSlide(0); setMixingGuideKind('balling'); } }
+-                          : isBeginner && pizzaStyle === 'neapolitan' && flour !== 'glutenFree' && !isRomanTeglia && index === (directRecipeFridgeHours > 0 ? 4 : 3)
++                          : pizzaStyle === 'neapolitan' && flour !== 'glutenFree' && !isRomanTeglia && index === (directRecipeFridgeHours > 0 ? 4 : 3)
+                             ? { kind: 'baking', onPress: () => { setVisualGuideSlide(0); setMixingGuideKind('baking'); } }
+-                          : isBeginner && pizzaStyle === 'romana' && !isRomanTeglia && flour !== 'glutenFree' && index === (directRecipeFridgeHours > 0 ? 4 : 3)
++                          : pizzaStyle === 'romana' && !isRomanTeglia && flour !== 'glutenFree' && index === (directRecipeFridgeHours > 0 ? 4 : 3)
+                             ? { kind: 'bakingRomanaTonda', onPress: () => { setVisualGuideSlide(0); setMixingGuideKind('bakingRomanaTonda'); } }
+-                          : isBeginner && pizzaStyle === 'ny_style' && flour !== 'glutenFree' && index === (directRecipeFridgeHours > 0 ? 4 : 3)
++                          : pizzaStyle === 'ny_style' && flour !== 'glutenFree' && index === (directRecipeFridgeHours > 0 ? 4 : 3)
+                             ? { kind: 'bakingNewYork', onPress: () => { setVisualGuideSlide(0); setMixingGuideKind('bakingNewYork'); } }
+-                          : isBeginner && isRomanTeglia && flour !== 'glutenFree' && index === (directRecipeFridgeHours > 0 ? 4 : 3)
++                          : isRomanTeglia && flour !== 'glutenFree' && index === (directRecipeFridgeHours > 0 ? 4 : 3)
+                             ? { kind: 'bakingRomanaTeglia', onPress: () => { setVisualGuideSlide(0); setMixingGuideKind('bakingRomanaTeglia'); } }
+                           : undefined}
+                     completed={completedSteps}
+@@ -3581,87 +3753,7 @@ export default function CalculatorHome() {
+         </View>
+         ) : null}
+ 
+-        {/* 6. RESULT - AT BOTTOM: Total FIRST, then per-pizza */}
+-        {!isBeginner ? (
+-        <View style={styles.recipeCard}>
+-          {dough.preferment ? (
+-            <>
+-              <Text style={styles.recipeSection}>
+-                7 · {t.calc.preferment} · {method === 'biga' ? `BIGA ${bigaPct}%` : `POOLISH ${poolishPct}%`}
+-              </Text>
+-              <ResultRow label={t.calc.totalFlour} value={weight(dough.preferment.flour)} highlight />
+-              <ResultRow label={t.calc.totalWater} value={weight(dough.preferment.water)} highlight />
+-              <ResultRow label={t.calc.yeastAmount + ' (' + yeastShortLabel + ')'} value={weight(dough.preferment.yeast, true)} />
+-              {method === 'poolish' ? (
+-                <Text style={styles.hint}>{t.calc.poolishHint}</Text>
+-              ) : (
+-                <Text style={styles.hint}>{t.calc.bigaHint}</Text>
+-              )}
+-
+-              <Text style={[styles.recipeSection, { marginTop: SPACING.md }]}>{t.calc.mainDough}</Text>
+-              <ResultRow label={t.calc.remainingFlour} value={weight(dough.main.flour)} highlight />
+-              {psylliumGrams > 0 ? <ResultRow label="Psyllium" value={weight(psylliumGrams)} highlight /> : null}
+-              {ice ? (
+-                <>
+-                  <ResultRow label={`${t.calc.coldWater} (${t.calc.remainingLabel})`} value={weight(Math.max(0, dough.main.water - ice.ice))} />
+-                  <ResultRow label={`🧊 ${t.calc.iceAmount}`} value={weight(ice.ice)} highlight />
+-                </>
+-              ) : (
+-                <ResultRow label={`${t.calc.remainingWater} (${formatTemperature(dough.waterTemp, temperatureUnit)})`} value={weight(dough.main.water)} highlight />
+-              )}
+-              <ResultRow label={t.calc.saltAmount} value={weight(dough.main.salt, true)} />
+-              <ResultRow label={t.calc.oilAmount} value={weight(dough.main.oil)} />
+-              <ResultRow label={t.calc.yeastAmount + ' (' + yeastShortLabel + ')'} value={weight(dough.main.yeast, true)} />
+-
+-              <View style={styles.subBlock}>
+-                <Text style={styles.subhead}>{t.calc.totals} · {pizzas} × {formatWeight(effectiveBall, measurementSystem)} = {formatWeight(dough.totalDough, measurementSystem)}</Text>
+-                <ResultRow label={t.calc.totalFlour} value={weight(dough.total.flour)} />
+-                {psylliumGrams > 0 ? <ResultRow label="Psyllium" value={weight(psylliumGrams)} /> : null}
+-                <ResultRow label={t.calc.totalWater} value={weight(dough.total.water)} />
+-                <ResultRow label={t.calc.saltAmount} value={weight(dough.total.salt, true)} />
+-                <ResultRow label={t.calc.yeastAmount} value={weight(dough.total.yeast, true)} />
+-              </View>
+-            </>
+-          ) : (
+-            <>
+-              <Text style={styles.recipeSection}>
+-                7 · {t.calc.totalDough} · {pizzas} × {formatWeight(effectiveBall, measurementSystem)} = {formatWeight(dough.totalDough, measurementSystem)}
+-              </Text>
+-              {isCustom ? (
+-                <>
+-                  <ResultRow label={`${flourName(lang, blendA)} (${blendPctA}%)`} value={weight(Math.round(dough.main.flour * blendPctA / 100))} highlight />
+-                  <ResultRow label={`${flourName(lang, blendB)} (${100 - blendPctA}%)`} value={weight(Math.round(dough.main.flour * (100 - blendPctA) / 100))} highlight />
+-                  <ResultRow label={t.calc.totalFlour} value={weight(dough.main.flour)} />
+-                </>
+-              ) : (
+-                <ResultRow label={`${t.calc.flourLabel} (${flourName(lang, flour)})`} value={weight(dough.main.flour)} highlight />
+-              )}
+-              {psylliumGrams > 0 ? <ResultRow label="Psyllium" value={weight(psylliumGrams)} highlight /> : null}
+-              {ice ? (
+-                <>
+-                  <ResultRow label={t.calc.coldWater} value={weight(ice.water)} />
+-                  <ResultRow label={`🧊 ${t.calc.iceAmount}`} value={weight(ice.ice)} highlight />
+-                </>
+-              ) : (
+-                <ResultRow label={`${t.calc.totalWater} (${formatTemperature(dough.waterTemp, temperatureUnit)})`} value={weight(dough.main.water)} highlight />
+-              )}
+-              <ResultRow label={t.calc.saltAmount} value={weight(dough.main.salt, true)} />
+-              <ResultRow label={`${t.calc.yeastAmount} (${yeastShortLabel}, ${dough.yeastPct}%)`} value={weight(dough.main.yeast, true)} />
+-              <ResultRow label={t.calc.oilAmount} value={weight(dough.main.oil)} />
+-            </>
+-          )}
+-
+-          {/* Per-pizza normative — BELOW total */}
+-          <Text style={[styles.recipeSection, { marginTop: SPACING.md, paddingTop: SPACING.md, borderTopWidth: 1, borderTopColor: COLORS.divider }]}>
+-            {isBeginner && isRomanTeglia ? t.calc.perTray : `${t.calc.perPizza} · ${formatLength(diameter, measurementSystem)}`}
+-          </Text>
+-          <ResultRow label={isBeginner && isRomanTeglia ? t.calc.trayDoughMass : t.calc.doughBall} value={weight(effectiveBall)} />
+-          <ResultRow label={t.calc.sauce} value={weight(dims.sauce)} />
+-          <ResultRow label={t.calc.cheese} value={weight(dims.cheese)} />
+-        </View>
+-        ) : null}
+-
+-        {/* 7. ACTIONS */}
++        {/* 8. ACTIONS */}
+         <View style={styles.actionsRow}>
+           <Pressable testID="add-shopping" style={[styles.actionBtn, { backgroundColor: COLORS.surfaceSecondary, borderWidth: 1, borderColor: COLORS.border }]} onPress={onShopping}>
+             <Icon name="cart" size={18} color={COLORS.brand} />
+@@ -3724,6 +3816,7 @@ export default function CalculatorHome() {
+         {moreTool === 'savedRecipes' && (
+           <SavedRecipesModal
+             editingRecipe={editingRecipe}
++            localOnly={!user}
+             onClose={() => setMoreTool(null)}
+             onLoad={(saved) => {
+               applyRecipe(saved.recipe);
+@@ -4103,6 +4196,7 @@ function getDetailedDirectSteps(
+   beginnerMode = false,
+   beginnerPhaseAFlourBehavior?: BeginnerPhaseAFlourBehavior,
+   targetFinalDoughTemp?: number,
++  finalRestMinutes?: number,
+ ): DetailedPhase[] {
+   const hand = mixing === 'hand';
+   const instructionFlour = flourType === 'custom' ? 'caputo00' : flourType;
+@@ -4177,21 +4271,36 @@ function getDetailedDirectSteps(
+   const napolitanaGlutenFreeRemainingMinutes = isNapolitana && isGlutenFree
+     ? Math.max(0, Math.round(roomHours * 60))
+     : 0;
+-  const temperingMin = Math.min(120, Math.max(15, Math.round(30 + (22 - roomTemp) * 7.5)));
+-  const temperingMax = Math.min(120, temperingMin + 15);
++  const temperingWindow = getTemperingWindow(roomTemp);
++  const temperingMin = temperingWindow.minimumMinutes;
++  const temperingMax = temperingWindow.maximumMinutes;
++  const resolvedFinalRestMinutes = beginnerMode ? temperingWindow.initialMinutes : Math.max(0, finalRestMinutes ?? 0);
++  const hasFinalRoomRest = beginnerMode || resolvedFinalRestMinutes > 0;
+   const ovenPreheatMin = oven === 'homeStone' ? 45 : 20;
+   const ovenPreheatMax = oven === 'homeStone' ? 60 : 20;
+-  const temperingMidpoint = Math.round(((temperingMin + temperingMax) / 2) * 60);
++  const temperingMidpoint = resolvedFinalRestMinutes * 60;
+   const timer = (id: string, seconds: number, kind: BaseTimer['kind']): BaseTimer => ({ id, seconds, kind });
+   const ballCount = Math.round(totalDough / ballWeight);
+   const ballWord = ballCount % 10 === 1 && ballCount % 100 !== 11 ? 'kuglu' : ballCount % 10 >= 2 && ballCount % 10 <= 4 && (ballCount % 100 < 10 || ballCount % 100 >= 20) ? 'kugle' : 'kugli';
+   const pizzaWord = pizzas % 10 === 1 && pizzas % 100 !== 11 ? 'pizzu' : pizzas % 10 >= 2 && pizzas % 10 <= 4 && (pizzas % 100 < 10 || pizzas % 100 >= 20) ? 'pizze' : 'pizza';
+-  const ballTemperingStep = hasColdFermentation
+-    ? `Nakon ${croatianHours(fridgeHours)} u hladnjaku izvadite kugle i ostavite ih ${roomHours > 0 ? croatianHours(roomHours) : '15–30 minuta'} na sobnoj temperaturi da se opuste. Pazite da se ne prefermentiraju, zatim nastavite s oblikovanjem.`
+-    : 'Ostavite kugle 15–30 minuta na sobnoj temperaturi da se opuste. Pazite da se ne prefermentiraju, zatim nastavite s oblikovanjem.';
+-  const tegliaTemperingStep = hasColdFermentation
+-    ? `Nakon ${croatianHours(fridgeHours)} u hladnjaku izvadite tijesto i ostavite ga ${roomHours > 0 ? croatianHours(roomHours) : '15–30 minuta'} na sobnoj temperaturi da se opusti. Pazite da ne prefermentira, zatim nastavite s utiskivanjem.`
+-    : `Ostavite tijesto ${temperingMin}–${temperingMax} minuta na sobnoj temperaturi da se opusti, zatim nastavite s utiskivanjem.`;
++  const finalRestLabel = beginnerMode
++    ? roomHours > 0 ? croatianHours(roomHours) : '15–30 minuta'
++    : croatianMinutes(resolvedFinalRestMinutes);
++  const ballTemperingStep = !hasFinalRoomRest && !hasColdFermentation
++    ? ''
++    : hasColdFermentation
++      ? resolvedFinalRestMinutes > 0 || beginnerMode
++        ? `Nakon ${croatianHours(fridgeHours)} u hladnjaku izvadite kugle i ostavite ih ${finalRestLabel} na sobnoj temperaturi da se opuste. Pazite da se ne prefermentiraju, zatim nastavite s oblikovanjem.`
++        : `Nakon ${croatianHours(fridgeHours)} u hladnjaku izvadite kugle i nastavite s oblikovanjem.`
++      : `Ostavite kugle ${finalRestLabel} na sobnoj temperaturi da se opuste. Pazite da se ne prefermentiraju, zatim nastavite s oblikovanjem.`;
++  const tegliaTemperingStep = !hasFinalRoomRest && !hasColdFermentation
++    ? ''
++    : hasColdFermentation
++      ? resolvedFinalRestMinutes > 0 || beginnerMode
++        ? `Nakon ${croatianHours(fridgeHours)} u hladnjaku izvadite tijesto i ostavite ga ${finalRestLabel} na sobnoj temperaturi da se opusti. Pazite da ne prefermentira, zatim nastavite s utiskivanjem.`
++        : `Nakon ${croatianHours(fridgeHours)} u hladnjaku izvadite tijesto i nastavite s utiskivanjem.`
++      : `Ostavite tijesto ${finalRestLabel} na sobnoj temperaturi da se opusti, zatim nastavite s utiskivanjem.`;
++  const finalRestStep = isRomanTeglia ? tegliaTemperingStep : ballTemperingStep;
+   const doughReadinessInfo = 'Lagano pritisnite kuglu prstom. Ako se udubljenje polako vraća, spremna je za oblikovanje; ako se odmah vrati, ostavite je još malo.';
+   const approvedHandPhaseAInfo = 'Ručno miješenje obično traje oko 10 minuta, ali vodite se stanjem tijesta. Završite kada je tijesto glatko, povezano i elastično.\n\nAko tijesto postane previše ljepljivo i teško za rad, pokrijte ga i ostavite da odmori oko 20 minuta. Nakon odmora napravite nekoliko nježnih Stretch & Fold preklapanja.\n\nStretch & Fold: uhvatite jedan rub tijesta, lagano ga razvucite prema gore i preklopite preko sredine. Okrenite tijesto i ponovite sa svih strana.\n\nNakon toga nastavite s receptom.';
+   const approvedManitobaHandPhaseAInfo = 'Ručno miješenje Manitoba brašna obično traje oko 10–15 minuta, ali vodite se stanjem tijesta. Završite kada je tijesto glatko, povezano i elastično.\n\nAko tijesto postane previše ljepljivo i teško za rad, pokrijte ga i ostavite da odmori oko 20 minuta. Nakon odmora napravite nekoliko nježnih Stretch & Fold preklapanja.\n\nStretch & Fold: uhvatite jedan rub tijesta, lagano ga razvucite prema gore i preklopite preko sredine. Okrenite tijesto i ponovite sa svih strana.\n\nNakon toga nastavite s receptom.';
+@@ -4721,7 +4830,9 @@ function getDetailedDirectSteps(
+       ] : [
+         'Stavite kugle u zatvorenu fermentacijsku kutiju i prebacite ih u hladnjak.',
+         `Kugle fermentiraju u hladnjaku ${fridgeHours} sati pri približno 4–6 °C. Vrijeme hladne fermentacije računa se samo jednom.`,
+-        'Nakon isteka odabranog vremena prijeđite na temperiranje.',
++        resolvedFinalRestMinutes > 0 || beginnerMode
++          ? 'Nakon isteka odabranog vremena prijeđite na temperiranje.'
++          : 'Nakon isteka odabranog vremena prijeđite na oblikovanje.',
+       ],
+       timers: [timer('cold-fermentation', fridgeHours * 3600, 'fridge')],
+     }] : []),
+@@ -4729,17 +4840,29 @@ function getDetailedDirectSteps(
+       title: isRomanTeglia
+         ? 'Faza E: Utiskivanje u tepsiju i pečenje'
+         : isNapolitana
+-          ? (hasColdFermentation ? 'Faza E: Temperiranje, oblikovanje i pečenje' : 'Faza D: Temperiranje, oblikovanje i pečenje')
+-          : hasPreferment ? (hasColdFermentation ? 'Faza F: Temperiranje i oblikovanje' : 'Faza E: Temperiranje i oblikovanje') : (hasColdFermentation ? 'Faza E: Temperiranje i oblikovanje' : 'Faza D: Temperiranje i oblikovanje'),
++          ? (hasColdFermentation ? 'Faza E: Temperiranje, oblikovanje i pečenje' : hasFinalRoomRest ? 'Faza D: Temperiranje, oblikovanje i pečenje' : 'Faza D: Oblikovanje i pečenje')
++          : hasPreferment
++            ? (hasColdFermentation ? 'Faza F: Temperiranje i oblikovanje' : hasFinalRoomRest ? 'Faza E: Temperiranje i oblikovanje' : 'Faza E: Oblikovanje')
++            : (hasColdFermentation ? 'Faza E: Temperiranje i oblikovanje' : hasFinalRoomRest ? 'Faza D: Temperiranje i oblikovanje' : 'Faza D: Oblikovanje'),
+       temperingInfo: isRomanTeglia
+-        ? 'Teglia se nakon hladne fermentacije nježno utiskuje u nauljenu tepsiju. Ne oblikujte kuglu i ne rastežite tijesto u zraku.'
++        ? hasColdFermentation
++          ? beginnerMode || !hasFinalRoomRest
++            ? 'Teglia se nakon hladne fermentacije nježno utiskuje u nauljenu tepsiju. Ne oblikujte kuglu i ne rastežite tijesto u zraku.'
++            : `Nakon hladne fermentacije ostavite masu ${finalRestLabel} na sobnoj temperaturi, zatim je nježno utisnite u nauljenu tepsiju.`
++          : hasFinalRoomRest ? `Ostavite masu tijesta ${finalRestLabel} da se opusti, zatim je nježno utisnite u nauljenu tepsiju.` : undefined
+         : hasColdFermentation
+-          ? `Vrijeme temperiranja automatski se prilagođava temperaturi prostorije od ${roomTemp} °C: približno ${temperingMin}–${temperingMax} minuta. Na hladnijoj temperaturi može trebati 1–2 sata. Pazite da se kugle ne predignu.`
+-          : roomHours === 0
+-            ? `Ostavite kugle ${temperingMin}–${temperingMax} minuta na sobnoj temperaturi prije oblikovanja.`
+-            : `Nakon završetka odabranog odmora od ${croatianHours(roomHours)} prijeđite na oblikovanje.`,
++          ? beginnerMode
++            ? `Vrijeme temperiranja automatski se prilagođava temperaturi prostorije od ${roomTemp} °C: približno ${temperingMin}–${temperingMax} minuta. Na hladnijoj temperaturi može trebati 1–2 sata. Pazite da se kugle ne predignu.`
++            : hasFinalRoomRest
++              ? `Nakon hladne fermentacije ostavite kugle ${finalRestLabel} na sobnoj temperaturi, zatim ih oblikujte.`
++              : 'Nakon hladne fermentacije prijeđite na oblikovanje.'
++          : beginnerMode
++            ? roomHours === 0
++              ? `Ostavite kugle ${temperingMin}–${temperingMax} minuta na sobnoj temperaturi prije oblikovanja.`
++              : `Nakon završetka odabranog odmora od ${croatianHours(roomHours)} prijeđite na oblikovanje.`
++            : hasFinalRoomRest ? `Ostavite kugle ${finalRestLabel} na sobnoj temperaturi prije oblikovanja.` : undefined,
+       proofingInfo: isRomanTeglia ? undefined : doughReadinessInfo,
+-      ovenTimingInfo: isRomanTeglia ? undefined : oven === 'ooni'
++      ovenTimingInfo: isRomanTeglia || (!beginnerMode && !hasColdFermentation) ? undefined : oven === 'ooni'
+         ? `Pizza peći treba približno ${ovenPreheatMin}–${ovenPreheatMax} minuta da se zagrije. Da se vrijeme uskladi s temperiranjem kugli, uključite pizza peć ${Math.max(0, ovenPreheatMin - temperingMax)}–${Math.max(0, ovenPreheatMax - temperingMin)} minuta prije nego što izvadite kugle iz hladnjaka.`
+         : `Pećnici treba približno ${ovenPreheatMin}–${ovenPreheatMax} minuta da se zagrije. Da se vrijeme uskladi s temperiranjem kugli, uključite pećnicu ${Math.max(0, ovenPreheatMin - temperingMax)}–${Math.max(0, ovenPreheatMax - temperingMin)} minuta prije nego što izvadite kugle iz hladnjaka.`,
+       ovenProgramInfo: oven === 'homePan' ? 'Ako imate Pizza program, koristite njega; ako nemate Pizza program, koristite gornji i donji grijač bez ventilatora.' : undefined,
+@@ -4747,7 +4870,7 @@ function getDetailedDirectSteps(
+       bakingCheckInfo: oven === 'homePan' ? 'Podignite rub pizze i provjerite je li dno dovoljno pečeno i zlatno-smeđe.' : undefined,
+       steps: isRomanTeglia ? [
+         `Uključite pećnicu 20 minuta prije pečenja i dobro je zagrijte na ${ovenTemp} °C.`,
+-        tegliaTemperingStep,
++        ...(tegliaTemperingStep ? [tegliaTemperingStep] : []),
+         'Lagano nauljite tepsiju.',
+         `Istresite masu u tepsiju ${trayDimensions.width}×${trayDimensions.length} cm i nježno je utisnite prstima do rubova bez rastezanja u zraku.`,
+         'Ostavite tijesto kratko da se opusti ako se vraća prema sredini.',
+@@ -4756,7 +4879,7 @@ function getDetailedDirectSteps(
+         'Na kraju uključite grill ako želite jače zapečenu gornju stranu.',
+       ] : oven === 'homePan' ? [
+         `Uključite pećnicu 20 minuta prije pečenja i dobro je zagrijte na ${ovenTemp} °C.`,
+-        isRomanTeglia ? tegliaTemperingStep : ballTemperingStep,
++        ...(finalRestStep ? [finalRestStep] : []),
+         ...(!isGlutenFree ? ['Površinu lagano pospite minimalnom količinom semole.'] : []),
+         isGlutenFree ? 'Brzim i nježnim pokretom izvadite kuglu iz posude i stavite je na pobrašnjenu podlogu.' : 'Brzim i nježnim pokretom izvadite kuglu iz posude i stavite je naopako na semolu.',
+         isRomanTonda ? 'Oblikujte tanku i ravnu Romanu pritiskanjem prstima ili valjkom; ne rastežite je agresivno u zraku.' : 'Vrhovima prstiju potiskujte zrak iz sredine prema rubovima. Ne koristite valjak.',
+@@ -4772,7 +4895,7 @@ function getDetailedDirectSteps(
+         'Izvadite pizzu iz pećnice i ostavite je kratko prije rezanja.',
+       ] : [
+         ovenSteps[0],
+-        isRomanTeglia ? tegliaTemperingStep : ballTemperingStep,
++        ...(finalRestStep ? [finalRestStep] : []),
+         isRomanTonda ? 'Radnu površinu lagano pospite brašnom ili semolom.' : isGlutenFree ? 'Radnu površinu obilno pospite bezglutenskim ili rižinim brašnom.' : 'Površinu lagano pospite minimalnom količinom semole.',
+         isRomanTonda ? 'Brzim i nježnim pokretom izvadite kuglu i stavite je na pobrašnjenu podlogu.' : isGlutenFree ? 'Brzim i nježnim pokretom izvadite kuglu i stavite je na pobrašnjenu podlogu.' : 'Brzim i nježnim pokretom izvadite kuglu iz posude i stavite je naopako na semolu.',
+         isRomanTonda ? 'Oblikujte tanku i ravnu Romanu pritiskanjem prstima ili valjkom; ne rastežite je agresivno u zraku.' : isNewYork ? 'Oblikujte veću kuglu u tankom središtu i što ujednačenijoj debljini. Nemojte namjerno stvarati visok, napuhnut napolitanski rub; kriška treba biti savitljiva.' : isGlutenFree ? 'Nema rastezanja u zraku. Vrhovima prstiju nježno tapkajte i potiskujte smjesu od sredine prema rubovima kako biste formirali krug. Ne koristite valjak.' : 'Vrhovima prstiju potiskujte zrak iz sredine prema rubovima. Ne koristite valjak.',
+@@ -4786,7 +4909,7 @@ function getDetailedDirectSteps(
+         oven === 'ooni' ? ovenSteps[3] : ovenSteps[2],
+       ],
+       timers: [
+-        timer('tempering', temperingMidpoint, 'preBake'),
++        ...(beginnerMode || resolvedFinalRestMinutes > 0 ? [timer('tempering', temperingMidpoint, 'preBake')] : []),
+         ...(beginnerMode ? getBeginnerOvenTimers(oven, ovenTemp, useBakeEstimate, isRomanTeglia) : []),
+       ],
+     },
+@@ -4816,6 +4939,7 @@ function getDetailedDirectStepsLocalized(
+   beginnerMode = false,
+   beginnerPhaseAFlourBehavior?: BeginnerPhaseAFlourBehavior,
+   targetFinalDoughTemp?: number,
++  finalRestMinutes?: number,
+ ): DetailedPhase[] {
+   const hand = mixing === 'hand';
+   const isGlutenFree = flourType === 'glutenFree';
+@@ -4837,6 +4961,7 @@ function getDetailedDirectStepsLocalized(
+   const isTegliaCustomBeginnerMixer = beginnerMode && isRomanTeglia && !hand && flourType === 'custom';
+   const isNewYork = variant === 'newYork';
+   const useBakeEstimate = isNewYork || estimatedBake;
++  const hasColdFermentation = fridgeHours > 0;
+   const isNeapolitanTipo00BeginnerHand = beginnerMode && variant === 'napolitana' && hand && flourType === 'caputo00';
+   const isNeapolitanTipo00BeginnerMixer = beginnerMode && variant === 'napolitana' && !hand && flourType === 'caputo00';
+   const isNeapolitanManitobaBeginnerHand = beginnerMode && variant === 'napolitana' && hand && flourType === 'manitoba';
+@@ -4951,33 +5076,69 @@ function getDetailedDirectStepsLocalized(
+     'Mixer mixing usually takes about 8–10 minutes, but use the condition of the dough as your guide. Finish when the dough is smooth, cohesive, and elastic.\n\nIf the dough becomes too sticky and difficult to work with, cover it and let it rest for about 10 minutes. After the rest, do several gentle Stretch & Fold folds.\n\nStretch & Fold: take one edge of the dough, gently stretch it upward, and fold it over the center. Turn the dough and repeat on all sides.\n\nThen continue with the recipe.',
+     'Mešanje običajno traja približno 8–10 minut, vendar se ravnajte po stanju testa. Končajte, ko je testo gladko, povezano in elastično.\n\nČe testo postane preveč lepljivo in ga je težko obdelovati, ga pokrijte in pustite počivati približno 10 minut. Po počitku naredite nekaj nežnih prepogibov Stretch & Fold.\n\nStretch & Fold: primite en rob testa, ga nežno raztegnite navzgor in prepognite čez sredino. Testo obrnite in ponovite na vseh straneh.\n\nNato nadaljujte po receptu.',
+   );
+-  const temperingMin = Math.min(120, Math.max(15, Math.round(30 + (22 - roomTemp) * 7.5)));
+-  const temperingMax = Math.min(120, temperingMin + 15);
++  const temperingWindow = getTemperingWindow(roomTemp);
++  const temperingMin = temperingWindow.minimumMinutes;
++  const temperingMax = temperingWindow.maximumMinutes;
++  const resolvedFinalRestMinutes = beginnerMode ? temperingWindow.initialMinutes : Math.max(0, finalRestMinutes ?? 0);
++  const hasFinalRoomRest = beginnerMode || resolvedFinalRestMinutes > 0;
+   const ovenPreheatMin = oven === 'homeStone' ? 45 : 20;
+   const ovenPreheatMax = oven === 'homeStone' ? 60 : 20;
+-  const temperingMidpoint = Math.round(((temperingMin + temperingMax) / 2) * 60);
++  const temperingMidpoint = resolvedFinalRestMinutes * 60;
+   const cheeseAmount = Math.round(cheesePerPizza);
+   const psylliumAmount = isGlutenFree ? Math.round(ingredients.flour * 0.02) : 0;
+   const ballCount = Math.round(totalDough / ballWeight);
+   const timer = (id: string, seconds: number, kind: BaseTimer['kind']): BaseTimer => ({ id, seconds, kind });
+   const recipeSentenceEnd = useBakeEstimate && lang === 'de' ? '' : '.';
+-  const finalRoomDuration = roomHours > 0
+-    ? pick(
++  const finalRoomDuration = !beginnerMode
++    ? resolvedFinalRestMinutes > 0 ? formatDuration(resolvedFinalRestMinutes * 60, lang) : ''
++    : roomHours > 0
++      ? pick(
+         `${roomHours} ${roomHours === 1 ? 'Stunde' : 'Stunden'}`,
+         `${roomHours} ${roomHours === 1 ? 'hour' : 'hours'}`,
+         `${roomHours} ${roomHours === 1 ? 'uro' : roomHours === 2 ? 'uri' : roomHours < 5 ? 'ure' : 'ur'}`,
+       )
+-    : pick('15–30 Minuten', '15–30 minutes', '15–30 minut');
++      : pick('15–30 Minuten', '15–30 minutes', '15–30 minut');
+   const tegliaTemperingStep = fridgeHours > 0
+-    ? pick(
++    ? resolvedFinalRestMinutes > 0 || beginnerMode
++      ? pick(
+         `Nehmen Sie den Teig nach ${coldFermentationDuration} aus dem Kühlschrank und lassen Sie ihn ${finalRoomDuration} bei Raumtemperatur entspannen. Achten Sie darauf, dass er nicht überfermentiert, und drücken Sie ihn anschließend in das Blech.`,
+         `After ${coldFermentationDuration} in the refrigerator, take the dough out and let it relax at room temperature for ${finalRoomDuration}. Make sure it does not over-ferment, then press it into the tray.`,
+         `Po ${coldFermentationDuration} v hladilniku vzemite testo ven in ga pustite ${finalRoomDuration} počivati pri sobni temperaturi. Pazite, da ne fermentira preveč, nato ga vtisnite v pekač.`,
+       )
++      : pick(
++        `Nehmen Sie den Teig nach ${coldFermentationDuration} aus dem Kühlschrank und drücken Sie ihn anschließend in das Blech.`,
++        `After ${coldFermentationDuration} in the refrigerator, take the dough out and press it into the tray.`,
++        `Po ${coldFermentationDuration} v hladilniku vzemite testo ven in ga nato vtisnite v pekač.`,
++      )
+     : pick(
+-        `Lassen Sie den Teig ${temperingMin}–${temperingMax} Minuten bei Raumtemperatur entspannen und drücken Sie ihn anschließend in das Blech.`,
+-        `Let the dough relax at room temperature for ${temperingMin}–${temperingMax} minutes, then press it into the tray.`,
+-        `Testo pustite ${temperingMin}–${temperingMax} minut počivati pri sobni temperaturi, nato ga vtisnite v pekač.`,
++        `Lassen Sie den Teig ${beginnerMode ? `${temperingMin}–${temperingMax} Minuten` : finalRoomDuration} bei Raumtemperatur entspannen und drücken Sie ihn anschließend in das Blech.`,
++        `Let the dough relax at room temperature for ${beginnerMode ? `${temperingMin}–${temperingMax} minutes` : finalRoomDuration}, then press it into the tray.`,
++        `Testo pustite ${beginnerMode ? `${temperingMin}–${temperingMax} minut` : finalRoomDuration} počivati pri sobni temperaturi, nato ga vtisnite v pekač.`,
++      );
++  const ballTemperingStep = !hasFinalRoomRest && !hasColdFermentation
++    ? ''
++    : hasColdFermentation
++      ? resolvedFinalRestMinutes > 0 || beginnerMode
++        ? pick(
++          `Nehmen Sie die Teigkugeln aus dem Kühlschrank und lassen Sie sie ${finalRoomDuration} vor dem Formen temperieren. Achten Sie darauf, dass die Teigkugeln nicht überfermentieren.`,
++          `Take the dough balls out of the refrigerator and let them temper for ${finalRoomDuration} before shaping. Make sure the dough balls do not over-ferment.`,
++          `Kroglice vzemite iz hladilnika in jih pred oblikovanjem pustite ${finalRoomDuration} temperirati. Pazite, da kroglice ne fermentirajo preveč.`,
++        )
++        : pick(
++          'Nehmen Sie die Teigkugeln aus dem Kühlschrank und fahren Sie mit dem Formen fort.',
++          'Take the dough balls out of the refrigerator and continue shaping.',
++          'Kroglice vzemite iz hladilnika in nadaljujte z oblikovanjem.',
++        )
++      : pick(
++        beginnerMode
++          ? 'Nehmen Sie die Teigkugeln aus dem Kühlschrank und lassen Sie sie 15–30 Minuten vor dem Formen temperieren. Achten Sie darauf, dass die Teigkugeln nicht überfermentieren.'
++          : `Lassen Sie die Teigkugeln ${finalRoomDuration} vor dem Formen bei Raumtemperatur ruhen.`,
++        beginnerMode
++          ? 'Take the dough balls out of the refrigerator and let them temper for 15–30 minutes before shaping. Make sure the dough balls do not over-ferment.'
++          : `Leave the dough balls at room temperature for ${finalRoomDuration} before shaping.`,
++        beginnerMode
++          ? 'Kroglice vzemite iz hladilnika in jih pred oblikovanjem pustite 15–30 minut temperirati. Pazite, da kroglice ne fermentirajo preveč.'
++          : `Kroglice pustite ${finalRoomDuration} na sobni temperaturi pred oblikovanjem.`,
+       );
+   const ovenSteps = oven === 'ooni'
+     ? [
+@@ -5394,7 +5555,7 @@ function getDetailedDirectStepsLocalized(
+           : pick('Formen Sie jedes Stück zu einer glatten und gespannten Teigkugel.', 'Shape each piece into a smooth and tight dough ball.', 'Vsak kos oblikujte v gladko in napeto kroglico.'),
+       ],
+     },
+-    {
++    ...(hasColdFermentation ? [{
+       title: pick('Phase D: Kalte Fermentation', 'Phase D: Cold Fermentation', 'Faza D: Hladna fermentacija'),
+       temperingInfo: isRomanTeglia
+         ? pick('Temperieren bedeutet, dass die Teigmasse nach der kalten Fermentation aus dem Kühlschrank genommen und vor dem Einlegen in das Blech einige Zeit bei Raumtemperatur stehen gelassen wird.', 'Tempering means taking the dough mass out of the refrigerator after cold fermentation and leaving it at room temperature for some time before pressing it into the tray.', 'Temperiranje pomeni, da po hladni fermentaciji maso testa vzamete iz hladilnika in jo pred vtiskanjem v pekač nekaj časa pustite na sobni temperaturi.')
+@@ -5405,36 +5566,60 @@ function getDetailedDirectStepsLocalized(
+       steps: isRomanTeglia ? [
+         pick('Legen Sie die Teigmasse in einen abgedeckten Behälter und stellen Sie sie in den Kühlschrank.', 'Place the dough mass in a covered container and transfer it to the refrigerator.', 'Maso testa položite v pokrito posodo in jo prestavite v hladilnik.'),
+         pick(`Lassen Sie die Teigmasse ${coldFermentationDuration} bei ungefähr 4–6 °C im Kühlschrank fermentieren. Die Zeit der kalten Fermentation wird nur einmal berechnet.`, `Ferment the dough mass in the refrigerator for ${coldFermentationDuration} at approximately 4–6 °C. Cold fermentation time is counted only once.`, `Masa testa naj fermentira v hladilniku ${coldFermentationDuration} pri približno 4–6 °C. Čas hladne fermentacije se šteje samo enkrat.`),
+-        pick('Nach Ablauf der gewählten Zeit fahren Sie mit dem Temperieren und dem Einlegen in das Blech fort.', 'After the selected time has elapsed, continue with tempering and pressing the dough into the tray.', 'Po poteku izbranega časa nadaljujte s temperiranjem in vtiskanjem testa v pekač.'),
++        resolvedFinalRestMinutes > 0 || beginnerMode
++          ? pick('Nach Ablauf der gewählten Zeit fahren Sie mit dem Temperieren und dem Einlegen in das Blech fort.', 'After the selected time has elapsed, continue with tempering and pressing the dough into the tray.', 'Po poteku izbranega časa nadaljujte s temperiranjem in vtiskanjem testa v pekač.')
++          : pick('Nach Ablauf der gewählten Zeit nehmen Sie den Teig aus dem Kühlschrank und drücken ihn in das Blech.', 'After the selected time has elapsed, take the dough out of the refrigerator and press it into the tray.', 'Po poteku izbranega časa vzemite testo iz hladilnika in ga vtisnite v pekač.'),
+       ] : [
+         pick('Legen Sie die Teigkugeln in eine verschlossene Teigbox und stellen Sie sie in den Kühlschrank.', 'Place the dough balls in a closed fermentation box and transfer them to the refrigerator.', 'Kroglice testa položite v zaprto fermentacijsko posodo in jih prestavite v hladilnik.'),
+         pick(`Lassen Sie die Teigkugeln ${fridgeHours} Stunden bei ungefähr 4–6 °C im Kühlschrank fermentieren. Die Zeit der kalten Fermentation wird nur einmal berechnet.`, `Ferment the dough balls in the refrigerator for ${fridgeHours} hours at approximately 4–6 °C. Cold fermentation time is counted only once.`, `Kroglice naj fermentirajo v hladilniku ${fridgeHours} ur pri približno 4–6 °C. Čas hladne fermentacije se šteje samo enkrat.`),
+-        pick('Nach Ablauf der gewählten Zeit fahren Sie mit dem Temperieren fort.', 'After the selected time has elapsed, proceed to tempering.', 'Po poteku izbranega časa nadaljujte s temperiranjem.'),
++        resolvedFinalRestMinutes > 0 || beginnerMode
++          ? pick('Nach Ablauf der gewählten Zeit fahren Sie mit dem Temperieren fort.', 'After the selected time has elapsed, proceed to tempering.', 'Po poteku izbranega časa nadaljujte s temperiranjem.')
++          : pick('Nach Ablauf der gewählten Zeit nehmen Sie die Teigkugeln aus dem Kühlschrank und fahren Sie mit dem Formen fort.', 'After the selected time has elapsed, take the dough balls out of the refrigerator and continue shaping.', 'Po poteku izbranega časa vzemite kroglice iz hladilnika in nadaljujte z oblikovanjem.'),
+       ],
+       timers: [timer('cold-fermentation', fridgeHours * 3600, 'fridge')],
+-    },
++    }] : []),
+     {
+       title: isRomanTeglia
+         ? pick('Phase E: In das Blech drücken und backen', 'Phase E: Pressing Into the Tray and Baking', 'Faza E: Vtiskovanje v pekač in peka')
+         : variant === 'napolitana'
+-          ? pick('Phase E: Temperieren, Formen und Backen', 'Phase E: Tempering, Shaping and Baking', 'Faza E: Temperiranje, oblikovanje in peka')
+-          : pick('Phase E: Temperieren und Formen', 'Phase E: Tempering and Shaping', 'Faza E: Temperiranje in oblikovanje'),
++          ? beginnerMode
++            ? pick('Phase E: Temperieren, Formen und Backen', 'Phase E: Tempering, Shaping and Baking', 'Faza E: Temperiranje, oblikovanje in peka')
++            : hasColdFermentation
++              ? pick('Phase E: Temperieren, Formen und Backen', 'Phase E: Tempering, Shaping and Baking', 'Faza E: Temperiranje, oblikovanje in peka')
++              : hasFinalRoomRest
++                ? pick('Phase D: Temperieren, Formen und Backen', 'Phase D: Tempering, Shaping and Baking', 'Faza D: Temperiranje, oblikovanje in peka')
++                : pick('Phase D: Formen und Backen', 'Phase D: Shaping and Baking', 'Faza D: Oblikovanje in peka')
++          : beginnerMode
++            ? pick('Phase E: Temperieren und Formen', 'Phase E: Tempering and Shaping', 'Faza E: Temperiranje in oblikovanje')
++            : hasColdFermentation
++              ? pick('Phase E: Temperieren und Formen', 'Phase E: Tempering and Shaping', 'Faza E: Temperiranje in oblikovanje')
++              : hasFinalRoomRest
++                ? pick('Phase D: Temperieren und Formen', 'Phase D: Tempering and Shaping', 'Faza D: Temperiranje in oblikovanje')
++                : pick('Phase D: Formen', 'Phase D: Shaping', 'Faza D: Oblikovanje'),
+       temperingInfo: isRomanTeglia
+-        ? pick(`Die Teigmasse wird nach ${coldFermentationDuration} aus dem Kühlschrank genommen und vor dem Einlegen in das Blech ${finalRoomDuration} bei Raumtemperatur entspannt.`, `After ${coldFermentationDuration} in the refrigerator, take the dough mass out and let it relax at room temperature for ${finalRoomDuration} before pressing it into the tray.`, `Po ${coldFermentationDuration} vzemite maso testa iz hladilnika in jo pred vtiskanjem v pekač ${finalRoomDuration} pustite počivati pri sobni temperaturi.`)
+-        : pick(`Die Temperierzeit wird automatisch an die Raumtemperatur von ${roomTemp} °C angepasst: ungefähr ${temperingMin}–${temperingMax} Minuten. Bei niedrigeren Temperaturen kann es 1–2 Stunden dauern. Achten Sie darauf, dass die Teigkugeln nicht überfermentieren.`, `Tempering time is automatically adjusted to the room temperature of ${roomTemp} °C: approximately ${temperingMin}–${temperingMax} minutes. At lower temperatures, it may take 1–2 hours. Make sure the dough balls do not over-ferment.`, `Čas temperiranja se samodejno prilagodi sobni temperaturi ${roomTemp} °C: približno ${temperingMin}–${temperingMax} minut. Pri nižjih temperaturah lahko traja 1–2 uri. Pazite, da kroglice ne fermentirajo preveč.`),
++        ? hasFinalRoomRest
++          ? hasColdFermentation
++            ? pick(`Die Teigmasse wird nach ${coldFermentationDuration} aus dem Kühlschrank genommen und vor dem Einlegen in das Blech ${finalRoomDuration} bei Raumtemperatur entspannt.`, `After ${coldFermentationDuration} in the refrigerator, take the dough mass out and let it relax at room temperature for ${finalRoomDuration} before pressing it into the tray.`, `Po ${coldFermentationDuration} vzemite maso testa iz hladilnika in jo pred vtiskanjem v pekač ${finalRoomDuration} pustite počivati pri sobni temperaturi.`)
++            : pick(`Lassen Sie die Teigmasse ${finalRoomDuration} bei Raumtemperatur ruhen und drücken Sie sie anschließend in das Blech.`, `Leave the dough mass at room temperature for ${finalRoomDuration}, then press it into the tray.`, `Maso testa pustite ${finalRoomDuration} na sobni temperaturi, nato jo vtisnite v pekač.`)
++          : undefined
++        : hasFinalRoomRest
++          ? beginnerMode
++            ? pick(`Die Temperierzeit wird automatisch an die Raumtemperatur von ${roomTemp} °C angepasst: ungefähr ${temperingMin}–${temperingMax} Minuten. Bei niedrigeren Temperaturen kann es 1–2 Stunden dauern. Achten Sie darauf, dass die Teigkugeln nicht überfermentieren.`, `Tempering time is automatically adjusted to the room temperature of ${roomTemp} °C: approximately ${temperingMin}–${temperingMax} minutes. At lower temperatures, it may take 1–2 hours. Make sure the dough balls do not over-ferment.`, `Čas temperiranja se samodejno prilagodi sobni temperaturi ${roomTemp} °C: približno ${temperingMin}–${temperingMax} minut. Pri nižjih temperaturah lahko traja 1–2 uri. Pazite, da kroglice ne fermentirajo preveč.`)
++            : pick(`Lassen Sie die Teigkugeln ${finalRoomDuration} bei Raumtemperatur ruhen und formen Sie sie anschließend.`, `Leave the dough balls at room temperature for ${finalRoomDuration}, then shape them.`, `Kroglice pustite ${finalRoomDuration} na sobni temperaturi, nato jih oblikujte.`)
++          : undefined,
+       proofingInfo: isRomanTeglia ? undefined : pick('Drücken Sie die Teigkugel leicht mit dem Finger. Wenn die Vertiefung langsam zurückfedert, ist sie bereit zum Formen; wenn sie sofort zurückfedert, braucht sie noch etwas Zeit.', 'Gently press the dough ball with your finger. If the indentation slowly springs back, it is ready for shaping; if it springs back immediately, it needs more time.', 'Kroglico rahlo pritisnite s prstom. Če se vdolbina počasi vrne, je pripravljena za oblikovanje; če se takoj vrne, potrebuje še nekaj časa.'),
+-      ovenTimingInfo: isRomanTeglia ? undefined : oven === 'ooni'
++      ovenTimingInfo: isRomanTeglia || (!beginnerMode && !hasColdFermentation) ? undefined : oven === 'ooni'
+         ? pick(`Der Pizzaofen benötigt ungefähr ${ovenPreheatMin}–${ovenPreheatMax} Minuten zum Aufheizen. Damit die Aufheizzeit mit dem Temperieren der Teigkugeln abgestimmt ist, schalten Sie den Pizzaofen ${Math.max(0, ovenPreheatMin - temperingMax)}–${Math.max(0, ovenPreheatMax - temperingMin)} Minuten vor dem Herausnehmen der Teigkugeln aus dem Kühlschrank ein.`, `The pizza oven needs approximately ${ovenPreheatMin}–${ovenPreheatMax} minutes to heat up. To coordinate the heating time with the tempering of the dough balls, turn on the pizza oven ${Math.max(0, ovenPreheatMin - temperingMax)}–${Math.max(0, ovenPreheatMax - temperingMin)} minutes before taking the dough balls out of the refrigerator.`, `Pizza pečica potrebuje približno ${ovenPreheatMin}–${ovenPreheatMax} minut, da se segreje. Za uskladitev časa segrevanja s temperiranjem kroglic vklopite pizza pečico ${Math.max(0, ovenPreheatMin - temperingMax)}–${Math.max(0, ovenPreheatMax - temperingMin)} minut, preden kroglice vzamete iz hladilnika.`)
+         : pick(`Der Ofen benötigt ungefähr ${ovenPreheatMin}–${ovenPreheatMax} Minuten zum Aufheizen. Damit die Aufheizzeit mit dem Temperieren der Teigkugeln abgestimmt ist, schalten Sie den Ofen ${Math.max(0, ovenPreheatMin - temperingMax)}–${Math.max(0, ovenPreheatMax - temperingMin)} Minuten vor dem Herausnehmen der Teigkugeln aus dem Kühlschrank ein.`, `The oven needs approximately ${ovenPreheatMin}–${ovenPreheatMax} minutes to heat up. To coordinate the oven heating time with the tempering of the dough balls, turn on the oven ${Math.max(0, ovenPreheatMin - temperingMax)}–${Math.max(0, ovenPreheatMax - temperingMin)} minutes before taking the dough balls out of the refrigerator.`, `Pečica potrebuje približno ${ovenPreheatMin}–${ovenPreheatMax} minut, da se segreje. Za uskladitev časa segrevanja pečice s temperiranjem kroglic pečico vklopite ${Math.max(0, ovenPreheatMin - temperingMax)}–${Math.max(0, ovenPreheatMax - temperingMin)} minut, preden kroglice vzamete iz hladilnika.`),
+       bakingInfo: oven === 'homeStone' ? pick('Platzieren Sie den Pizzastein oder Pizzastahl als Ausgangsposition etwa zwei Einschubebenen unterhalb des oberen Heizelements. Wenn Oberseite oder Boden der Pizza zu schnell dunkel werden, passen Sie die Position an Ihren Ofen an.', 'As a starting position, place the pizza stone or steel about two rack positions below the upper heating element. If the top or bottom of the pizza darkens too quickly, adjust the position for your oven.', 'Kot izhodiščni položaj postavite kamen ali jeklo za pico približno dve ravni pod zgornji grelnik. Če se vrh ali dno pice prehitro zatemni, položaj prilagodite svoji pečici.') : undefined,
+       bakingCheckInfo: oven === 'homePan' ? pick('Heben Sie den Pizzarand an und prüfen Sie, ob der Boden ausreichend gebacken und goldbraun ist.', 'Lift the pizza rim and check whether the bottom is sufficiently baked and golden brown.', 'Dvignite rob pice in preverite, ali je dno dovolj pečeno in zlato-rjavo.') : undefined,
+       steps: isRomanTeglia ? [
+         pick(`Heizen Sie den Ofen auf ${ovenTemp} °C vor.`, `Preheat the oven to ${ovenTemp} °C.`, `Pečico segrejte na ${ovenTemp} °C.`),
+-        tegliaTemperingStep,
++        ...(tegliaTemperingStep ? [tegliaTemperingStep] : []),
+         pick(`Ölen Sie das Blech ${trayDimensions.width}×${trayDimensions.length} cm leicht ein, geben Sie die Masse hinein und drücken Sie sie mit den Fingerspitzen bis zu den Rändern.`, `Lightly oil the ${trayDimensions.width}×${trayDimensions.length} cm tray, place the dough mass inside, and press it to the edges with your fingertips.`, `Pekač ${trayDimensions.width}×${trayDimensions.length} cm rahlo naoljite, položite vanj maso in jo s konicami prstov nežno potisnite do robov.`),
+         pick('Geben Sie Sauce und Belag darauf und backen Sie die Pizza, bis Boden und Rand gut gebacken sind.', 'Add sauce and toppings, then bake until the bottom and rim are well baked.', 'Dodajte omako in nadev ter pecite, dokler dno in rob nista dobro pečena.'),
+       ] : oven === 'homePan' ? [
+-        pick(`Nehmen Sie die Teigkugeln aus dem Kühlschrank und lassen Sie sie ${finalRoomDuration} vor dem Formen temperieren. Achten Sie darauf, dass die Teigkugeln nicht überfermentieren.`, `Take the dough balls out of the refrigerator and let them temper for ${finalRoomDuration} before shaping. Make sure the dough balls do not over-ferment.`, `Kroglice vzemite iz hladilnika in jih pred oblikovanjem pustite ${finalRoomDuration} temperirati. Pazite, da kroglice ne fermentirajo preveč.`),
++        ...(ballTemperingStep ? [ballTemperingStep] : []),
+         ...(!isGlutenFree ? [pick('Bestäuben Sie die Fläche leicht mit einer minimalen Menge Semola.', 'Lightly dust the surface with a minimal amount of semolina.', 'Površino rahlo posujte z minimalno količino zdroba.')] : []),
+         pick('Nehmen Sie die Teigkugel mit einer schnellen und vorsichtigen Bewegung aus dem Behälter und legen Sie sie mit der Oberseite nach unten auf die Semola.', 'Quickly and gently remove the dough ball from the container and place it upside down on the semolina.', 'Kroglico hitro in nežno vzemite iz posode ter jo položite obrnjeno na zdrob.'),
+         isRomanTonda ? pick('Formen Sie die Romana Tonda dünn und flach durch Drücken mit den Fingern oder mit dem Nudelholz; dehnen Sie sie nicht aggressiv in der Luft.', 'Shape the Romana Tonda thin and flat by pressing with your fingers or using a rolling pin; do not stretch it aggressively in the air.', 'Romano Tondo oblikujte tanko in ravno s pritiskanjem prstov ali z valjarjem; ne raztezajte je agresivno v zraku.') : pick('Drücken Sie mit den Fingerspitzen die Luft von der Mitte in Richtung Rand. Verwenden Sie kein Nudelholz.', 'Using your fingertips, push the air from the center toward the edges. Do not use a rolling pin.', 'S konicami prstov potiskajte zrak iz sredine proti robovom. Ne uporabljajte valjarja.'),
+@@ -5452,7 +5637,7 @@ function getDetailedDirectStepsLocalized(
+         pick('Nehmen Sie die Pizza aus dem Ofen und lassen Sie sie kurz ruhen, bevor Sie sie schneiden.', 'Remove the pizza from the oven and let it rest briefly before slicing.', 'Pico vzemite iz pečice in jo pred rezanjem pustite kratek čas počivati.'),
+       ] : [
+         ovenSteps[0],
+-        pick(`Nehmen Sie die Teigkugeln aus dem Kühlschrank und lassen Sie sie ${finalRoomDuration} vor dem Formen temperieren. Achten Sie darauf, dass die Teigkugeln nicht überfermentieren.`, `Take the dough balls out of the refrigerator and let them temper for ${finalRoomDuration} before shaping. Make sure the dough balls do not over-ferment.`, `Kroglice vzemite iz hladilnika in jih pred oblikovanjem pustite ${finalRoomDuration} temperirati. Pazite, da kroglice ne fermentirajo preveč.`),
++        ...(ballTemperingStep ? [ballTemperingStep] : []),
+         pick('Bestäuben Sie die Arbeitsfläche leicht mit einer minimalen Menge Semola.', 'Lightly dust the work surface with a minimal amount of semolina.', 'Delovno površino rahlo posujte z minimalno količino zdroba.'),
+         pick('Nehmen Sie die Teigkugel mit einer schnellen und vorsichtigen Bewegung aus dem Behälter und legen Sie sie mit der Oberseite nach unten auf die Semola.', 'Quickly and gently remove the dough ball from the container and place it upside down on the semolina.', 'Kroglico hitro in nežno vzemite iz posode ter jo položite obrnjeno na zdrob.'),
+         isRomanTonda
+@@ -5470,7 +5655,7 @@ function getDetailedDirectStepsLocalized(
+         ovenSteps[2],
+       ],
+       timers: [
+-        timer('tempering', temperingMidpoint, 'preBake'),
++        ...(beginnerMode || resolvedFinalRestMinutes > 0 ? [timer('tempering', temperingMidpoint, 'preBake')] : []),
+         ...(beginnerMode ? getBeginnerOvenTimers(oven, ovenTemp, useBakeEstimate, isRomanTeglia) : []),
+       ],
+     },
+@@ -8243,11 +8428,13 @@ function LeftoverModal({ onClose }: { onClose: () => void }) {
+ 
+ function SavedRecipesModal({
+   editingRecipe,
++  localOnly,
+   onClose,
+   onLoad,
+   onSave,
+ }: {
+   editingRecipe: { id: string; name: string } | null;
++  localOnly: boolean;
+   onClose: () => void;
+   onLoad: (recipe: SavedRecipe) => void;
+   onSave: (name: string, recipeId?: string | null) => Promise<SavedRecipe>;
+@@ -8261,7 +8448,8 @@ function SavedRecipesModal({
+ 
+   useEffect(() => {
+     let mounted = true;
+-    api('/api/recipes').then((data) => {
++    const loadRecipes = localOnly ? getProSavedRecipes() : api('/api/recipes');
++    loadRecipes.then((data) => {
+       if (mounted) setRecipes(data || []);
+     }).catch(() => {
+       if (mounted) setError(true);
+@@ -8269,7 +8457,7 @@ function SavedRecipesModal({
+       if (mounted) setLoading(false);
+     });
+     return () => { mounted = false; };
+-  }, []);
++  }, [localOnly]);
+ 
+   const save = async () => {
+     if (!name.trim()) return;
+@@ -8290,7 +8478,8 @@ function SavedRecipesModal({
+ 
+   const remove = async (recipeId: string) => {
+     try {
+-      await api(`/api/recipes/${recipeId}`, { method: 'DELETE' });
++      if (localOnly) await deleteProRecipe(recipeId);
++      else await api(`/api/recipes/${recipeId}`, { method: 'DELETE' });
+       setRecipes((previous) => previous.filter((recipe) => recipe.recipe_id !== recipeId));
+     } catch {
+       setError(true);
+@@ -8463,7 +8652,6 @@ const styles = StyleSheet.create({
+   beginnerSubtypeInfoText: { color: COLORS.muted, fontSize: 11, fontWeight: '600' },
+   styleRow: { flex: 1, minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: SPACING.sm, paddingHorizontal: SPACING.sm, paddingVertical: 7, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface },
+   styleRowActive: { backgroundColor: COLORS.brand, borderColor: COLORS.brand },
+-  lockedOption: { opacity: 0.62 },
+   styleThumb: { width: 52, height: 52, borderRadius: RADIUS.md },
+   styleCard: { width: 190, minHeight: 146, padding: SPACING.md, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface, gap: 4 },
+   styleCardActive: { borderColor: COLORS.brand, backgroundColor: COLORS.brandTertiary },
+diff --git a/frontend/app/(tabs)/planner.tsx b/frontend/app/(tabs)/planner.tsx
+index 907a75a..76ae92e 100644
+--- a/frontend/app/(tabs)/planner.tsx
++++ b/frontend/app/(tabs)/planner.tsx
+@@ -1,8 +1,8 @@
+-import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
++import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+ import { Alert, View, Text, StyleSheet, ScrollView, Pressable, Platform, TextInput } from 'react-native';
+ import { useSafeAreaInsets } from 'react-native-safe-area-context';
+ import AsyncStorage from '@react-native-async-storage/async-storage';
+-import { useLocalSearchParams, useRouter } from 'expo-router';
++import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+ import Icon from '@react-native-vector-icons/ionicons';
+ import DateTimePicker from '@react-native-community/datetimepicker';
+ 
+@@ -11,15 +11,17 @@ import { getCachedExperienceLevel, subscribeExperienceLevel } from '../../src/ex
+ import { COLORS, SPACING, RADIUS } from '../../src/theme';
+ import { getCachedTemperatureUnit, subscribeTemperatureUnit, getCachedMeasurementSystem, subscribeMeasurementSystem } from '../../src/preferences';
+ import { formatTemperature, formatUnitText } from '../../src/units';
++import { getPlannerNotificationRestoreStatus, shouldReconcilePlannerNotifications, subscribePlannerNotificationRestoreStatus } from '../../src/beginnerPlanRestoreCoordinator';
+ import {
+-  reversePlan, Method, PizzaStyle,
++  getDirectHomeFermentationSchedule, getFermentationSchedule, getTemperingWindow, reversePlan, selectPlannerHomeSchedules, Method, PizzaStyle,
+   BEGINNER_DIRECT_MIN_WINDOW_HOURS,
+   getSharedHomeBakeAt, setSharedHomeBakeAt, subscribeSharedHomeBakeAt,
+   getSharedHomeDirectSchedule, subscribeSharedHomeDirectSchedule,
++  getSharedHomeDirectScheduleMode,
+   getSharedHomeBigaSchedule, subscribeSharedHomeBigaSchedule,
+   getSharedHomePoolishSchedule, subscribeSharedHomePoolishSchedule,
+ } from '../../src/calculator';
+-import { scheduleLocal, cancelPlannerNotificationsForMethods, isPushSupported, requestNotificationPermissions } from '../../src/notifications';
++import { scheduleLocal, cancelObsoletePlannerNotifications, cancelPlannerNotificationsForMethods, isPushSupported, requestNotificationPermissions } from '../../src/notifications';
+ 
+ function fmt(d: Date) {
+   const day = d.toLocaleDateString(undefined, { weekday: 'short', day: '2-digit', month: 'short' });
+@@ -37,6 +39,28 @@ function fmtPlanTime(d: Date, lang: string) {
+ 
+ function pad(n: number) { return String(n).padStart(2, '0'); }
+ 
++type CalculatorPlanSettings = {
++  roomTemp: number;
++  roomHours: number;
++  fridgeTemp: number;
++  fridgeHours: number;
++  bigaHours: number;
++  poolishHours: number;
++};
++
++const DEFAULT_CALCULATOR_PLAN_SETTINGS: CalculatorPlanSettings = {
++  roomTemp: 22,
++  roomHours: 2,
++  fridgeTemp: 4,
++  fridgeHours: 24,
++  bigaHours: 24,
++  poolishHours: 24,
++};
++
++function isRecord(value: unknown): value is Record<string, unknown> {
++  return typeof value === 'object' && value !== null && !Array.isArray(value);
++}
++
+ export default function Planner() {
+   const insets = useSafeAreaInsets();
+   const router = useRouter();
+@@ -47,24 +71,83 @@ export default function Planner() {
+   const experienceLevel = useSyncExternalStore(subscribeExperienceLevel, getCachedExperienceLevel, getCachedExperienceLevel);
+   const experienceLoaded = experienceLevel !== undefined;
+   const isBeginner = experienceLevel !== 'pro';
++  const plannerRestoreStatus = useSyncExternalStore(subscribePlannerNotificationRestoreStatus, getPlannerNotificationRestoreStatus, getPlannerNotificationRestoreStatus);
+   const temperatureUnit = useSyncExternalStore(subscribeTemperatureUnit, getCachedTemperatureUnit, getCachedTemperatureUnit) ?? 'celsius';
+   const measurementSystem = useSyncExternalStore(subscribeMeasurementSystem, getCachedMeasurementSystem, getCachedMeasurementSystem) ?? 'metric';
+   const [style, setStyle] = useState<PizzaStyle>('neapolitan');
+   const [selectedMethod, setSelectedMethod] = useState<Method>('direct');
++  const [calculatorPlanSettings, setCalculatorPlanSettings] = useState(DEFAULT_CALCULATOR_PLAN_SETTINGS);
++  const [roomTempLoaded, setRoomTempLoaded] = useState(false);
+   const method: Method = isBeginner ? 'direct' : selectedMethod;
+   const bakeAt = useSyncExternalStore(subscribeSharedHomeBakeAt, getSharedHomeBakeAt, getSharedHomeBakeAt);
+   const directHomeSchedule = useSyncExternalStore(subscribeSharedHomeDirectSchedule, getSharedHomeDirectSchedule, getSharedHomeDirectSchedule);
++  const directHomeScheduleMode = useSyncExternalStore(subscribeSharedHomeDirectSchedule, getSharedHomeDirectScheduleMode, getSharedHomeDirectScheduleMode);
+   const bigaHomeSchedule = useSyncExternalStore(subscribeSharedHomeBigaSchedule, getSharedHomeBigaSchedule, getSharedHomeBigaSchedule);
+   const poolishHomeSchedule = useSyncExternalStore(subscribeSharedHomePoolishSchedule, getSharedHomePoolishSchedule, getSharedHomePoolishSchedule);
++  const {
++    direct: plannerDirectHomeSchedule,
++    biga: plannerBigaHomeSchedule,
++    poolish: plannerPoolishHomeSchedule,
++  } = selectPlannerHomeSchedules({
++    isBeginner,
++    bakeAt,
++    directSchedule: directHomeSchedule,
++    directScheduleMode: directHomeScheduleMode,
++    bigaSchedule: bigaHomeSchedule,
++    poolishSchedule: poolishHomeSchedule,
++  });
+   const [scheduledPlanKey, setScheduledPlanKey] = useState<string | null>(null);
+   const pendingBeginnerReturnBakeAt = useRef<number | null>(null);
+-  const effectiveStyle = isBeginner && directHomeSchedule?.style ? directHomeSchedule.style : style;
++  const effectiveStyle = isBeginner && plannerDirectHomeSchedule?.style ? plannerDirectHomeSchedule.style : style;
+   const effectiveStyleName = isBeginner && effectiveStyle === 'romana'
+-    ? directHomeSchedule?.romanFormat === 'teglia' ? 'Romana Teglia' : 'Romana Tonda'
++    ? plannerDirectHomeSchedule?.romanFormat === 'teglia' ? 'Romana Teglia' : 'Romana Tonda'
+     : t.calc.pizzaStyles[effectiveStyle].name;
+   const plannerStepCopy = isBeginner
+     ? t.planner.stepCopy
+     : { ...t.planner.stepCopy, directHomeCopy: undefined };
++  useFocusEffect(useCallback(() => {
++    let current = true;
++    setRoomTempLoaded(false);
++    void AsyncStorage.getItem('calculatorSettings')
++      .then((value) => {
++        if (!value) {
++          if (current) setCalculatorPlanSettings(DEFAULT_CALCULATOR_PLAN_SETTINGS);
++          return;
++        }
++        const settings: unknown = JSON.parse(value);
++        if (!isRecord(settings)) {
++          console.warn('Saved calculator settings are invalid; Planner will use its default fermentation settings.');
++          if (current) setCalculatorPlanSettings(DEFAULT_CALCULATOR_PLAN_SETTINGS);
++          return;
++        }
++        const readNumber = (key: keyof CalculatorPlanSettings) => {
++          const saved = settings[key];
++          if (typeof saved === 'number' && Number.isFinite(saved)) return saved;
++          if (saved !== undefined) console.warn(`Saved calculator setting "${key}" is invalid; Planner will use its default.`);
++          return DEFAULT_CALCULATOR_PLAN_SETTINGS[key];
++        };
++        if (current) {
++          setCalculatorPlanSettings({
++            roomTemp: readNumber('roomTemp'),
++            roomHours: readNumber('roomHours'),
++            fridgeTemp: readNumber('fridgeTemp'),
++            fridgeHours: readNumber('fridgeHours'),
++            bigaHours: readNumber('bigaHours'),
++            poolishHours: readNumber('poolishHours'),
++          });
++        }
++      })
++      .catch((error: unknown) => {
++        console.error('Failed to load current calculator fermentation settings for Planner.', error);
++        if (current) setCalculatorPlanSettings(DEFAULT_CALCULATOR_PLAN_SETTINGS);
++      })
++      .finally(() => {
++        if (current) setRoomTempLoaded(true);
++      });
++    return () => {
++      current = false;
++    };
++  }, []));
+   useEffect(() => {
+     returnToBeginner.current = returnTo === 'beginner';
+     if (returnSection === 'style' || returnSection === 'plan') beginnerReturnSection.current = returnSection;
+@@ -72,20 +155,74 @@ export default function Planner() {
+   useEffect(() => {
+     if (experienceLoaded && isBeginner) void cancelPlannerNotificationsForMethods(['biga', 'poolish']);
+   }, [experienceLoaded, isBeginner]);
+-  const hasCurrentBeginnerDirectSchedule = !isBeginner || (!!directHomeSchedule && !!bakeAt
+-    && directHomeSchedule.bakeAt.getTime() === bakeAt.getTime());
+-  const steps = bakeAt && hasCurrentBeginnerDirectSchedule ? reversePlan(bakeAt, method, effectiveStyle, plannerStepCopy, directHomeSchedule, bigaHomeSchedule, poolishHomeSchedule, lang, formatTemperature(directHomeSchedule?.ovenTemp ?? 250, temperatureUnit)).map((step) => ({
++  const hasCurrentBeginnerDirectSchedule = !isBeginner || !!plannerDirectHomeSchedule;
++  const plannerFermentationSchedule = useMemo(() => {
++    if (isBeginner) {
++      return getFermentationSchedule({
++        method,
++        roomHours: calculatorPlanSettings.roomHours,
++        roomTemp: calculatorPlanSettings.roomTemp,
++        fridgeHours: calculatorPlanSettings.fridgeHours,
++        fridgeTemp: calculatorPlanSettings.fridgeTemp,
++        ...(method === 'biga' ? { prefermentHours: calculatorPlanSettings.bigaHours } : {}),
++        ...(method === 'poolish' ? { prefermentHours: calculatorPlanSettings.poolishHours } : {}),
++      });
++    }
++    if (method === 'direct' && plannerDirectHomeSchedule) {
++      return getDirectHomeFermentationSchedule(
++        plannerDirectHomeSchedule,
++        calculatorPlanSettings.roomTemp,
++        calculatorPlanSettings.fridgeTemp,
++      );
++    }
++    const roomAfterFridgeHours = calculatorPlanSettings.fridgeHours > 0
++      ? getTemperingWindow(calculatorPlanSettings.roomTemp).initialMinutes / 60
++      : 0;
++    return getFermentationSchedule({
++      method,
++      roomHours: calculatorPlanSettings.roomHours,
++      roomTemp: calculatorPlanSettings.roomTemp,
++      fridgeHours: calculatorPlanSettings.fridgeHours,
++      fridgeTemp: calculatorPlanSettings.fridgeTemp,
++      roomAfterFridgeHours,
++      ...(method === 'biga' ? { prefermentHours: calculatorPlanSettings.bigaHours } : {}),
++      ...(method === 'poolish' ? { prefermentHours: calculatorPlanSettings.poolishHours } : {}),
++    });
++  }, [isBeginner, method, calculatorPlanSettings, plannerDirectHomeSchedule]);
++  const steps = bakeAt && hasCurrentBeginnerDirectSchedule && roomTempLoaded ? reversePlan(bakeAt, method, effectiveStyle, plannerStepCopy, plannerDirectHomeSchedule, plannerBigaHomeSchedule, plannerPoolishHomeSchedule, lang, formatTemperature(plannerDirectHomeSchedule?.ovenTemp ?? 250, temperatureUnit), calculatorPlanSettings.roomTemp, isBeginner ? undefined : plannerFermentationSchedule).map((step) => ({
+     ...step,
+     desc: formatUnitText(step.desc, temperatureUnit, measurementSystem),
+   })) : [];
+-  const planKey = bakeAt ? `${bakeAt.getTime()}-${method}-${effectiveStyle}-${directHomeSchedule?.romanFormat ?? ''}-${directHomeSchedule?.ovenTemp ?? ''}-${directHomeSchedule?.strategy ?? ''}-${directHomeSchedule?.startAt.getTime() ?? ''}-${directHomeSchedule?.roomBeforeFridgeHours ?? ''}-${directHomeSchedule?.fridgeHours ?? ''}-${directHomeSchedule?.roomAfterFridgeHours ?? ''}-${directHomeSchedule?.ballingAt?.getTime() ?? ''}-${directHomeSchedule?.preheatAt?.getTime() ?? ''}-${bigaHomeSchedule?.finalMixAt.getTime() ?? ''}-${poolishHomeSchedule?.finalMixAt.getTime() ?? ''}` : '';
++  const planKey = bakeAt ? JSON.stringify([
++    method,
++    effectiveStyle,
++    bakeAt.getTime(),
++    steps.map((step) => step.at.getTime()),
++    plannerDirectHomeSchedule,
++    plannerBigaHomeSchedule,
++    plannerPoolishHomeSchedule,
++  ]) : '';
++  const canReconcilePlannerNotifications = shouldReconcilePlannerNotifications(
++    plannerRestoreStatus,
++    isBeginner,
++    !!bakeAt,
++    !!planKey && hasCurrentBeginnerDirectSchedule,
++  );
++
++  useEffect(() => {
++    if (Platform.OS === 'web' || !isPushSupported() || !canReconcilePlannerNotifications) return;
++    if (scheduledPlanKey && scheduledPlanKey !== planKey) setScheduledPlanKey(null);
++    void cancelObsoletePlannerNotifications(planKey || null).catch((error) => {
++      console.error('Unable to cancel notifications for an outdated Planner plan:', error);
++    });
++  }, [canReconcilePlannerNotifications, planKey, scheduledPlanKey]);
+ 
+   useEffect(() => {
+-    if (!isBeginner || pendingBeginnerReturnBakeAt.current === null || !bakeAt || !directHomeSchedule) return;
+-    if (bakeAt.getTime() !== pendingBeginnerReturnBakeAt.current || directHomeSchedule.bakeAt.getTime() !== bakeAt.getTime()) return;
++    if (!isBeginner || pendingBeginnerReturnBakeAt.current === null || !bakeAt || !plannerDirectHomeSchedule) return;
++    if (bakeAt.getTime() !== pendingBeginnerReturnBakeAt.current || plannerDirectHomeSchedule.bakeAt.getTime() !== bakeAt.getTime()) return;
+     pendingBeginnerReturnBakeAt.current = null;
+     router.replace('/(tabs)?focus=plan');
+-  }, [isBeginner, bakeAt, directHomeSchedule, router]);
++  }, [isBeginner, bakeAt, plannerDirectHomeSchedule, router]);
+ 
+   // Native picker state (iOS/Android)
+   const [pickerMode, setPickerMode] = useState<null | 'date' | 'time'>(null);
+@@ -178,7 +315,7 @@ export default function Planner() {
+     let scheduled = 0;
+     for (const s of futureSteps) {
+       const trigger = s.at.getTime() - Date.now();
+-      const id = await scheduleLocal(`🍕 ${s.title}`, s.desc, Math.round(trigger / 1000), { source: 'pizza-planner', method });
++      const id = await scheduleLocal(`🍕 ${s.title}`, s.desc, Math.round(trigger / 1000), { source: 'pizza-planner', method, planId: planKey });
+       if (id) scheduled += 1;
+     }
+     if (!scheduled) {
+@@ -247,9 +384,9 @@ export default function Planner() {
+   return (
+     <View style={[styles.root, { paddingTop: insets.top }]}>
+       <View style={styles.header}>
+-        <Pressable testID="planner-back" accessibilityRole="button" accessibilityLabel="Back" onPress={handlePlannerBack} style={styles.backButton}>
++        <Pressable testID="planner-back" accessibilityRole="button" accessibilityLabel={t.common.back} onPress={handlePlannerBack} style={styles.backButton}>
+           <Icon name="arrow-back" size={20} color={COLORS.brand} />
+-          <Text style={styles.backButtonText}>Back</Text>
++          <Text style={styles.backButtonText}>{t.common.back}</Text>
+         </Pressable>
+         <Text style={styles.title}>{t.planner.title}</Text>
+       </View>
+diff --git a/frontend/scripts/verify-home-pizza-plan.js b/frontend/scripts/verify-home-pizza-plan.js
+index a2897fc..b819cc5 100644
+--- a/frontend/scripts/verify-home-pizza-plan.js
++++ b/frontend/scripts/verify-home-pizza-plan.js
+@@ -13,8 +13,14 @@ const plannerUiSource = fs.readFileSync(path.join(__dirname, '..', 'app', '(tabs
+ const compiled = ts.transpileModule(source, {
+   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+ }).outputText;
++const compiledTranslations = ts.transpileModule(translationsSource, {
++  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
++}).outputText;
+ const moduleRef = { exports: {} };
+ vm.runInNewContext(compiled, { module: moduleRef, exports: moduleRef.exports }, { filename: 'calculator.ts' });
++const translationsModule = { exports: {} };
++vm.runInNewContext(compiledTranslations, { module: translationsModule, exports: translationsModule.exports }, { filename: 'translations.ts' });
++const productionTranslations = translationsModule.exports.translations;
+ 
+ const {
+   getAvailableFermentationHours,
+@@ -66,14 +72,21 @@ assert.match(bigaUiSource, /setMixing\('hand'\)/);
+ assert.match(bigaUiSource, /setMixing\('mixer'\)/);
+ assert.match(bigaUiSource, /mixing: mixing === 'mixer' \? 'spiral' : 'hand'/);
+ assert.match(bigaUiSource, /const beginnerDirectHome = isBeginner && method === 'direct' && !!directHomeSchedule/);
+-assert.match(bigaUiSource, /!isPremiumUnlocked && !isBeginner && nextStyle !== FREE_PIZZA_STYLE/);
+-assert.match(bigaUiSource, /const locked = !isPremiumUnlocked && !isBeginner && key !== FREE_PIZZA_STYLE/);
++assert.doesNotMatch(bigaUiSource, /isPremiumUnlocked|FREE_PIZZA_STYLE|FREE_FLOUR_TYPES|lock-closed|Pizzabook Premium|Otključaj Premium/);
++assert.match(plannerUiSource, /\(\['neapolitan', 'romana', 'ny_style'\] as PizzaStyle\[\]\)\.map/);
++assert.match(plannerUiSource, /\]\.filter\(\(m\) => isBeginner \? m\.key === 'direct' : true\)\.map/);
+ assert.match(bigaUiSource, /!isBeginner \? \(/);
+ assert.match(bigaUiSource, /isBeginner && index === 0 \? beginnerWaterInfo/);
+ assert.match(bigaUiSource, /if \(index === 3 && schedule\.fridgeHours > 0\)/);
+ assert.match(bigaUiSource, /const activePhases = schedule\.fridgeHours > 0\s*\?\s*phases\s*:\s*phases\.filter/);
+ assert.match(bigaUiSource, /buildBeginnerRoomOnlyFinalStart\(lang, false\)/);
+ assert.match(bigaUiSource, /const coldFinalStart = schedule\.fridgeHours > 0 \? buildBeginnerColdFinalStart\(schedule, lang, false\) : null/);
++assert.match(bigaUiSource, /function getBeginnerFridgeOutAt\(schedule: HomePizzaPlanSchedule\)/);
++assert.match(bigaUiSource, /const fridgeOutAt = getBeginnerFridgeOutAt\(schedule\);/);
++assert.match(bigaUiSource, /const fridgeAt = directHomeSchedule\.fridgeAt;/);
++assert.match(bigaUiSource, /fridgeAt && fridgeAt\.getTime\(\) > ballingAt\.getTime\(\)/);
++assert.match(bigaUiSource, /at: fridgeAt/);
++assert.match(source, /fridgeAt && fridgeAt\.getTime\(\) > ballingAt\.getTime\(\) && homeCopy\?\.fridgeIn/);
+ assert.match(bigaUiSource, /coldFinalStart!\.step/);
+ assert.match(bigaUiSource, /:\s*roomFinalStart!\.step/);
+ assert.match(bigaUiSource, /if \(fridgeHours > 0\)[\s\S]*isRomanTeglia/);
+@@ -81,12 +94,13 @@ assert.match(bigaUiSource, /isBeginner && \/\^\(biga\|poolish\)\[-_\]\//);
+ assert.match(bigaUiSource, /formatTemperature\(dough\.waterTemp, temperatureUnit\)/);
+ assert.match(bigaUiSource, /mix by hand until no dry flour remains/);
+ assert.match(bigaUiSource, /mix on low speed until no dry flour remains/);
+-assert.match(plannerUiSource, /reversePlan\(bakeAt, method, effectiveStyle, plannerStepCopy, directHomeSchedule, bigaHomeSchedule, poolishHomeSchedule, lang, formatTemperature\(directHomeSchedule\?\.ovenTemp/);
++assert.match(plannerUiSource, /reversePlan\(bakeAt, method, effectiveStyle, plannerStepCopy, plannerDirectHomeSchedule, plannerBigaHomeSchedule, plannerPoolishHomeSchedule, lang, formatTemperature\(plannerDirectHomeSchedule\?\.ovenTemp/);
+ assert.match(plannerUiSource, /hasCurrentBeginnerDirectSchedule/);
+ assert.match(plannerUiSource, /isBeginner \? m\.key === 'direct'/);
+ assert.match(plannerUiSource, /cancelPlannerNotificationsForMethods\(\['biga', 'poolish'\]\)/);
+ assert.match(plannerUiSource, /await cancelPlannerNotificationsForMethods\(\['direct', 'biga', 'poolish'\]\)/);
+-assert.match(plannerUiSource, /scheduleLocal\(`🍕 \$\{s\.title\}`, s\.desc, Math\.round\(trigger \/ 1000\), \{ source: 'pizza-planner', method \}\)/);
++assert.match(plannerUiSource, /scheduleLocal\(`🍕 \$\{s\.title\}`, s\.desc, Math\.round\(trigger \/ 1000\), \{ source: 'pizza-planner', method, planId: planKey \}\)/);
++assert.match(plannerUiSource, /cancelObsoletePlannerNotifications\(planKey \|\| null\)/);
+ const tegliaTranslationBlocks = [...translationsSource.matchAll(/directHomeTegliaCopy:\s*\{([\s\S]*?)\n\s*\},/g)].map((match) => match[1]);
+ assert.equal(tegliaTranslationBlocks.length, 4);
+ for (const block of tegliaTranslationBlocks) {
+@@ -1065,6 +1079,10 @@ const plannerCopy = {
+   directHomeCopy: {
+     start: '{STRATEGY} bulk {ROOM_BEFORE}h at {ROOM_TEMP}C',
+     ballingFridge: 'Ball now and refrigerate {HOURS}h at {FRIDGE_TEMP}C',
++    ballingTitle: 'Shape dough balls',
++    balling: 'Divide and shape {WEIGHT} g dough balls.',
++    fridgeInTitle: 'Refrigerate dough balls',
++    fridgeIn: 'Refrigerate the shaped dough balls for {HOURS} at {FRIDGE_TEMP}.',
+     roomOnlyBalling: 'Ball now and room proof {ROOM_AFTER}h at {ROOM_TEMP}C',
+     finalRoom: 'Room proof {ROOM_AFTER}h at {ROOM_TEMP}C',
+     preheat: 'Preheat for {PREHEAT_MINUTES} min',
+@@ -1073,7 +1091,198 @@ const plannerCopy = {
+     bake: 'Launch at T',
+   },
+ };
++plannerCopy.directHomeTegliaCopy = {
++  ...plannerCopy.directHomeCopy,
++  ballingTitle: 'Prepare tray dough mass',
++  balling: 'Transfer the dough mass to its covered container.',
++  fridgeInTitle: 'Refrigerate the dough mass',
++  fridgeIn: 'Refrigerate the covered dough mass for {HOURS} at {FRIDGE_TEMP}.',
++};
+ const styles = ['neapolitan', 'romana', 'ny_style'];
++
++const b2FridgeSchedule = {
++  startAt: new Date('2027-04-12T07:05:00.000Z'),
++  bakeAt: new Date('2027-04-12T19:00:00.000Z'),
++  ballingAt: new Date('2027-04-12T08:55:00.000Z'),
++  fridgeAt: new Date('2027-04-12T09:00:00.000Z'),
++  preheatAt: new Date('2027-04-12T18:00:00.000Z'),
++  roomBeforeFridgeHours: 115 / 60,
++  fridgeHours: 8,
++  roomAfterFridgeHours: 2,
++  phaseAMinutes: 20,
++  phaseBMinutes: 90,
++  phaseCMinutes: 5,
++  prefermentHours: 0,
++  strategy: 'hybrid',
++  style: 'neapolitan',
++  ovenType: 'homeStone',
++  roomTemp: 22,
++  fridgeTemp: 4,
++};
++const beginnerFridgeOutAt = new Date(
++  b2FridgeSchedule.startAt.getTime()
++    + (b2FridgeSchedule.roomBeforeFridgeHours + b2FridgeSchedule.fridgeHours) * 3600000,
++);
++const legacyPlannerFridgeOutAt = new Date(
++  b2FridgeSchedule.ballingAt.getTime() + b2FridgeSchedule.fridgeHours * 3600000,
++);
++assert.equal(beginnerFridgeOutAt.toISOString(), '2027-04-12T17:00:00.000Z');
++assert.equal(legacyPlannerFridgeOutAt.toISOString(), '2027-04-12T16:55:00.000Z');
++assert.equal(
++  b2FridgeSchedule.fridgeAt.getTime(),
++  b2FridgeSchedule.startAt.getTime() + b2FridgeSchedule.roomBeforeFridgeHours * 3600000,
++);
++assert.equal(
++  b2FridgeSchedule.fridgeAt.getTime() - b2FridgeSchedule.ballingAt.getTime(),
++  b2FridgeSchedule.phaseCMinutes * 60000,
++);
++const b2PlannerSteps = reversePlan(
++  b2FridgeSchedule.bakeAt,
++  'direct',
++  'neapolitan',
++  plannerCopy,
++  b2FridgeSchedule,
++);
++assert.equal(
++  b2PlannerSteps.find((step) => step.title === plannerCopy.warmTitle).at.toISOString(),
++  '2027-04-12T17:00:00.000Z',
++);
++assert.equal(
++  b2PlannerSteps.find((step) => step.title === 'Shape dough balls').at.toISOString(),
++  b2FridgeSchedule.ballingAt.toISOString(),
++);
++assert.equal(
++  b2PlannerSteps.find((step) => step.title === 'Refrigerate dough balls').at.toISOString(),
++  b2FridgeSchedule.fridgeAt.toISOString(),
++);
++assert.match(
++  b2PlannerSteps.find((step) => step.title === 'Refrigerate dough balls').desc,
++  /shaped dough balls/,
++);
++const teglia17Schedule = {
++  ...b2FridgeSchedule,
++  startAt: new Date('2027-04-12T14:00:00.000Z'),
++  bakeAt: new Date('2027-04-12T20:00:00.000Z'),
++  ballingAt: new Date('2027-04-12T14:55:00.000Z'),
++  fridgeAt: new Date('2027-04-12T15:00:00.000Z'),
++  preheatAt: new Date('2027-04-12T19:00:00.000Z'),
++  roomBeforeFridgeHours: 1,
++  fridgeHours: 4,
++  roomAfterFridgeHours: 1,
++  phaseAMinutes: 20,
++  phaseBMinutes: 30,
++  phaseCMinutes: 5,
++  style: 'romana',
++  romanFormat: 'teglia',
++};
++for (const lang of ['hr', 'en', 'de', 'sl']) {
++  const productionCopy = productionTranslations[lang].planner.stepCopy;
++  const tegliaSteps = reversePlan(
++    teglia17Schedule.bakeAt,
++    'direct',
++    'romana',
++    productionCopy,
++    teglia17Schedule,
++    null,
++    null,
++    lang,
++  );
++  const fridgeInSteps = tegliaSteps.filter((step) => step.title === productionCopy.directHomeTegliaCopy.fridgeInTitle);
++  assert.equal(fridgeInSteps.length, 1, `${lang} production Teglia copy should render one fridge-in step`);
++  assert.equal(fridgeInSteps[0].at.getTime(), teglia17Schedule.fridgeAt.getTime(), `${lang} Planner fridge-in should use fridgeAt`);
++  assert.equal(
++    new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Vienna', hour: '2-digit', minute: '2-digit' }).format(fridgeInSteps[0].at),
++    '17:00',
++    `${lang} production Teglia fridge-in should display at 17:00 Europe/Vienna`,
++  );
++  assert.match(fridgeInSteps[0].desc, /mass|Masse|masu|maso/i, `${lang} production Teglia copy should refer to the dough mass`);
++}
++const romanBlendPlannerSteps = reversePlan(
++  b2FridgeSchedule.bakeAt,
++  'direct',
++  'romana',
++  plannerCopy,
++  { ...b2FridgeSchedule, style: 'romana', romanFormat: 'tonda' },
++);
++assert.equal(
++  romanBlendPlannerSteps.find((step) => step.title === 'Shape dough balls').at.toISOString(),
++  b2FridgeSchedule.ballingAt.toISOString(),
++);
++assert.equal(
++  romanBlendPlannerSteps.find((step) => step.title === 'Refrigerate dough balls').at.toISOString(),
++  b2FridgeSchedule.fridgeAt.toISOString(),
++);
++const generatedB2Plan = createDirectHomePizzaPlan({
++  style: 'neapolitan',
++  pizzas: 1,
++  ballWeight: 250,
++  method: 'direct',
++  mixing: 'hand',
++  beginnerScheduleMode: 'fridgeRoom',
++  bakeAt: b2FridgeSchedule.bakeAt,
++  roomTemp: 22,
++  fridgeTemp: 4,
++  ovenType: 'homeStone',
++  ovenTemp: 300,
++}, { source: 'unknown' }, 62, 'fresh', b2FridgeSchedule.startAt, true);
++assert.ok(generatedB2Plan, 'production Beginner plan should be generated');
++const generatedB2Schedule = generatedB2Plan.schedule;
++assert.deepEqual(
++  [generatedB2Schedule.phaseAMinutes, generatedB2Schedule.phaseBMinutes, generatedB2Schedule.phaseCMinutes],
++  [20, 90, 5],
++);
++assert.equal(generatedB2Schedule.bakeAt.getTime(), b2FridgeSchedule.bakeAt.getTime());
++assert.equal(generatedB2Schedule.ballingAt.toISOString(), b2FridgeSchedule.ballingAt.toISOString());
++assert.equal(generatedB2Schedule.fridgeAt.toISOString(), b2FridgeSchedule.fridgeAt.toISOString());
++const generatedB2PlannerSteps = reversePlan(
++  generatedB2Schedule.bakeAt,
++  'direct',
++  'neapolitan',
++  plannerCopy,
++  generatedB2Schedule,
++);
++assert.equal(
++  generatedB2PlannerSteps.find((step) => step.title === plannerCopy.warmTitle).at.toISOString(),
++  beginnerFridgeOutAt.toISOString(),
++);
++const viennaMidnightBakeAt = new Date('2027-04-13T00:30:00.000Z');
++const viennaMidnightNow = new Date('2027-04-12T12:35:00.000Z');
++const viennaMidnightPlan = createDirectHomePizzaPlan({
++  style: 'neapolitan',
++  pizzas: 1,
++  ballWeight: 250,
++  method: 'direct',
++  mixing: 'hand',
++  beginnerScheduleMode: 'fridgeRoom',
++  bakeAt: viennaMidnightBakeAt,
++  roomTemp: 22,
++  fridgeTemp: 4,
++  ovenType: 'homeStone',
++  ovenTemp: 300,
++}, { source: 'unknown' }, 62, 'fresh', viennaMidnightNow, true);
++assert.ok(viennaMidnightPlan, 'production Beginner plan should cross local midnight');
++const viennaMidnightSchedule = viennaMidnightPlan.schedule;
++const viennaTime = new Intl.DateTimeFormat('en-GB', {
++  timeZone: 'Europe/Vienna',
++  dateStyle: 'short',
++  timeStyle: 'short',
++});
++const viennaFridgeOutAt = new Date(
++  viennaMidnightSchedule.startAt.getTime()
++    + (viennaMidnightSchedule.roomBeforeFridgeHours + viennaMidnightSchedule.fridgeHours) * 3600000,
++);
++assert.equal(viennaTime.format(viennaFridgeOutAt), '13/04/2027, 00:30');
++const viennaPlannerSteps = reversePlan(
++  viennaMidnightSchedule.bakeAt,
++  'direct',
++  'neapolitan',
++  plannerCopy,
++  viennaMidnightSchedule,
++);
++assert.equal(
++  viennaPlannerSteps.find((step) => step.title === plannerCopy.warmTitle).at.getTime(),
++  viennaFridgeOutAt.getTime(),
++);
+ const beginnerStrategyTable = {
+   18: ['roomOnly', 'roomOnly', 'roomOnly', 'hybrid', 'coldDominant', 'coldDominant', 'coldDominant'],
+   22: ['hybrid', 'hybrid', 'hybrid', 'hybrid', 'coldDominant', 'coldDominant', 'coldDominant'],
+@@ -1190,7 +1399,28 @@ for (const style of styles) {
+         assert.equal(plannerSteps.at(-1).desc, 'Launch at T');
+         const directMixTitle = style === 'neapolitan' ? plannerCopy.directTitle : plannerCopy.directMixTitle;
+         assert.equal(plannerSteps.find((step) => step.title === directMixTitle).at.getTime(), plan.schedule.startAt.getTime());
+-        assert.equal(plannerSteps.find((step) => step.title === plannerCopy.ballsTitle).at.getTime(), plan.schedule.ballingAt.getTime());
++        const separateFridgeIn = plan.schedule.fridgeAt
++          && plan.schedule.fridgeAt.getTime() > plan.schedule.ballingAt.getTime();
++        const selectedHomeCopy = style === 'romana' && plan.schedule.romanFormat === 'teglia'
++          ? plannerCopy.directHomeTegliaCopy
++          : plannerCopy.directHomeCopy;
++        const ballingTitle = selectedHomeCopy.ballingTitle ?? plannerCopy.ballsTitle;
++        const ballingStep = plannerSteps.find((step) => step.title === ballingTitle);
++        assert.ok(ballingStep, JSON.stringify({
++          style,
++          hours,
++          ballingTitle,
++          ballingAt: plan.schedule.ballingAt,
++          fridgeAt: plan.schedule.fridgeAt,
++          plannerSteps: plannerSteps.map((step) => step.title),
++        }));
++        assert.equal(ballingStep.at.getTime(), plan.schedule.ballingAt.getTime());
++        if (separateFridgeIn) {
++          assert.equal(
++            plannerSteps.find((step) => step.title === selectedHomeCopy.fridgeInTitle).at.getTime(),
++            plan.schedule.fridgeAt.getTime(),
++          );
++        }
+         assert.equal(plannerSteps.find((step) => step.title === plannerCopy.ovenTitle).at.getTime(), plan.schedule.preheatAt.getTime());
+         assert.equal(plannerSteps.find((step) => step.title === 'Shape and top').at.getTime(), bakeAt.getTime() - 15 * 60000);
+         assert.equal(plan.schedule.ballingAt.getTime(), plan.schedule.startAt.getTime() + plan.schedule.roomBeforeFridgeHours * 3600000);
+diff --git a/frontend/src/calculator.ts b/frontend/src/calculator.ts
+index 350001e..ec8445f 100644
+--- a/frontend/src/calculator.ts
++++ b/frontend/src/calculator.ts
+@@ -15,6 +15,16 @@ export function getBeginnerPreheatMinutes(ovenType: OvenType): number {
+   return ovenType === 'homeStone' ? 60 : 20;
+ }
+ 
++export function getTemperingWindow(roomTemp: number) {
++  const minimumMinutes = Math.min(120, Math.max(15, Math.round(30 + (22 - roomTemp) * 7.5)));
++  const maximumMinutes = Math.min(120, minimumMinutes + 15);
++  return {
++    minimumMinutes,
++    maximumMinutes,
++    initialMinutes: Math.round((minimumMinutes + maximumMinutes) / 2),
++  };
++}
++
+ function formatPlannerClockTime(at: Date, lang: BakingLanguage): string {
+   const locale = { hr: 'hr-HR', en: 'en-GB', de: 'de-DE', sl: 'sl-SI' }[lang];
+   return new Intl.DateTimeFormat(locale, { timeStyle: 'short' }).format(at);
+@@ -249,6 +259,7 @@ export function setSharedHomeBakeAt(bakeAt: Date | null): void {
+ }
+ 
+ let sharedHomeDirectSchedule: HomePizzaPlanSchedule | null = null;
++let sharedHomeDirectScheduleMode: 'beginner' | 'pro' | null = null;
+ const sharedHomeDirectScheduleListeners = new Set<() => void>();
+ let sharedHomeBigaSchedule: BigaHomePizzaSchedule | null = null;
+ const sharedHomeBigaScheduleListeners = new Set<() => void>();
+@@ -259,9 +270,18 @@ export function getSharedHomeDirectSchedule(): HomePizzaPlanSchedule | null {
+   return sharedHomeDirectSchedule;
+ }
+ 
+-export function setSharedHomeDirectSchedule(schedule: HomePizzaPlanSchedule | null): void {
+-  if (sharedHomeDirectSchedule === schedule) return;
++export function getSharedHomeDirectScheduleMode(): 'beginner' | 'pro' | null {
++  return sharedHomeDirectScheduleMode;
++}
++
++export function setSharedHomeDirectSchedule(
++  schedule: HomePizzaPlanSchedule | null,
++  mode: 'beginner' | 'pro' | null = null,
++): void {
++  const nextMode = schedule ? mode : null;
++  if (sharedHomeDirectSchedule === schedule && sharedHomeDirectScheduleMode === nextMode) return;
+   sharedHomeDirectSchedule = schedule;
++  sharedHomeDirectScheduleMode = nextMode;
+   sharedHomeDirectScheduleListeners.forEach((listener) => listener());
+ }
+ 
+@@ -1561,6 +1581,32 @@ export function getPoolishHomeScheduleMilestones(schedule: PoolishHomePizzaSched
+   ];
+ }
+ 
++export function selectPlannerHomeSchedules(input: {
++  isBeginner: boolean;
++  bakeAt: Date | null;
++  directSchedule: HomePizzaPlanSchedule | null;
++  directScheduleMode: 'beginner' | 'pro' | null;
++  bigaSchedule: BigaHomePizzaSchedule | null;
++  poolishSchedule: PoolishHomePizzaSchedule | null;
++}): {
++  direct: HomePizzaPlanSchedule | null;
++  biga: BigaHomePizzaSchedule | null;
++  poolish: PoolishHomePizzaSchedule | null;
++} {
++  const direct = input.directSchedule
++    && input.directScheduleMode === (input.isBeginner ? 'beginner' : 'pro')
++    && input.bakeAt
++    && input.directSchedule.bakeAt.getTime() === input.bakeAt.getTime()
++    && isHomeScheduleDurationValid(input.directSchedule)
++    ? input.directSchedule
++    : null;
++  return {
++    direct,
++    biga: input.isBeginner ? input.bigaSchedule : null,
++    poolish: input.isBeginner ? input.poolishSchedule : null,
++  };
++}
++
+ export const POOLISH_HOME_V1_POLICY = {
+   finalDoughRoomHoursCap: 3,
+   finalBallRestHours: 3,
+@@ -1754,7 +1800,7 @@ export const BASE_FLOURS: Exclude<FlourType, 'custom'>[] = [
+ ];
+ 
+ export type FermentationPhase = {
+-  kind: 'preferment' | 'final';
++  kind: 'preferment' | 'final' | 'final-rest';
+   environment: 'room' | 'fridge';
+   hours: number;
+   temperature: number;
+@@ -1774,6 +1820,7 @@ type FermentationScheduleOptions = {
+   fridgeHours: number;
+   fridgeTemp: number;
+   prefermentHours?: number;
++  roomAfterFridgeHours?: number;
+   prefermentRoomHours?: number;
+   prefermentFridgeHours?: number;
+ };
+@@ -1789,6 +1836,7 @@ export function getFermentationSchedule(opts: FermentationScheduleOptions): Ferm
+   if (opts.method === 'direct') {
+     addPhase({ kind: 'final', environment: 'room', hours: roomHours, temperature: opts.roomTemp });
+     addPhase({ kind: 'final', environment: 'fridge', hours: fridgeHours, temperature: opts.fridgeTemp });
++    addPhase({ kind: 'final-rest', environment: 'room', hours: Math.max(0, opts.roomAfterFridgeHours ?? 0), temperature: opts.roomTemp });
+     return { phases, prefermentHours: 0, prefermentRoomHours: 0, prefermentFridgeHours: 0 };
+   }
+ 
+@@ -1805,10 +1853,28 @@ export function getFermentationSchedule(opts: FermentationScheduleOptions): Ferm
+   addPhase({ kind: 'preferment', environment: 'fridge', hours: prefermentFridgeHours, temperature: opts.fridgeTemp });
+   addPhase({ kind: 'final', environment: 'room', hours: roomHours, temperature: opts.roomTemp });
+   addPhase({ kind: 'final', environment: 'fridge', hours: fridgeHours, temperature: opts.fridgeTemp });
++  addPhase({ kind: 'final-rest', environment: 'room', hours: Math.max(0, opts.roomAfterFridgeHours ?? 0), temperature: opts.roomTemp });
+ 
+   return { phases, prefermentHours, prefermentRoomHours, prefermentFridgeHours };
+ }
+ 
++export function getDirectHomeFermentationSchedule(
++  schedule: HomePizzaPlanSchedule,
++  roomTemp: number,
++  fridgeTemp: number,
++): FermentationSchedule {
++  const phases: FermentationPhase[] = [];
++  const addPhase = (phase: FermentationPhase) => {
++    if (phase.hours > 0) phases.push(phase);
++  };
++
++  addPhase({ kind: 'final', environment: 'room', hours: schedule.roomBeforeFridgeHours, temperature: roomTemp });
++  addPhase({ kind: 'final', environment: 'fridge', hours: schedule.fridgeHours, temperature: fridgeTemp });
++  addPhase({ kind: 'final-rest', environment: 'room', hours: schedule.roomAfterFridgeHours, temperature: roomTemp });
++
++  return { phases, prefermentHours: 0, prefermentRoomHours: 0, prefermentFridgeHours: 0 };
++}
++
+ // Single source of truth for Biga Home timing: builds fermentation-exposure phases directly from a
+ // BigaHomePizzaSchedule instead of legacy roomHours/fridgeHours/prefermentHours inputs, so the same
+ // schedule that determines timestamps also determines yeast exposure (no second timing calculation).
+@@ -1929,13 +1995,14 @@ export function doughCalc(opts: {
+   // When provided, the method's Home schedule replaces legacy timing inputs for yeast calculation.
+   bigaHomeSchedule?: BigaHomePizzaSchedule;
+   poolishHomeSchedule?: PoolishHomePizzaSchedule;
++  fermentationSchedule?: FermentationSchedule;
+ }): DoughCalculationResult {
+   // === Fermentation math (dynamic yeast) ===
+-  const fermentation = opts.method === 'biga' && opts.bigaHomeSchedule
++  const fermentation = opts.fermentationSchedule ?? (opts.method === 'biga' && opts.bigaHomeSchedule
+     ? getBigaHomeFermentationSchedule(opts.bigaHomeSchedule, opts.roomTemp, opts.fridgeTemp)
+     : opts.method === 'poolish' && opts.poolishHomeSchedule
+       ? getPoolishHomeFermentationSchedule(opts.poolishHomeSchedule, opts.roomTemp, opts.fridgeTemp)
+-      : getFermentationSchedule(opts);
++      : getFermentationSchedule(opts));
+   const eTotal = Math.max(0.5, fermentation.phases.reduce((total, phase) => {
+     const rate = phase.environment === 'room'
+       ? 1 + 0.08 * (phase.temperature - 20)
+@@ -2160,6 +2227,9 @@ type DirectHomePlannerCopy = {
+   start: string;
+   ballingFridge: string;
+   ballingTitle?: string;
++  balling?: string;
++  fridgeInTitle?: string;
++  fridgeIn?: string;
+   roomOnlyBalling: string;
+   roomOnlyTitle?: string;
+   finalRoom: string;
+@@ -2184,6 +2254,21 @@ function formatHoursLabel(hoursValue: number): string {
+   return m ? `${h} h ${m} min` : `${h} h`;
+ }
+ 
++function formatTemperingDuration(minutes: number, lang: BakingLanguage): string {
++  const totalMinutes = Math.max(0, Math.round(minutes));
++  const hours = Math.floor(totalMinutes / 60);
++  const remainingMinutes = totalMinutes % 60;
++  const hourLabel = hours === 1
++    ? ({ hr: 'sat', en: 'hour', de: 'Stunde', sl: 'ura' }[lang])
++    : ({ hr: 'sati', en: 'hours', de: 'Stunden', sl: 'ur' }[lang]);
++  const minuteLabel = ({ hr: 'minuta', en: 'minutes', de: 'Minuten', sl: 'minut' }[lang]);
++  const hourText = hours > 0 ? `${hours} ${hourLabel}` : '';
++  const minuteText = remainingMinutes > 0 ? `${remainingMinutes} ${minuteLabel}` : '';
++  if (!hourText) return minuteText;
++  if (!minuteText) return hourText;
++  return `${hourText}${lang === 'hr' ? ' i ' : lang === 'sl' ? ' in ' : ' '}${minuteText}`;
++}
++
+ export function reversePlan(
+   bakeAt: Date,
+   method: Method,
+@@ -2194,6 +2279,8 @@ export function reversePlan(
+   poolishHomeSchedule?: PoolishHomePizzaSchedule | null,
+   bakingLanguage: BakingLanguage = 'en',
+   bakingTemperatureLabel?: string,
++  roomTemp = 22,
++  selectedFermentationSchedule?: FermentationSchedule,
+ ) {
+   const steps: { at: Date; title: string; desc: string }[] = [];
+   const push = (offsetMin: number, title: string, desc: string) => {
+@@ -2265,12 +2352,36 @@ export function reversePlan(
+     if (!homeSchedule!.strategy) {
+       const ovenDesc = isRoman ? copy.ovenRomanDesc : isNy ? copy.ovenNyDesc : copy.ovenDesc;
+       push(60, copy.ovenTitle, ovenDesc);
+-      push(roomAfterFridgeHours * 60, copy.warmTitle, fillPlannerCopy(copy.warmDesc, { STYLE: styleName }));
+-      push((roomAfterFridgeHours + fridgeHours) * 60, copy.coldTitle, fillPlannerCopy(copy.coldDesc, { HOURS: formatHoursLabel(fridgeHours), STYLE: styleName }));
++      const tempering = formatTemperingDuration(roomAfterFridgeHours * 60, bakingLanguage);
++      if (roomAfterFridgeHours > 0) {
++        push(roomAfterFridgeHours * 60, copy.warmTitle, fillPlannerCopy(copy.warmDesc, {
++          STYLE: styleName,
++          TEMPERING: tempering,
++        }));
++      }
++      if (fridgeHours > 0) {
++        const coldDesc = roomAfterFridgeHours > 0
++          ? fillPlannerCopy(copy.coldDesc, {
++            HOURS: formatHoursLabel(fridgeHours),
++            STYLE: styleName,
++            TEMPERING: tempering,
++          })
++          : fillPlannerCopy({
++            hr: 'Drži kugle {HOURS} sati u zatvorenoj kutiji na {FRIDGE_TEMP}.',
++            en: 'Keep the dough balls in a covered box at {FRIDGE_TEMP} for {HOURS} hours.',
++            de: 'Lassen Sie die Teigkugeln {HOURS} Stunden in einer geschlossenen Box bei {FRIDGE_TEMP}.',
++            sl: 'Kroglice hranite {HOURS} ur v zaprti posodi pri {FRIDGE_TEMP}.',
++          }[bakingLanguage], {
++            HOURS: formatHoursLabel(fridgeHours),
++            FRIDGE_TEMP: `${homeSchedule!.fridgeTemp ?? 4}°C`,
++          });
++        push((roomAfterFridgeHours + fridgeHours) * 60, copy.coldTitle, coldDesc);
++      }
+       push((roomAfterFridgeHours + fridgeHours + roomBeforeFridgeHours) * 60, directTitle, directDesc);
+       if (isNy) {
+         const bakeValues = {
+           BAKE_TIME: formatBakingTimeRange(homeSchedule!.ovenType ?? 'homeStone', homeSchedule!.ovenTemp ?? 250, bakingLanguage),
++          TEMPERING: formatTemperingDuration(roomAfterFridgeHours * 60, bakingLanguage),
+           OVEN_TEMP_DISPLAY: bakingTemperatureLabel ?? `${homeSchedule!.ovenTemp ?? 250}°C`,
+         };
+         push(0, copy.bakeTitle ?? copy.ovenTitle, fillPlannerCopy(copy.directNyBakeDesc ?? copy.bakeDesc ?? copy.ovenDesc, bakeValues));
+@@ -2281,7 +2392,7 @@ export function reversePlan(
+       ?? new Date(bakeAt.getTime() - getBeginnerPreheatMinutes(homeSchedule!.ovenType ?? 'homeStone') * 60000);
+     const ballingAt = homeSchedule!.ballingAt
+       ?? new Date(homeSchedule!.startAt.getTime() + roomBeforeFridgeHours * 3600000);
+-    const finalRoomAt = new Date(ballingAt.getTime() + fridgeHours * 3600000);
++    const finalRoomAt = new Date((homeSchedule!.fridgeAt ?? ballingAt).getTime() + fridgeHours * 3600000);
+     if (homeCopy) {
+       const phaseBStart = new Date(
+         homeSchedule!.startAt.getTime() + (homeSchedule!.phaseAMinutes ?? 0) * 60000,
+@@ -2304,12 +2415,13 @@ export function reversePlan(
+     }
+     const values = {
+       STYLE: styleName,
+-      HOURS: formatHoursLabel(fridgeHours),
++      HOURS: fridgeHours,
+       ROOM_BEFORE: formatHoursLabel(roomBeforeFridgeHours),
+       ROOM_AFTER: formatHoursLabel(roomAfterFridgeHours),
+       ROOM_TEMP: `${homeSchedule!.roomTemp ?? ''}°C`,
+       FRIDGE_TEMP: `${homeSchedule!.fridgeTemp ?? ''}°C`,
+       WEIGHT: homeSchedule!.ballWeight ?? PIZZA_STYLE_PROFILES[style].ballWeight,
++      TEMPERING: formatTemperingDuration(roomAfterFridgeHours * 60, bakingLanguage),
+       PREHEAT_MINUTES: Math.round((bakeAt.getTime() - preheatAt.getTime()) / 60000),
+       PREHEAT_TIME: formatPlannerClockTime(preheatAt, bakingLanguage),
+       OVEN_TEMP: `${homeSchedule!.ovenTemp ?? 250}°C`,
+@@ -2318,12 +2430,30 @@ export function reversePlan(
+     };
+     steps.push({ at: preheatAt, title: homeCopy?.preheatTitle ?? copy.ovenTitle, desc: fillPlannerCopy(homeCopy?.preheat ?? copy.ovenDesc, values) });
+     if (fridgeHours > 0) {
+-      steps.push({ at: finalRoomAt, title: homeCopy?.finalRoomTitle ?? copy.warmTitle, desc: fillPlannerCopy(homeCopy?.finalRoom ?? copy.warmDesc, values) });
+-      steps.push({
+-        at: ballingAt,
+-        title: homeCopy?.ballingTitle ?? copy.ballsTitle,
+-        desc: fillPlannerCopy(homeCopy?.ballingFridge ?? copy.coldDesc, values),
+-      });
++      if (roomAfterFridgeHours > 0) {
++        steps.push({ at: finalRoomAt, title: homeCopy?.finalRoomTitle ?? copy.warmTitle, desc: fillPlannerCopy(homeCopy?.finalRoom ?? copy.warmDesc, values) });
++      }
++      const fridgeAt = homeSchedule!.fridgeAt;
++      if (fridgeAt && fridgeAt.getTime() > ballingAt.getTime() && homeCopy?.fridgeIn) {
++        if (homeCopy.balling) {
++          steps.push({
++            at: ballingAt,
++            title: homeCopy.ballingTitle ?? copy.ballsTitle,
++            desc: fillPlannerCopy(homeCopy.balling, values),
++          });
++        }
++        steps.push({
++          at: fridgeAt,
++          title: homeCopy.fridgeInTitle ?? copy.coldTitle,
++          desc: fillPlannerCopy(homeCopy.fridgeIn, values),
++        });
++      } else {
++        steps.push({
++          at: ballingAt,
++          title: homeCopy?.ballingTitle ?? copy.ballsTitle,
++          desc: fillPlannerCopy(homeCopy?.ballingFridge ?? copy.coldDesc, values),
++        });
++      }
+     } else {
+       steps.push({ at: ballingAt, title: homeCopy?.roomOnlyTitle ?? copy.ballsTitle, desc: fillPlannerCopy(homeCopy?.roomOnlyBalling ?? copy.ballsDesc, values) });
+     }
+@@ -2342,26 +2472,127 @@ export function reversePlan(
+     return steps.sort((a, b) => a.at.getTime() - b.at.getTime());
+   }
+ 
++  if (selectedFermentationSchedule) {
++    const sumHours = (kind: FermentationPhase['kind'], environment: FermentationPhase['environment']) =>
++      selectedFermentationSchedule.phases
++        .filter((phase) => phase.kind === kind && phase.environment === environment)
++        .reduce((total, phase) => total + phase.hours, 0);
++    const finalRoomHours = sumHours('final', 'room');
++    const finalFridgeHours = sumHours('final', 'fridge');
++    const finalRestHours = sumHours('final-rest', 'room');
++    const prefermentRoomHours = sumHours('preferment', 'room');
++    const prefermentFridgeHours = sumHours('preferment', 'fridge');
++    const prefermentHours = prefermentRoomHours + prefermentFridgeHours;
++    const isRoman = style === 'romana';
++    const isNy = style === 'ny_style';
++    const styleName = isRoman ? 'Romana' : isNy ? 'New York Style' : 'Napolitana';
++    const warmBeforeBake = finalRestHours * 60;
++    const tempering = formatTemperingDuration(warmBeforeBake, bakingLanguage);
++    const finalRoomOffset = warmBeforeBake + (finalFridgeHours + finalRoomHours) * 60;
++    const finalMixTitle = isRoman || isNy ? copy.directMixTitle : copy.directTitle;
++    const finalMixDesc = isRoman ? copy.directRomanDesc : isNy ? copy.directNyDesc : copy.directDesc;
++
++    push(60, copy.ovenTitle, isRoman ? copy.ovenRomanDesc : isNy ? copy.ovenNyDesc : copy.ovenDesc);
++    if (warmBeforeBake > 0) {
++      push(warmBeforeBake, copy.warmTitle, fillPlannerCopy(copy.warmDesc, {
++        STYLE: styleName,
++        TEMPERING: tempering,
++      }));
++    }
++    if (finalFridgeHours > 0) {
++      const fridgeTemp = selectedFermentationSchedule.phases.find((phase) => phase.kind === 'final' && phase.environment === 'fridge')?.temperature ?? 4;
++      const coldDesc = warmBeforeBake > 0
++        ? fillPlannerCopy(copy.coldDesc, {
++          HOURS: finalFridgeHours,
++          FRIDGE_TEMP: `${fridgeTemp}°C`,
++          STYLE: styleName,
++          TEMPERING: tempering,
++        })
++        : fillPlannerCopy({
++          hr: 'Drži kugle {HOURS} sati u zatvorenoj kutiji na {FRIDGE_TEMP}.',
++          en: 'Keep the dough balls in a covered box at {FRIDGE_TEMP} for {HOURS} hours.',
++          de: 'Lassen Sie die Teigkugeln {HOURS} Stunden in einer geschlossenen Box bei {FRIDGE_TEMP}.',
++          sl: 'Kroglice hranite {HOURS} ur v zaprti posodi pri {FRIDGE_TEMP}.',
++        }[bakingLanguage], {
++          HOURS: formatHoursLabel(finalFridgeHours),
++          FRIDGE_TEMP: `${fridgeTemp}°C`,
++        });
++      push(warmBeforeBake + finalFridgeHours * 60, copy.coldTitle, coldDesc);
++    }
++
++    if (method === 'direct') {
++      if (finalRoomHours > 0) {
++        push(finalRoomOffset, copy.bulkTitle, fillPlannerCopy(copy.bulkDesc, {
++          STYLE: styleName,
++          HOURS: formatHoursLabel(finalRoomHours),
++        }));
++      }
++      push(finalRoomOffset, finalMixTitle, finalMixDesc);
++    } else {
++      if (prefermentHours > 0) {
++        const prefermentValues = {
++          HOURS: formatHoursLabel(prefermentHours),
++          ROOM_HOURS: formatHoursLabel(prefermentRoomHours),
++          FRIDGE_HOURS: formatHoursLabel(prefermentFridgeHours),
++        };
++        push(finalRoomOffset + prefermentHours * 60, method === 'biga' ? copy.bigaTitle : copy.poolishTitle,
++          fillPlannerCopy(method === 'biga' ? copy.bigaDesc : copy.poolishDesc, prefermentValues));
++      }
++      push(finalRoomOffset, fillPlannerCopy(copy.finalMixTitle, {
++        PREFERMENT: method === 'biga' ? copy.bigaName : copy.poolishName,
++      }), method === 'biga' ? copy.finalBigaDesc : copy.finalPoolishDesc);
++      if (finalRoomHours > 0) {
++        push(finalRoomOffset, copy.finalBulkTitle, fillPlannerCopy(copy.finalBulkDesc, {
++          HOURS: formatHoursLabel(finalRoomHours),
++        }));
++      }
++    }
++
++    if (isNy) {
++      const bakeValues = {
++        BAKE_TIME: formatBakingTimeRange('homeStone', 250, bakingLanguage),
++        TEMPERING: tempering,
++        OVEN_TEMP_DISPLAY: bakingTemperatureLabel ?? '250°C',
++      };
++      push(0, copy.bakeTitle ?? copy.ovenTitle, fillPlannerCopy(copy.directNyBakeDesc ?? copy.bakeDesc ?? copy.ovenDesc, bakeValues));
++    }
++    return steps.sort((a, b) => a.at.getTime() - b.at.getTime());
++  }
++
+   if (style !== 'neapolitan') {
+     const isRoman = style === 'romana';
+     const styleName = isRoman ? 'Romana' : 'New York Style';
+-    const warmBeforeBake = isRoman ? 75 : 75;
++    const warmBeforeBake = getTemperingWindow(roomTemp).initialMinutes;
++    const tempering = formatTemperingDuration(warmBeforeBake, bakingLanguage);
+     const ballsColdHours = 24;
+     const bulkMinutes = method === 'direct' ? 60 : method === 'biga' ? 60 : 60;
+     const finalMixHours = method === 'direct' ? 0 : method === 'biga' ? 18 : 16;
+ 
+     push(60, copy.ovenTitle, isRoman ? copy.ovenRomanDesc : copy.ovenNyDesc);
+-    push(warmBeforeBake, copy.warmTitle, fillPlannerCopy(copy.warmDesc, { STYLE: styleName }));
+-    push(warmBeforeBake + ballsColdHours * 60, copy.coldTitle, fillPlannerCopy(copy.coldDesc, { HOURS: ballsColdHours, STYLE: styleName }));
++    push(warmBeforeBake, copy.warmTitle, fillPlannerCopy(copy.warmDesc, {
++      STYLE: styleName,
++      TEMPERING: tempering,
++    }));
++    push(warmBeforeBake + ballsColdHours * 60, copy.coldTitle, fillPlannerCopy(copy.coldDesc, {
++    HOURS: ballsColdHours,
++      FRIDGE_TEMP: '4°C',
++      STYLE: styleName,
++      TEMPERING: tempering,
++    }));
+ 
+     if (method === 'direct') {
+-      push(warmBeforeBake + ballsColdHours * 60 + bulkMinutes, copy.bulkTitle, fillPlannerCopy(copy.bulkDesc, { STYLE: styleName }));
++      push(warmBeforeBake + ballsColdHours * 60 + bulkMinutes, copy.bulkTitle, fillPlannerCopy(copy.bulkDesc, { STYLE: styleName, HOURS: formatHoursLabel(bulkMinutes / 60) }));
+       push(warmBeforeBake + ballsColdHours * 60 + bulkMinutes, copy.directMixTitle, isRoman ? copy.directRomanDesc : copy.directNyDesc);
+     } else {
+       const prefermentName = method === 'biga' ? copy.bigaName : copy.poolishName;
+-      push(warmBeforeBake + ballsColdHours * 60 + bulkMinutes, copy.finalBulkTitle, copy.finalBulkDesc);
++      push(warmBeforeBake + ballsColdHours * 60 + bulkMinutes, copy.finalBulkTitle, fillPlannerCopy(copy.finalBulkDesc, { HOURS: formatHoursLabel(bulkMinutes / 60) }));
+       push(warmBeforeBake + ballsColdHours * 60 + bulkMinutes + finalMixHours * 60, fillPlannerCopy(copy.finalMixTitle, { PREFERMENT: prefermentName }), method === 'biga' ? copy.finalBigaDesc : copy.finalPoolishDesc);
+-      push(warmBeforeBake + ballsColdHours * 60 + bulkMinutes + finalMixHours * 60 + (method === 'biga' ? 16 * 60 : 16 * 60), method === 'biga' ? copy.bigaTitle : copy.poolishTitle, method === 'biga' ? copy.bigaDesc : copy.poolishDesc);
++      const legacyPrefermentHours = 16;
++      push(warmBeforeBake + ballsColdHours * 60 + bulkMinutes + finalMixHours * 60 + legacyPrefermentHours * 60, method === 'biga' ? copy.bigaTitle : copy.poolishTitle, fillPlannerCopy(method === 'biga' ? copy.bigaDesc : copy.poolishDesc, {
++        HOURS: formatHoursLabel(legacyPrefermentHours),
++        ROOM_HOURS: formatHoursLabel(method === 'biga' ? legacyPrefermentHours : 0),
++        FRIDGE_HOURS: formatHoursLabel(method === 'poolish' ? legacyPrefermentHours : 0),
++      }));
+     }
+     return steps.sort((a, b) => a.at.getTime() - b.at.getTime());
+   }
+--- a/frontend/scripts/verify-tempering-alignment.mjs
++++ b/frontend/scripts/verify-tempering-alignment.mjs
+@@ -0,0 +1,360 @@
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import path from 'node:path';
++import ts from 'typescript';
++import vm from 'node:vm';
++
++const root = path.resolve(import.meta.dirname, '..');
++const calculatorSource = fs.readFileSync(path.join(root, 'src/calculator.ts'), 'utf8');
++const translationsSource = fs.readFileSync(path.join(root, 'src/i18n/translations.ts'), 'utf8');
++const loadTypeScriptModule = (source, filename) => {
++  const compiled = ts.transpileModule(source, {
++    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
++  }).outputText;
++  const moduleRef = { exports: {} };
++  vm.runInNewContext(compiled, { module: moduleRef, exports: moduleRef.exports }, { filename });
++  return moduleRef.exports;
++};
++const calculator = loadTypeScriptModule(calculatorSource, 'calculator.ts');
++const translations = loadTypeScriptModule(translationsSource, 'translations.ts').translations;
++
++const {
++  createDirectHomePizzaPlan,
++  createBigaHomePizzaPlan,
++  createPoolishHomePizzaPlan,
++  doughCalc,
++  getDirectHomeFermentationSchedule,
++  getFermentationSchedule,
++  getHomeFlourStrengthInput,
++  getTemperingWindow,
++  isHomeScheduleDurationValid,
++  reversePlan,
++  selectPlannerHomeSchedules,
++} = calculator;
++
++assert.deepEqual({ ...getTemperingWindow(22) }, {
++  minimumMinutes: 30,
++  maximumMinutes: 45,
++  initialMinutes: 38,
++});
++assert.equal(getTemperingWindow(18).initialMinutes, 68);
++assert.equal(getTemperingWindow(26).initialMinutes, 23);
++
++const bakeAt = new Date('2026-10-20T18:00:00.000Z');
++const restMinutes = getTemperingWindow(22).initialMinutes;
++const settings = {
++  roomHours: 2,
++  roomTemp: 22,
++  fridgeHours: 24,
++  fridgeTemp: 4,
++  bigaHours: 24,
++  poolishHours: 24,
++};
++
++function makeSchedule(method, selected = settings, includeFinish = selected.fridgeHours > 0) {
++  return getFermentationSchedule({
++    method,
++    roomHours: selected.roomHours,
++    roomTemp: selected.roomTemp,
++    fridgeHours: selected.fridgeHours,
++    fridgeTemp: selected.fridgeTemp,
++    ...(method === 'biga' ? { prefermentHours: selected.bigaHours } : {}),
++    ...(method === 'poolish' ? { prefermentHours: selected.poolishHours } : {}),
++    roomAfterFridgeHours: includeFinish ? getTemperingWindow(selected.roomTemp).initialMinutes / 60 : 0,
++  });
++}
++
++function doughFor(method, schedule, yeastType = 'fresh', flourType = 'caputo00', mixing = 'hand') {
++  return doughCalc({
++    pizzas: 4,
++    ballWeight: 260,
++    hydration: flourType === 'glutenFree' ? 75 : 63,
++    saltPct: 2.8,
++    oilPct: 2,
++    method,
++    bigaPct: 50,
++    poolishPct: 35,
++    roomHours: settings.roomHours,
++    roomTemp: settings.roomTemp,
++    fridgeHours: settings.fridgeHours,
++    fridgeTemp: settings.fridgeTemp,
++    prefermentHours: method === 'biga' ? settings.bigaHours : method === 'poolish' ? settings.poolishHours : 0,
++    yeastType,
++    flourType,
++    mixing: mixing === 'mixer' ? 'spiral' : 'hand',
++    fermentationSchedule: schedule,
++  });
++}
++
++function rawExposure(schedule) {
++  return schedule.phases.reduce((total, phase) => {
++    const rate = phase.environment === 'room'
++      ? 1 + 0.08 * (phase.temperature - 20)
++      : 0.12 * (1 + 0.05 * (phase.temperature - 4));
++    return total + phase.hours * rate;
++  }, 0);
++}
++
++function assertCalcUsesSchedule(method, schedule, yeastType, flour, mixing) {
++  const calc = doughFor(method, schedule, yeastType, flour, mixing);
++  const expectedExposure = Math.max(0.5, rawExposure(schedule));
++  const expectedYeastPct = 0.5 / expectedExposure / (yeastType === 'dry' ? 3 : 1);
++  assert.equal(calc.eTotal, Math.round(expectedExposure * 10) / 10);
++  assert.equal(calc.yeastPct, Math.round(expectedYeastPct * 100) / 100);
++  if (method !== 'direct') {
++    assert.ok(calc.preferment, `${method} keeps its preferment`);
++    const prefermentShare = method === 'biga' ? 7 / 12 : 5 / 12;
++    assert.ok(Math.abs(calc.preferment.yeast - calc.total.yeast * prefermentShare) <= 0.02);
++    assert.ok(Math.abs(calc.main.yeast - calc.total.yeast * (1 - prefermentShare)) <= 0.02);
++  }
++  return calc;
++}
++
++function sumHours(schedule, kind, environment) {
++  return schedule.phases
++    .filter((phase) => phase.kind === kind && phase.environment === environment)
++    .reduce((total, phase) => total + phase.hours, 0);
++}
++
++for (const style of ['neapolitan', 'romana', 'ny_style']) {
++  for (const method of ['direct', 'biga', 'poolish']) {
++    for (const lang of ['hr', 'en', 'de', 'sl']) {
++      const copy = translations[lang].planner.stepCopy;
++      const coldSchedule = makeSchedule(method);
++      assert.equal(sumHours(coldSchedule, 'final-rest', 'room'), restMinutes / 60);
++      assert.equal(coldSchedule.phases.filter((phase) => phase.kind === 'final-rest').length, 1);
++      assertCalcUsesSchedule(method, coldSchedule, 'fresh', 'caputo00', 'hand');
++
++      const coldSteps = reversePlan(
++        bakeAt,
++        method,
++        style,
++        copy,
++        null,
++        null,
++        null,
++        lang,
++        undefined,
++        settings.roomTemp,
++        coldSchedule,
++      );
++      const warm = coldSteps.find((step) => step.title === copy.warmTitle);
++      const cold = coldSteps.find((step) => step.title === copy.coldTitle);
++      const bulkTitle = method === 'direct' ? copy.bulkTitle : copy.finalBulkTitle;
++      const bulk = coldSteps.find((step) => step.title === bulkTitle);
++      assert.ok(warm, `${style}/${method}/${lang}: Pro cold schedule has a final-rest event`);
++      assert.equal((bakeAt.getTime() - warm.at.getTime()) / 60000, restMinutes);
++      assert.ok(cold, `${style}/${method}/${lang}: selected fridge phase reaches Planner`);
++      assert.equal((bakeAt.getTime() - cold.at.getTime()) / 60000, restMinutes + settings.fridgeHours * 60);
++      assert.ok(bulk, `${style}/${method}/${lang}: selected room phase reaches Planner`);
++      assert.equal(
++        (bakeAt.getTime() - bulk.at.getTime()) / 60000,
++        restMinutes + (settings.fridgeHours + settings.roomHours) * 60,
++      );
++
++      const roomOnlySettings = { ...settings, roomHours: 3, fridgeHours: 0 };
++      const roomOnlySchedule = makeSchedule(method, roomOnlySettings, false);
++      assert.equal(sumHours(roomOnlySchedule, 'final-rest', 'room'), 0);
++      assert.equal(sumHours(roomOnlySchedule, 'final', 'room'), 3);
++      assert.equal(roomOnlySchedule.phases.some((phase) => phase.hours === 0), false);
++      assertCalcUsesSchedule(method, roomOnlySchedule, 'fresh', 'caputo00', 'hand');
++      const roomOnlySteps = reversePlan(
++        bakeAt,
++        method,
++        style,
++        copy,
++        null,
++        null,
++        null,
++        lang,
++        undefined,
++        settings.roomTemp,
++        roomOnlySchedule,
++      );
++      assert.equal(roomOnlySteps.some((step) => step.title === copy.warmTitle), false);
++      assert.equal(roomOnlySteps.some((step) => step.title === copy.coldTitle), false);
++      const roomOnlyBulk = roomOnlySteps.find((step) => step.title === bulkTitle);
++      assert.ok(roomOnlyBulk, `${style}/${method}/${lang}: existing room-only fermentation remains`);
++      assert.equal((bakeAt.getTime() - roomOnlyBulk.at.getTime()) / 60000, 3 * 60);
++    }
++  }
++}
++
++for (const method of ['direct', 'biga', 'poolish']) {
++  const coldSchedule = makeSchedule(method);
++  const roomOnlySchedule = makeSchedule(method, { ...settings, roomHours: 3, fridgeHours: 0 }, false);
++  for (const yeastType of ['fresh', 'dry']) {
++    for (const flour of ['caputo00', 'manitoba', 'custom', 'glutenFree']) {
++      for (const mixing of ['hand', 'mixer']) {
++        const withFinish = assertCalcUsesSchedule(method, coldSchedule, yeastType, flour, mixing);
++        const withoutFinish = doughFor(method, getFermentationSchedule({
++          method,
++          roomHours: settings.roomHours,
++          roomTemp: settings.roomTemp,
++          fridgeHours: settings.fridgeHours,
++          fridgeTemp: settings.fridgeTemp,
++          ...(method === 'biga' ? { prefermentHours: settings.bigaHours } : {}),
++          ...(method === 'poolish' ? { prefermentHours: settings.poolishHours } : {}),
++        }), yeastType, flour, mixing);
++        assert.ok(withFinish.eTotal > withoutFinish.eTotal);
++        assert.ok(withFinish.yeastPct <= withoutFinish.yeastPct);
++        assertCalcUsesSchedule(method, roomOnlySchedule, yeastType, flour, mixing);
++      }
++    }
++  }
++}
++
++const beforeExampleSchedule = getFermentationSchedule({
++  method: 'direct',
++  roomHours: 2,
++  roomTemp: 22,
++  fridgeHours: 24,
++  fridgeTemp: 4,
++});
++const afterExampleSchedule = makeSchedule('direct');
++const beforeExample = doughFor('direct', beforeExampleSchedule);
++const afterExample = doughFor('direct', afterExampleSchedule);
++assert.equal(beforeExample.eTotal, 5.2);
++assert.equal(afterExample.eTotal, 5.9);
++assert.ok(afterExample.total.yeast < beforeExample.total.yeast);
++
++const homeNow = new Date('2026-10-18T12:00:00.000Z');
++function makeActualDirectHomePlan(availableHours, style = 'romana') {
++  const bake = new Date(homeNow.getTime() + availableHours * 60 * 60 * 1000);
++  return createDirectHomePizzaPlan({
++    style,
++    romanFormat: style === 'romana' ? 'tonda' : undefined,
++    pizzas: 4,
++    ballWeight: 260,
++    method: 'direct',
++    bakeAt: bake,
++    roomTemp: 22,
++    fridgeTemp: 4,
++    ovenType: 'homeStone',
++    ovenTemp: 300,
++    flourType: 'caputo00',
++    mixing: 'hand',
++  }, getHomeFlourStrengthInput('caputo00', { source: 'w', w: 280 }), 63, 'fresh', homeNow, false);
++}
++
++const actualColdHomePlan = makeActualDirectHomePlan(36);
++assert.ok(actualColdHomePlan, 'production Direct Home planner returns a cold Pro candidate');
++assert.ok(actualColdHomePlan.schedule.fridgeHours > 0);
++assert.ok(isHomeScheduleDurationValid(actualColdHomePlan.schedule));
++const actualColdHomeSchedule = getDirectHomeFermentationSchedule(actualColdHomePlan.schedule, 22, 4);
++assert.equal(sumHours(actualColdHomeSchedule, 'final-rest', 'room'), actualColdHomePlan.schedule.roomAfterFridgeHours);
++assert.equal(actualColdHomeSchedule.phases.filter((phase) => phase.kind === 'final-rest').length,
++  actualColdHomePlan.schedule.roomAfterFridgeHours > 0 ? 1 : 0);
++const actualColdHomeCalc = doughCalc({
++  pizzas: 4,
++  ballWeight: 260,
++  hydration: 63,
++  saltPct: 2.8,
++  oilPct: 2,
++  method: 'direct',
++  roomHours: 0,
++  roomTemp: 22,
++  fridgeHours: 0,
++  fridgeTemp: 4,
++  yeastType: 'fresh',
++  flourType: 'caputo00',
++  mixing: 'hand',
++  fermentationSchedule: actualColdHomeSchedule,
++});
++assert.equal(actualColdHomeCalc.eTotal, Math.round(rawExposure(actualColdHomeSchedule) * 10) / 10);
++const actualColdHomeSteps = reversePlan(
++  actualColdHomePlan.schedule.bakeAt,
++  'direct',
++  actualColdHomePlan.schedule.style,
++  translations.hr.planner.stepCopy,
++  actualColdHomePlan.schedule,
++  null,
++  null,
++  'hr',
++  undefined,
++  22,
++  actualColdHomeSchedule,
++);
++assert.ok(actualColdHomeSteps.some((step) => step.at.getTime() === actualColdHomePlan.schedule.startAt.getTime()));
++if (actualColdHomePlan.schedule.roomAfterFridgeHours > 0) {
++  const expectedFinalRestAt = (actualColdHomePlan.schedule.fridgeAt ?? actualColdHomePlan.schedule.ballingAt).getTime()
++    + actualColdHomePlan.schedule.fridgeHours * 60 * 60 * 1000;
++  assert.ok(actualColdHomeSteps.some((step) => step.at.getTime() === expectedFinalRestAt));
++}
++
++const actualBigaHomePlan = createBigaHomePizzaPlan({
++  style: 'neapolitan',
++  pizzas: 4,
++  ballWeight: 260,
++  bakeAt: actualColdHomePlan.schedule.bakeAt,
++  roomTemp: 22,
++  fridgeTemp: 4,
++  ovenType: 'homeStone',
++}, homeNow);
++const actualPoolishHomePlan = createPoolishHomePizzaPlan({
++  style: 'neapolitan',
++  pizzas: 4,
++  ballWeight: 260,
++  bakeAt: actualColdHomePlan.schedule.bakeAt,
++  roomTemp: 22,
++  fridgeTemp: 4,
++  ovenType: 'homeStone',
++  poolishHours: 24,
++}, homeNow);
++assert.ok(actualBigaHomePlan, 'production Biga Home planner returns a prior Beginner schedule');
++assert.ok(actualPoolishHomePlan, 'production Poolish Home planner returns a prior Beginner schedule');
++const previousBeginnerSchedules = {
++  isBeginner: false,
++  bakeAt: actualColdHomePlan.schedule.bakeAt,
++  directSchedule: actualColdHomePlan.schedule,
++  directScheduleMode: 'beginner',
++  bigaSchedule: actualBigaHomePlan.schedule,
++  poolishSchedule: actualPoolishHomePlan.schedule,
++};
++const proAfterBeginner = selectPlannerHomeSchedules(previousBeginnerSchedules);
++assert.equal(proAfterBeginner.direct, null);
++assert.equal(proAfterBeginner.biga, null);
++assert.equal(proAfterBeginner.poolish, null);
++const proWithCurrentDirect = selectPlannerHomeSchedules({
++  ...previousBeginnerSchedules,
++  directScheduleMode: 'pro',
++});
++assert.equal(proWithCurrentDirect.direct, actualColdHomePlan.schedule);
++assert.equal(proWithCurrentDirect.biga, null);
++assert.equal(proWithCurrentDirect.poolish, null);
++const restoredBeginnerSchedules = selectPlannerHomeSchedules({
++  ...previousBeginnerSchedules,
++  isBeginner: true,
++});
++assert.equal(restoredBeginnerSchedules.direct, actualColdHomePlan.schedule);
++assert.equal(restoredBeginnerSchedules.biga, actualBigaHomePlan.schedule);
++assert.equal(restoredBeginnerSchedules.poolish, actualPoolishHomePlan.schedule);
++
++const actualRoomOnlyHomePlan = [1.25, 1.5, 2, 3, 4, 6]
++  .map((hours) => makeActualDirectHomePlan(hours, 'neapolitan'))
++  .find((plan) => plan && plan.schedule.fridgeHours === 0);
++assert.ok(actualRoomOnlyHomePlan, 'production Direct Home planner returns a room-only plan');
++assert.ok(isHomeScheduleDurationValid(actualRoomOnlyHomePlan.schedule));
++const actualRoomOnlySchedule = getDirectHomeFermentationSchedule(actualRoomOnlyHomePlan.schedule, 22, 4);
++assert.equal(sumHours(actualRoomOnlySchedule, 'final-rest', 'room'), actualRoomOnlyHomePlan.schedule.roomAfterFridgeHours);
++assert.equal(actualRoomOnlySchedule.phases.some((phase) => phase.environment === 'fridge'), false);
++const actualRoomOnlySteps = reversePlan(
++  actualRoomOnlyHomePlan.schedule.bakeAt,
++  'direct',
++  'neapolitan',
++  translations.en.planner.stepCopy,
++  actualRoomOnlyHomePlan.schedule,
++  null,
++  null,
++  'en',
++  undefined,
++  22,
++  actualRoomOnlySchedule,
++);
++assert.equal(actualRoomOnlySteps.some((step) => step.title === translations.en.planner.stepCopy.coldTitle), false);
++
++console.log(
++  `Pro final-rest alignment passed. Direct 4×260 g @22°C, 2 h room + 24 h fridge: ` +
++  `yeast ${beforeExample.total.yeast.toFixed(2)} g -> ${afterExample.total.yeast.toFixed(2)} g ` +
++  `(eTotal ${beforeExample.eTotal} -> ${afterExample.eTotal}; ${restMinutes} min final rest).`,
++);

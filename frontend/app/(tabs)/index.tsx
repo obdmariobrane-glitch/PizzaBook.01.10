@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, Modal, TextInput, Platform, Alert, Image, ImageBackground, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -9,27 +9,40 @@ import {
   adaptDirectMixingSteps,
   adaptDirectYeastStep,
   getYeastAwarePrefermentSteps,
+  getProHomeMixerDirectSteps,
   labelSelectedYeast,
   PHASE_TIMER_DURATIONS, TIMER_KIND_LABEL, TIMER_NOTIF, BaseTimer,
   formatDuration, formatCountdown,
 } from '../../src/i18n/prefermentSteps';
 import { useT } from '../../src/i18n/LanguageProvider';
 import type { Lang } from '../../src/i18n/translations';
-import { getSpiralMixingSteps, getSpiralMixingTitle } from '../../src/i18n/spiralMixing';
+import { costCalculatorCopy } from '../../src/i18n/costCalculator';
+import { getSpongePreparationPhase, SPONGE_COPY } from '../../src/i18n/spongeSteps';
+import { YEAST_SETTINGS_COPY } from '../../src/i18n/yeastSettings';
+import { adaptSpiralMixerSourceSteps, getProHomeMixerStepInfo, getProSpiralMixingStepInfo, getSpiralMixingSteps, getSpiralMixingTitle, type SpiralMixingRecipe, type SpiralMixingStepInfoList } from '../../src/i18n/spiralMixing';
+import { getProIceWaterInstructions } from '../../src/i18n/proIceWaterInstructions';
+import { adaptProGlutenFreeMixingPhaseA, adaptProGlutenFreeRoomPhaseB } from '../../src/i18n/proGlutenFreeBulk';
+import { alignProDirectSteps } from '../../src/i18n/proDirectStepAlignment';
 import { scheduleLocal, cancelLocal, cancelGuidedNotificationForStep, cancelGuidedNotificationsForPlan, cancelGuidedNotificationsForPlanExcept, cancelPlannerNotificationsForMethods, isPushSupported, requestNotificationPermissions, scheduleLocalAt, scheduleNotificationBatch } from '../../src/notifications';
 import { runGuidedNotificationSync } from '../../src/notifications';
 import { COLORS, SPACING, RADIUS } from '../../src/theme';
+import { COMMUNITY_ENABLED } from '../../src/communityFeature';
+
+const ProWebInfoContext = createContext(false);
 import { applyLoadedExperienceLevel, getCachedExperienceLevel, subscribeExperienceLevel } from '../../src/experienceLevel';
 import {
   getCachedTemperatureUnit, subscribeTemperatureUnit,
   getCachedMeasurementSystem, subscribeMeasurementSystem, setPreferredYeastType,
   getCachedPreferredYeastType, subscribePreferredYeastType, applyLoadedCalculatorPreferences,
-  parsePreferredYeastType, type PreferredYeastType,
+  parsePreferredYeastType, type PreferredYeastType, type TemperatureUnit,
 } from '../../src/preferences';
 import { displayTemperature, formatLength, formatTemperature, formatUnitText, formatWeight, temperatureInputToCelsius, weightInputToGrams } from '../../src/units';
 import {
-  dimensionsCalc, doughCalc, getDirectHomeFermentationSchedule, getFermentationSchedule, getTemperingWindow, getTegliaFinalProofPlan, iceCalc, getBakingTimeRange, formatBakingTimeRange, isHomeScheduleDurationValid,
-  Method, OvenType, FlourType, PizzaStyle, HomeFlourStrengthSource, PIZZA_STYLE_PROFILES, FLOUR_PROFILES, BASE_FLOURS, normalizeBeginnerSavedState, beginnerHydrationFor, beginnerBallWeightForDiameter, beginnerDiameterForBallWeight, blendIdealHydration,
+  dimensionsCalc, doughCalc, getDirectHomeFermentationSchedule, getFermentationSchedule, getSpongeFermentationSchedule, getTemperingWindow, getTegliaFinalProofPlan, getTegliaFinalProofWindowMinutes, iceCalc, getBakingTimeRange, formatBakingTimeRange, isHomeScheduleDurationValid,
+  SPONGE_YEAST_REFERENCE, validateManualYeastGrams,
+  Method, OvenType, getOvenBehaviorType, FlourType, PizzaStyle, HomeFlourStrengthSource, CommercialYeastType, SpongeYeastMode, PIZZA_STYLE_PROFILES, FLOUR_PROFILES, BASE_FLOURS, normalizeBeginnerSavedState, beginnerHydrationFor, beginnerBallWeightForDiameter, beginnerDiameterForBallWeight, blendIdealHydration, isEffectivelyGlutenFreeBlend,
+  isProMethodAllowedForFlour,
+  isValidProTrayDimension, parseProTrayDimensionInput,
   splitFlourBlend,
   calculateBeginnerPhaseBPlan, createDirectHomePizzaPlan, createBigaHomePizzaPlan, createPoolishHomePizzaPlan, getBeginnerFlourGuidanceKind, getBeginnerPreheatMinutes, getHomeFlourStrengthInput, getHomePlanLegacyFermentationHours,
   BeginnerPhaseBPlan, BeginnerDirectScheduleMode,
@@ -58,15 +71,79 @@ import {
   GuidedScheduleEvent,
   planGuidedNotifications,
 } from '../../src/guidedRecipe';
-import { deleteProRecipe, getProSavedRecipes, ProSavedRecipe, saveProRecipe } from '../../src/proSavedRecipes';
+import { deleteProRecipe, getSavedRecipes, saveLocalRecipe } from '../../src/proSavedRecipes';
+import type { ProSavedRecipe, SavedRecipeMode } from '../../src/proSavedRecipes';
+import { OFFLINE_ONLY_MODE } from '../../src/offlineMode';
+import {
+  DEFAULT_KAMADO_OVEN_PROFILE,
+  KAMADO_MAXIMUM_TEMPERATURE_C,
+  formatKamadoBakeTimeRange,
+  formatKamadoBakeTimeRecommendation,
+  getKamadoBakeTimeRange,
+  insertKamadoPhaseOnce,
+  isKamadoBakingTemperatureAllowed,
+  normalizeKamadoProOvenProfile,
+  parseKamadoOvenProfile,
+  sanitizeKamadoTemperatureInput,
+  type KamadoOvenProfile,
+} from '../../src/kamadoOvenProfile';
 
 const DIAMETERS = [28, 30, 33, 35];
 const CALCULATOR_SETTINGS_KEY = 'calculatorSettings';
+const CALCULATOR_YEAST_SUMMARY_KEY = 'calculatorYeastSummary';
+const SPONGE_PREPARATION_STORAGE_KEY = 'calculatorSpongePreparation';
+const CALCULATOR_OVEN_PREFERENCE_PREFIX = 'calculatorOvenPreference:';
+const KAMADO_PROFILE_STORAGE_KEY = 'kamadoOvenProfile';
+const getKamadoProfileTemperature = (profile: KamadoOvenProfile | null): number | null => profile?.maximumTemperatureC ?? null;
+const formatKamadoTemperatureInput = (temperatureC: number, unit: TemperatureUnit): string =>
+  formatTemperature(temperatureC, unit).replace(/°[CF]$/, '');
+const isValidSpongeWaterAllocation = (flourShare: number, spongeHydration: number, totalHydration: number): boolean =>
+  Number.isFinite(flourShare)
+  && flourShare > 0
+  && flourShare <= 100
+  && Number.isFinite(spongeHydration)
+  && spongeHydration > 0
+  && spongeHydration <= 200
+  && Number.isFinite(totalHydration)
+  && totalHydration > 0
+  && flourShare * spongeHydration <= totalHydration * 100;
+const getKamadoBakeBlockedText = (lang: Lang): string => ({
+  hr: 'PizzaBook još nema odobreno automatsko vrijeme pečenja ni posebne korake za Kamado. Odabrana temperatura pečenja je vaša postavka; maksimalna temperatura uređaja ostaje zasebna sigurnosna granica.',
+  en: 'PizzaBook does not yet have an approved automatic bake duration or Kamado-specific baking steps. The baking temperature is your selected setting; the appliance maximum remains a separate safety limit.',
+  de: 'PizzaBook hat noch keine freigegebene automatische Backdauer oder Kamado-spezifische Backanweisungen. Die Backtemperatur ist Ihre gewählte Einstellung; die Maximaltemperatur des Geräts bleibt eine separate Sicherheitsgrenze.',
+  sl: 'PizzaBook še nima odobrenega samodejnega časa peke ali posebnih korakov za Kamado. Temperatura peke je vaša izbrana nastavitev; najvišja temperatura naprave ostaja ločena varnostna meja.',
+})[lang];
 const GUIDED_NOTIFICATIONS_ENABLED_KEY = 'beginnerGuidedNotificationsEnabled';
 const GUIDED_PROGRESS_STORAGE_PREFIX = 'beginnerGuidedProgress:';
 const GUIDED_NIGHT_WARNING_CONFIRMED_PREFIX = 'beginnerNightWarningConfirmed:';
 const ALL_FLOUR_TYPES: FlourType[] = ['caputo00', 'manitoba', 'spelt', 'wholeWheat', 'glutenFree', 'custom'];
 const isFlourType = (value: unknown): value is FlourType => ALL_FLOUR_TYPES.includes(value as FlourType);
+const isOvenType = (value: unknown): value is OvenType => value === 'ooni' || value === 'homeStone' || value === 'homePan' || value === 'kamado';
+const usesPizzaOvenBehavior = (oven: OvenType): boolean => getOvenBehaviorType(oven) === 'ooni';
+type CalculatorOvenPreference = { oven: OvenType; ovenTemp: number };
+
+function parseCalculatorOvenPreference(value: string | null): CalculatorOvenPreference | null {
+  if (value === null) return null;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (
+      parsed !== null
+      && typeof parsed === 'object'
+      && 'oven' in parsed
+      && 'ovenTemp' in parsed
+      && isOvenType(parsed.oven)
+      && typeof parsed.ovenTemp === 'number'
+      && Number.isFinite(parsed.ovenTemp)
+    ) {
+      return { oven: parsed.oven, ovenTemp: parsed.ovenTemp };
+    }
+  } catch (error) {
+    console.warn('Saved oven preference could not be parsed; calculator settings will be used.', error);
+    return null;
+  }
+  console.warn('Saved oven preference is invalid; calculator settings will be used.');
+  return null;
+}
 type RecipeVariant = 'napolitana' | 'romanaTonda' | 'romanaTeglia' | 'newYork';
 type BeginnerSection = 'style' | 'flour' | 'quantity' | 'method' | 'oven' | 'bake' | 'plan';
 type BeginnerPhaseAFlourBehavior = 'standard' | 'spelt' | 'wholeWheat';
@@ -74,7 +151,7 @@ type SavedRecipe = ProSavedRecipe;
 type DetailedPhase = {
   title: string;
   steps: string[];
-  stepInfo?: Array<{ title: string; body: string } | undefined>;
+  stepInfo?: SpiralMixingStepInfoList;
   timers?: BaseTimer[];
   waterInfo?: string;
   containerOilInfo?: string;
@@ -142,6 +219,10 @@ function croatianMinutes(minutes: number): string {
   return `${croatianHours(hours)} i ${remainingMinutes} minuta`;
 }
 
+function phaseBBulkRestMinutes(roomTemp: number): number {
+  return Math.max(15, Math.round(30 * (22 / Math.max(10, roomTemp))));
+}
+
 function formatBeginnerClockTime(at: Date, lang: Lang): string {
   const locale = { hr: 'hr-HR', en: 'en-GB', de: 'de-DE', sl: 'sl-SI' }[lang];
   return new Intl.DateTimeFormat(locale, { timeStyle: 'short' }).format(at);
@@ -183,7 +264,24 @@ function localizeBeginnerScheduleNotice(notice: string, lang: Lang): string | nu
   return null;
 }
 
-function buildBeginnerOvenInfo(lang: Lang, oven: OvenType, ovenTemp: number, teglia: boolean): string {
+function buildBeginnerOvenInfo(lang: Lang, oven: OvenType, ovenTemp: number, teglia: boolean, kamadoProfile: KamadoOvenProfile | null = null): string {
+  if (oven === 'kamado') {
+    return ({
+      hr: kamadoProfile
+        ? `Maksimalna temperatura vašeg Kamada: ${kamadoProfile.maximumTemperatureC} °C. To je samo granica uređaja, ne cilj pečenja. ${getKamadoBakeBlockedText(lang)}`
+        : `Unesite maksimalnu dopuštenu temperaturu koju vaš Kamado može sigurno postići prema uputama proizvođača. ${getKamadoBakeBlockedText(lang)}`,
+      en: kamadoProfile
+        ? `Your Kamado maximum temperature: ${kamadoProfile.maximumTemperatureC} °C. This is only the appliance limit, not a baking target. ${getKamadoBakeBlockedText(lang)}`
+        : `Enter the maximum temperature your Kamado is allowed to reach safely according to the manufacturer's instructions. ${getKamadoBakeBlockedText(lang)}`,
+      de: kamadoProfile
+        ? `Maximaltemperatur Ihres Kamado: ${kamadoProfile.maximumTemperatureC} °C. Dies ist nur die Gerätegrenze und kein Backziel. ${getKamadoBakeBlockedText(lang)}`
+        : `Geben Sie die laut Herstelleranleitung maximal zulässige sichere Temperatur Ihres Kamado ein. ${getKamadoBakeBlockedText(lang)}`,
+      sl: kamadoProfile
+        ? `Maksimalna temperatura vašega Kamada: ${kamadoProfile.maximumTemperatureC} °C. To je samo meja naprave, ne cilj peke. ${getKamadoBakeBlockedText(lang)}`
+        : `Vnesite največjo dovoljeno temperaturo, ki jo lahko Kamado varno doseže po navodilih proizvajalca. ${getKamadoBakeBlockedText(lang)}`,
+    })[lang];
+  }
+  oven = getOvenBehaviorType(oven);
   const minutes = getBeginnerPreheatMinutes(oven);
   const workflow = teglia
     ? {
@@ -234,9 +332,20 @@ type CalculatorSettings = {
   customBallWeight: number | null;
   method: Method;
   bigaPct: number;
+  bigaHydrationPct?: number;
   poolishPct: number;
+  poolishHydrationPct?: number;
+  poolishFermentationTempC?: number;
   bigaHours: number;
   poolishHours: number;
+  spongeFlourPct?: number;
+  spongeHydrationPct?: number;
+  spongeFermentationTempC?: number;
+  spongeFermentationHours?: number;
+  spongeYeastType?: CommercialYeastType;
+  spongeYeastMode?: SpongeYeastMode;
+  spongeManualYeastGrams?: number;
+  methodYeastSettings?: Partial<Record<Method, Partial<MethodYeastSettings>>>;
   hydration: number;
   saltPct: number;
   oilPct: number;
@@ -250,6 +359,71 @@ type CalculatorSettings = {
   mixing: MixingSelection;
   beginnerScheduleMode?: BeginnerDirectScheduleMode;
 };
+
+type MethodYeastSettings = {
+  mode: SpongeYeastMode;
+  yeastType: CommercialYeastType;
+  manualInput: string;
+  manualGrams: number;
+};
+
+const DEFAULT_METHOD_YEAST_SETTINGS: Record<Method, MethodYeastSettings> = {
+  direct: { mode: 'automatic', yeastType: 'fresh', manualInput: '1', manualGrams: 1 },
+  biga: { mode: 'automatic', yeastType: 'fresh', manualInput: '1', manualGrams: 1 },
+  poolish: { mode: 'automatic', yeastType: 'fresh', manualInput: '1', manualGrams: 1 },
+  sponge: { mode: 'automatic', yeastType: 'fresh', manualInput: '1', manualGrams: 1 },
+};
+
+function isCommercialYeastType(value: unknown): value is CommercialYeastType {
+  return value === 'fresh' || value === 'activeDry' || value === 'dry';
+}
+
+function isYeastMode(value: unknown): value is SpongeYeastMode {
+  return value === 'automatic' || value === 'manual';
+}
+
+function restoreMethodYeastSettings(
+  value: unknown,
+  legacySponge?: { mode?: unknown; yeastType?: unknown; manualGrams?: unknown },
+  legacyMethod?: { method?: unknown; yeastType?: unknown },
+): Record<Method, MethodYeastSettings> {
+  const restored: Record<Method, MethodYeastSettings> = {
+    direct: { ...DEFAULT_METHOD_YEAST_SETTINGS.direct },
+    biga: { ...DEFAULT_METHOD_YEAST_SETTINGS.biga },
+    poolish: { ...DEFAULT_METHOD_YEAST_SETTINGS.poolish },
+    sponge: { ...DEFAULT_METHOD_YEAST_SETTINGS.sponge },
+  };
+  const savedSettings = value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Partial<Record<Method, Partial<MethodYeastSettings>>>
+    : {};
+  for (const method of ['direct', 'biga', 'poolish', 'sponge'] as const) {
+    const saved = savedSettings[method];
+    if (!saved || typeof saved !== 'object') continue;
+    if (isYeastMode(saved.mode)) restored[method].mode = saved.mode;
+    if (isCommercialYeastType(saved.yeastType)) restored[method].yeastType = saved.yeastType;
+    if (typeof saved.manualGrams === 'number' && Number.isFinite(saved.manualGrams) && saved.manualGrams > 0) {
+      restored[method].manualGrams = saved.manualGrams;
+      restored[method].manualInput = String(saved.manualGrams);
+    }
+    if (typeof saved.manualInput === 'string') restored[method].manualInput = saved.manualInput;
+  }
+  if (!savedSettings.sponge) {
+    if (isYeastMode(legacySponge?.mode)) restored.sponge.mode = legacySponge.mode;
+    if (isCommercialYeastType(legacySponge?.yeastType)) restored.sponge.yeastType = legacySponge.yeastType;
+    if (typeof legacySponge?.manualGrams === 'number' && Number.isFinite(legacySponge.manualGrams) && legacySponge.manualGrams > 0) {
+      restored.sponge.manualGrams = legacySponge.manualGrams;
+      restored.sponge.manualInput = String(legacySponge.manualGrams);
+    }
+  }
+  if (
+    (legacyMethod?.method === 'direct' || legacyMethod?.method === 'biga' || legacyMethod?.method === 'poolish' || legacyMethod?.method === 'sponge')
+    && !savedSettings[legacyMethod.method]
+    && isCommercialYeastType(legacyMethod.yeastType)
+  ) {
+    restored[legacyMethod.method].yeastType = legacyMethod.yeastType;
+  }
+  return restored;
+}
 
 type FlourEntry = { key: FlourType; label: string; suffix: string; info?: string };
 
@@ -326,11 +500,15 @@ const METHOD_INFO: Record<Lang, Record<Method, { title: string; body: string }>>
     },
     biga: {
       title: 'Biga',
-      body: 'Biga je tvrdi talijanski predferment s približno 44–50% vode u odnosu na brašno. Dio brašna, vode i kvasca grubo se sjedini dan ranije, a zatim se nakon fermentacije dodaje ostatku sastojaka. Daje bogat okus, lagano i probavljivo tijesto, hrskavost i velike mjehuriće zraka.',
+      body: 'Biga je talijanski predferment kojemu se hidratacija može prilagoditi. Dio brašna, vode i kvasca grubo se sjedini, a zatim se nakon fermentacije dodaje ostatku sastojaka. Daje bogat okus, lagano i probavljivo tijesto, hrskavost i velike mjehuriće zraka.',
     },
     poolish: {
       title: 'Poolish',
-      body: 'Poolish je tekuće predtijesto od jednakih količina brašna i vode (100% hidracija) uz dodatak kvasca. Nakon fermentacije dodaje se preostalo brašno, voda i sol. Rezultat je mekano, elastično tijesto koje se lako razvlači, lijepo zlatno zapečeno i blago orašasto.',
+      body: 'Poolish je predtijesto od brašna, vode i kvasca s prilagodljivom hidratacijom, temperaturom i trajanjem fermentacije. Nakon fermentacije dodaje se preostalo brašno, voda i sol. Rezultat je mekano, elastično tijesto koje se lako razvlači, lijepo zlatno zapečeno i blago orašasto.',
+    },
+    sponge: {
+      title: 'Sponge',
+      body: 'Sponge je predferment s odvojeno podesivim udjelom brašna, hidratacijom, temperaturom i trajanjem fermentacije. Količine brašna, vode i kvasca za Sponge prikazuju se zasebno od sastojaka završnog tijesta.',
     },
   },
   en: {
@@ -340,11 +518,15 @@ const METHOD_INFO: Record<Lang, Record<Method, { title: string; body: string }>>
     },
     biga: {
       title: 'Biga',
-      body: 'Biga is a firm Italian preferment made with roughly 44–50% water relative to the flour. Part of the flour, water, and yeast is mixed roughly the day before, then combined with the remaining ingredients after fermentation. It creates rich flavor, a light and digestible dough, crispness, and large air bubbles.',
+      body: 'Biga is an Italian preferment with adjustable hydration. Part of the flour, water, and yeast is mixed roughly, then combined with the remaining ingredients after fermentation. It creates rich flavor, a light and digestible dough, crispness, and large air bubbles.',
     },
     poolish: {
       title: 'Poolish',
-      body: 'Poolish is a liquid preferment made with equal parts flour and water (100% hydration) plus yeast. After fermentation, the remaining flour, water, and salt are added. It creates soft, elastic dough that stretches easily, develops a beautiful golden color, and has a gentle, lightly nutty flavor.',
+      body: 'Poolish is a preferment made with flour, water, and yeast, with adjustable hydration, fermentation temperature, and duration. After fermentation, the remaining flour, water, and salt are added. It creates soft, elastic dough that stretches easily, develops a beautiful golden color, and has a gentle, lightly nutty flavor.',
+    },
+    sponge: {
+      title: 'Sponge',
+      body: 'Sponge is a preferment with independently adjustable flour share, hydration, fermentation temperature, and duration. Its flour, water, and yeast quantities are shown separately from the final dough ingredients.',
     },
   },
   de: {
@@ -354,11 +536,15 @@ const METHOD_INFO: Record<Lang, Record<Method, { title: string; body: string }>>
     },
     biga: {
       title: 'Biga',
-      body: 'Biga ist ein fester italienischer Vorteig mit etwa 44–50% Wasser bezogen auf die Mehlmenge. Ein Teil von Mehl, Wasser und Hefe wird am Vortag grob vermischt und später mit den übrigen Zutaten verknetet. Sie sorgt für kräftiges Aroma, einen leichten Teig und große Luftblasen.',
+      body: 'Biga ist ein italienischer Vorteig mit einstellbarer Hydration. Ein Teil von Mehl, Wasser und Hefe wird grob vermischt und nach der Fermentation mit den übrigen Zutaten verknetet. Sie sorgt für kräftiges Aroma, einen leichten Teig und große Luftblasen.',
     },
     poolish: {
       title: 'Poolish',
-      body: 'Poolish ist ein flüssiger Vorteig aus gleichen Teilen Mehl und Wasser (100% Hydration) mit Hefe. Nach der Fermentation werden das restliche Mehl, Wasser und Salz hinzugefügt. Das Ergebnis ist ein weicher, elastischer Teig mit schöner goldener Farbe und leicht nussigem Geschmack.',
+      body: 'Poolish ist ein Vorteig aus Mehl, Wasser und Hefe mit einstellbarer Hydration, Gärtemperatur und Gärdauer. Nach der Fermentation werden das restliche Mehl, Wasser und Salz hinzugefügt. Das Ergebnis ist ein weicher, elastischer Teig mit schöner goldener Farbe und leicht nussigem Geschmack.',
+    },
+    sponge: {
+      title: 'Sponge',
+      body: 'Sponge ist ein Vorteig, bei dem Mehlanteil, Hydration, Gärtemperatur und Gärdauer unabhängig eingestellt werden können. Mehl, Wasser und Hefe für den Sponge werden getrennt von den Zutaten des Hauptteigs angezeigt.',
     },
   },
   sl: {
@@ -368,11 +554,15 @@ const METHOD_INFO: Record<Lang, Record<Method, { title: string; body: string }>>
     },
     biga: {
       title: 'Biga',
-      body: 'Biga je čvrsto italijansko predtesto s približno 44–50% vode glede na količino moke. Del moke, vode in kvasa dan prej grobo zmešamo, nato pa po fermentaciji dodamo preostale sestavine. Daje bogat okus, lahko in prebavljivo testo ter velike zračne mehurčke.',
+      body: 'Biga je italijansko predtesto z nastavljivo hidracijo. Del moke, vode in kvasa grobo zmešamo, nato pa po fermentaciji dodamo preostale sestavine. Daje bogat okus, lahko in prebavljivo testo ter velike zračne mehurčke.',
     },
     poolish: {
       title: 'Poolish',
-      body: 'Poolish je tekoče predtesto iz enakih količin moke in vode (100% hidracija) z dodatkom kvasa. Po fermentaciji dodamo preostalo moko, vodo in sol. Testo je mehko, elastično in ga je lahko raztegniti, pri peki pa dobi lepo zlato barvo in rahlo oreškast okus.',
+      body: 'Poolish je predtesto iz moke, vode in kvasa z nastavljivo hidracijo, temperaturo in trajanjem fermentacije. Po fermentaciji dodamo preostalo moko, vodo in sol. Testo je mehko, elastično in ga je lahko raztegniti, pri peki pa dobi lepo zlato barvo in rahlo oreškast okus.',
+    },
+    sponge: {
+      title: 'Sponge',
+      body: 'Sponge je predtesto z ločeno nastavljivim deležem moke, hidracijo, temperaturo in trajanjem fermentacije. Količine moke, vode in kvasa za Sponge so prikazane ločeno od sestavin končnega testa.',
     },
   },
 };
@@ -382,6 +572,7 @@ export default function CalculatorHome() {
   const router = useRouter();
   const { focus, stepId } = useLocalSearchParams<{ focus?: string; stepId?: string }>();
   const { t, lang } = useT();
+  const yeastSettingsCopy = YEAST_SETTINGS_COPY[lang];
   const sharedBakeAt = useSyncExternalStore(subscribeSharedHomeBakeAt, getSharedHomeBakeAt, getSharedHomeBakeAt);
   const sharedBakeTimestamp = sharedBakeAt?.getTime() ?? null;
   const scheduleCalculationNow = useMemo(() => new Date(), [sharedBakeTimestamp]);
@@ -411,13 +602,60 @@ export default function CalculatorHome() {
   const [customBallInput, setCustomBallInput] = useState<string>('');
   const [customBallInputSystem, setCustomBallInputSystem] = useState<'metric' | 'us'>('metric');
   const [selectedMethod, setMethod] = useState<Method>('direct');
-  const method: Method = isBeginner ? 'direct' : selectedMethod;
+  const method: Method = isBeginner
+    ? 'direct'
+    : isProMethodAllowedForFlour(selectedMethod, flour, blendA, blendB, blendPctA)
+      ? selectedMethod
+      : 'direct';
   const [bigaPct, setBigaPct] = useState(50);
+  const [bigaHydrationPct, setBigaHydrationPct] = useState(62);
   const [poolishPct, setPoolishPct] = useState(35);
+  const [poolishHydrationPct, setPoolishHydrationPct] = useState(100);
+  const [poolishFermentationTempC, setPoolishFermentationTempC] = useState(22);
   const [bigaHours, setBigaHours] = useState(24);
   const [poolishHours, setPoolishHours] = useState(24);
+  const [spongeFlourPct, setSpongeFlourPct] = useState<number>(SPONGE_YEAST_REFERENCE.flourShare);
+  const [spongeHydrationPct, setSpongeHydrationPct] = useState(62);
+  const [spongeFermentationTempC, setSpongeFermentationTempC] = useState<number>(SPONGE_YEAST_REFERENCE.fermentationTempC);
+  const [spongeFermentationHours, setSpongeFermentationHours] = useState<number>(SPONGE_YEAST_REFERENCE.fermentationHours);
+  const [methodYeastSettings, setMethodYeastSettings] = useState<Record<Method, MethodYeastSettings>>(
+    () => restoreMethodYeastSettings(DEFAULT_METHOD_YEAST_SETTINGS),
+  );
+  const updateMethodYeastSettings = (target: Method, updates: Partial<MethodYeastSettings>) => {
+    setMethodYeastSettings((current) => ({
+      ...current,
+      [target]: { ...current[target], ...updates },
+    }));
+  };
+  const spongeYeastType = methodYeastSettings.sponge.yeastType;
+  const spongeYeastMode = methodYeastSettings.sponge.mode;
+  const spongeManualYeastGrams = methodYeastSettings.sponge.manualGrams;
   const [methodExpanded, setMethodExpanded] = useState(false);
   const [hydration, setHydration] = useState(beginnerHydrationFor('neapolitan', 'caputo00'));
+  const spongeMinimumTotalHydration = Math.max(50, Math.ceil(spongeFlourPct * spongeHydrationPct / 100));
+  const maxProBigaPct = Math.min(100, Math.max(20, Math.floor(hydration * 100 / bigaHydrationPct)));
+  const maxProPoolishPct = Math.min(100, Math.max(20, Math.floor(hydration * 100 / poolishHydrationPct)));
+  const bigaMinimumTotalHydration = Math.max(50, Math.ceil(bigaPct * bigaHydrationPct / 100));
+  const poolishMinimumTotalHydration = Math.max(50, Math.ceil(poolishPct * poolishHydrationPct / 100));
+  const minimumTotalHydration = method === 'sponge'
+    ? spongeMinimumTotalHydration
+    : method === 'biga'
+      ? bigaMinimumTotalHydration
+      : method === 'poolish'
+        ? poolishMinimumTotalHydration
+        : 50;
+  const maxBigaHydrationPct = Math.min(200, Math.floor(hydration * 100 / bigaPct));
+  const maxPoolishHydrationPct = Math.min(200, Math.floor(hydration * 100 / poolishPct));
+  const proBigaWaterError = !isBeginner && method === 'biga' && bigaPct > maxProBigaPct;
+  const activeYeastSettings = methodYeastSettings[method];
+  const proPoolishWaterError = !isBeginner && method === 'poolish' && poolishPct > maxProPoolishPct;
+
+  if (!isBeginner && method === 'biga' && bigaPct > maxProBigaPct) {
+    setBigaPct(maxProBigaPct);
+  }
+  if (!isBeginner && method === 'poolish' && poolishPct > maxProPoolishPct) {
+    setPoolishPct(maxProPoolishPct);
+  }
   const [saltPct, setSaltPct] = useState(PIZZA_STYLE_PROFILES.neapolitan.saltPct);
   const [oilPct, setOilPct] = useState(PIZZA_STYLE_PROFILES.neapolitan.oilPct);
   const [roomTemp, setRoomTemp] = useState(22);
@@ -429,6 +667,10 @@ export default function CalculatorHome() {
   const [ovenTemp, setOvenTemp] = useState(300);
   const [ovenTempInput, setOvenTempInput] = useState('300');
   const [ovenTempEditing, setOvenTempEditing] = useState(false);
+  const [kamadoProfile, setKamadoProfile] = useState<KamadoOvenProfile | null>(null);
+  const [kamadoBakingTemperatureInput, setKamadoBakingTemperatureInput] = useState('');
+  const [kamadoBakingTemperatureEditing, setKamadoBakingTemperatureEditing] = useState(false);
+  const [kamadoProfileLoaded, setKamadoProfileLoaded] = useState(false);
   const [mixing, setMixing] = useState<MixingSelection>('hand');
   const mixingForExperience: MixingSelection = isBeginner && mixing === 'spiral' ? 'mixer' : mixing;
   const [beginnerScheduleMode, setBeginnerScheduleMode] = useState<BeginnerDirectScheduleMode | undefined>(undefined);
@@ -479,6 +721,7 @@ export default function CalculatorHome() {
   const [restoredBeginnerCalculationNow, setRestoredBeginnerCalculationNow] = useState<Date | null>(null);
   const pendingBeginnerPlanSnapshot = useRef<(BeginnerPlanSnapshot & { parsedSchedule: HomePizzaPlanSchedule; parsedCalculationNow: Date }) | null>(null);
   const beginnerRestoreCoordinator = useRef(createBeginnerPlanRestoreCoordinator());
+  const loadedSettingsExperience = useRef<boolean | null>(null);
   const beginnerSectionY = useRef<Partial<Record<BeginnerSection, number>>>({});
   const beginnerSectionRefs = useRef<Partial<Record<BeginnerSection, View | null>>>({});
   const beginnerScrollOffset = useRef(0);
@@ -500,8 +743,60 @@ export default function CalculatorHome() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    const restoreKamadoProfile = async () => {
+      try {
+        const rawProfile = await AsyncStorage.getItem(KAMADO_PROFILE_STORAGE_KEY);
+        if (!active) return;
+        if (rawProfile !== null) {
+          const savedProfile = parseKamadoOvenProfile(JSON.parse(rawProfile));
+          if (!savedProfile) throw new Error('Saved Kamado profile is incomplete or invalid.');
+          const profile = isBeginner
+            ? savedProfile
+            : normalizeKamadoProOvenProfile(savedProfile);
+          if (profile.isDefault && isBeginner) {
+            setKamadoProfile(null);
+            setKamadoBakingTemperatureInput('');
+          } else {
+            if (
+              !isBeginner
+              && savedProfile.maximumTemperatureC !== KAMADO_MAXIMUM_TEMPERATURE_C
+              && (savedProfile.bakingTemperatureC === undefined
+                || savedProfile.bakingTemperatureC <= KAMADO_MAXIMUM_TEMPERATURE_C)
+            ) {
+              try {
+                await AsyncStorage.setItem(KAMADO_PROFILE_STORAGE_KEY, JSON.stringify(profile));
+              } catch (error) {
+                console.error('Failed to update the saved Kamado maximum temperature.', error);
+              }
+            }
+            setKamadoProfile(profile);
+            if (profile.bakingTemperatureC !== undefined) {
+              setKamadoBakingTemperatureInput(formatKamadoTemperatureInput(profile.bakingTemperatureC, temperatureUnit));
+            }
+          }
+        } else if (!isBeginner) {
+          try {
+            await AsyncStorage.setItem(KAMADO_PROFILE_STORAGE_KEY, JSON.stringify(DEFAULT_KAMADO_OVEN_PROFILE));
+          } catch (error) {
+            console.error('Failed to persist the default Kamado profile.', error);
+          }
+          if (active) setKamadoProfile(DEFAULT_KAMADO_OVEN_PROFILE);
+        }
+        if (active) setKamadoProfileLoaded(true);
+      } catch (error) {
+        console.error('Failed to load saved Kamado profile.', error);
+        if (active) setKamadoProfileLoaded(true);
+      }
+    };
+    void restoreKamadoProfile();
+    return () => { active = false; };
+  }, [isBeginner]);
+
+  useEffect(() => {
     beginnerRestoreCoordinator.current.activate();
     const generation = beginnerRestoreCoordinator.current.begin();
+    loadedSettingsExperience.current = null;
     setPlannerNotificationRestoreStatus('pending');
     // Clear the prior experience snapshot before asynchronously loading the newly selected one.
     // eslint-disable-next-line react-hooks/set-state-in-effect -- A synchronous reset prevents stale plan data from rendering during restore.
@@ -515,13 +810,16 @@ export default function CalculatorHome() {
     const restoreLoaders = createBeginnerPlanRestoreLoaders({
       getItem: (key) => AsyncStorage.getItem(key),
     });
-    void beginnerRestoreCoordinator.current.load(generation, restoreLoaders).then((restoreData) => {
+    void beginnerRestoreCoordinator.current.load(generation, restoreLoaders).then(async (restoreData) => {
       if (!restoreData || !beginnerRestoreCoordinator.current.isCurrent(generation)) return;
       applyLoadedExperienceLevel(restoreData.experienceLevel);
       applyLoadedCalculatorPreferences(restoreData.preferences);
       if (!beginnerRestoreCoordinator.current.isCurrent(generation)) return;
       const { calculatorSettings: value, experienceLevel: loadedExperienceLevel, legacyBakeAt: legacyBakeAtValue, beginnerPlanSnapshot: beginnerPlanValue } = restoreData;
       const loadedIsBeginner = loadedExperienceLevel !== 'pro';
+      const storedOvenPreference = parseCalculatorOvenPreference(
+        await AsyncStorage.getItem(`${CALCULATOR_OVEN_PREFERENCE_PREFIX}${loadedIsBeginner ? 'beginner' : 'pro'}`),
+      );
       const storedPlan = parseBeginnerPlanSnapshot<HomePizzaPlanSchedule>(beginnerPlanValue, isHomeScheduleDurationValid);
       const storedPlanIsCurrent = loadedIsBeginner && storedPlan && isBeginnerPlanActive(storedPlan, new Date());
       if (storedPlanIsCurrent && storedPlan) {
@@ -539,13 +837,21 @@ export default function CalculatorHome() {
             setPizzaStyle(saved.pizzaStyle);
           }
           if (saved.romanFormat) setRomanFormat(saved.romanFormat);
-          if (typeof saved.trayWidth === 'number') {
-            setTrayWidth(saved.trayWidth);
-            setTrayWidthInput(String(saved.trayWidth));
+          if (restoreBeginnerStyles || isValidProTrayDimension(saved.trayWidth)) {
+            if (typeof saved.trayWidth === 'number') {
+              setTrayWidth(saved.trayWidth);
+              setTrayWidthInput(String(saved.trayWidth));
+            }
+          } else if (saved.trayWidth !== undefined) {
+            console.warn('Saved PRO tray width is invalid; the current value will be kept.');
           }
-          if (typeof saved.trayLength === 'number') {
-            setTrayLength(saved.trayLength);
-            setTrayLengthInput(String(saved.trayLength));
+          if (restoreBeginnerStyles || isValidProTrayDimension(saved.trayLength)) {
+            if (typeof saved.trayLength === 'number') {
+              setTrayLength(saved.trayLength);
+              setTrayLengthInput(String(saved.trayLength));
+            }
+          } else if (saved.trayLength !== undefined) {
+            console.warn('Saved PRO tray length is invalid; the current value will be kept.');
           }
           if (isFlourType(saved.flour)) setFlour(saved.flour);
           if (saved.flourStrengthSource === 'w' || saved.flourStrengthSource === 'protein' || saved.flourStrengthSource === 'unknown') {
@@ -561,13 +867,43 @@ export default function CalculatorHome() {
             setDiameter(restoreBeginnerStyles && (saved.pizzaStyle ?? 'neapolitan') === 'neapolitan' ? PIZZA_STYLE_PROFILES.neapolitan.defaultDiameter : saved.diameter);
           }
           if (saved.customBallWeight !== undefined) setCustomBallWeight(saved.customBallWeight);
-          if (saved.method === 'direct' || saved.method === 'biga' || saved.method === 'poolish') {
+          if (saved.method === 'direct' || saved.method === 'biga' || saved.method === 'poolish' || saved.method === 'sponge') {
             setMethod(saved.flour === 'glutenFree' ? 'direct' : saved.method);
           }
           if (typeof saved.bigaPct === 'number') setBigaPct(saved.bigaPct);
           if (typeof saved.poolishPct === 'number') setPoolishPct(saved.poolishPct);
           if (typeof saved.bigaHours === 'number') setBigaHours(saved.bigaHours);
           if (typeof saved.poolishHours === 'number') setPoolishHours(saved.poolishHours);
+          if (!loadedIsBeginner) {
+            if (typeof saved.bigaHydrationPct === 'number' && Number.isFinite(saved.bigaHydrationPct) && saved.bigaHydrationPct >= 10 && saved.bigaHydrationPct <= 200) setBigaHydrationPct(saved.bigaHydrationPct);
+            if (typeof saved.poolishHydrationPct === 'number' && Number.isFinite(saved.poolishHydrationPct) && saved.poolishHydrationPct >= 10 && saved.poolishHydrationPct <= 200) setPoolishHydrationPct(saved.poolishHydrationPct);
+            if (typeof saved.poolishFermentationTempC === 'number' && Number.isFinite(saved.poolishFermentationTempC) && saved.poolishFermentationTempC >= 4 && saved.poolishFermentationTempC <= 35) setPoolishFermentationTempC(saved.poolishFermentationTempC);
+            const restoredSpongeFlourPct = typeof saved.spongeFlourPct === 'number' ? saved.spongeFlourPct : SPONGE_YEAST_REFERENCE.flourShare;
+            const restoredSpongeHydrationPct = typeof saved.spongeHydrationPct === 'number' ? saved.spongeHydrationPct : 62;
+            const restoredTotalHydration = typeof saved.hydration === 'number' && Number.isFinite(saved.hydration) ? saved.hydration : hydration;
+            const spongeAllocationIsValid = isValidSpongeWaterAllocation(
+              restoredSpongeFlourPct,
+              restoredSpongeHydrationPct,
+              restoredTotalHydration,
+            );
+            if (spongeAllocationIsValid) {
+              setSpongeFlourPct(restoredSpongeFlourPct);
+              setSpongeHydrationPct(restoredSpongeHydrationPct);
+            } else {
+              console.warn('Saved Sponge flour and water allocation exceeds total hydration; Sponge settings will use their current values.');
+              if (saved.method === 'sponge') setMethod('direct');
+            }
+            if (typeof saved.spongeFermentationTempC === 'number' && Number.isFinite(saved.spongeFermentationTempC) && saved.spongeFermentationTempC >= 4 && saved.spongeFermentationTempC <= 35) setSpongeFermentationTempC(saved.spongeFermentationTempC);
+            if (typeof saved.spongeFermentationHours === 'number' && Number.isFinite(saved.spongeFermentationHours) && saved.spongeFermentationHours >= 0.5 && saved.spongeFermentationHours <= 48) setSpongeFermentationHours(saved.spongeFermentationHours);
+            setMethodYeastSettings(restoreMethodYeastSettings(saved.methodYeastSettings, {
+              mode: saved.spongeYeastMode,
+              yeastType: saved.spongeYeastType,
+              manualGrams: saved.spongeManualYeastGrams,
+            }, {
+              method: saved.method,
+              yeastType: getCachedPreferredYeastType(),
+            }));
+          }
           if (typeof saved.hydration === 'number') setHydration(saved.hydration);
           if (typeof saved.saltPct === 'number') setSaltPct(saved.saltPct);
           if (typeof saved.oilPct === 'number') setOilPct(saved.oilPct);
@@ -576,10 +912,14 @@ export default function CalculatorHome() {
           if (typeof saved.fridgeTemp === 'number') setFridgeTemp(saved.fridgeTemp);
           if (typeof saved.fridgeHours === 'number') setFridgeHours(saved.fridgeHours);
           if (typeof saved.useIce === 'boolean') setUseIce(saved.useIce);
-          if (saved.oven) setOven(saved.oven);
-          if (typeof saved.ovenTemp === 'number') {
-            setOvenTemp(saved.ovenTemp);
-            setOvenTempInput(String(saved.ovenTemp));
+          const beginnerSavedOven = isOvenType(saved.oven) && saved.oven !== 'kamado' ? saved.oven : 'homeStone';
+          const restoredOven = storedOvenPreference?.oven
+            ?? (isOvenType(saved.oven) && (!loadedIsBeginner || saved.oven !== 'kamado') ? saved.oven : null);
+          const restoredOvenTemp = storedOvenPreference?.ovenTemp ?? saved.ovenTemp;
+          if (restoredOven) setOven(restoredOven);
+          if (typeof restoredOvenTemp === 'number') {
+            setOvenTemp(restoredOvenTemp);
+            setOvenTempInput(String(restoredOvenTemp));
           }
           if (saved.pizzaStyle === 'romana' && saved.romanFormat === 'teglia' && !restoreBeginnerStyles) {
             setOven('homePan');
@@ -589,10 +929,16 @@ export default function CalculatorHome() {
           const savedMixing = parseMixingSelection(saved.mixing);
           if (savedMixing) setMixing(loadedIsBeginner && savedMixing === 'spiral' ? 'mixer' : savedMixing);
           if (loadedIsBeginner && !storedPlanIsCurrent && (saved.beginnerScheduleMode === 'roomOnly' || saved.beginnerScheduleMode === 'fridgeRoom')) setBeginnerScheduleMode(saved.beginnerScheduleMode);
-          if (restoreBeginnerStyles) applyBeginnerNormalized(saved);
+          if (restoreBeginnerStyles) {
+            applyBeginnerNormalized({
+              ...saved,
+              ...(storedOvenPreference ? storedOvenPreference : saved.oven === 'kamado' ? { oven: beginnerSavedOven } : {}),
+            });
+          }
         } catch {}
       }
       setSettingsLoaded(true);
+      loadedSettingsExperience.current = loadedIsBeginner;
       setSettingsLoadStatus('loaded');
       setPlannerNotificationRestoreStatus(loadedIsBeginner || restoredBakeAt !== undefined ? 'ready' : 'unavailable');
     }).catch((error) => {
@@ -617,11 +963,40 @@ export default function CalculatorHome() {
       flourStrengthSource,
       ...(flourStrengthSource === 'w' && strengthIsValid ? { flourW: parsedStrength } : {}),
       ...(flourStrengthSource === 'protein' && strengthIsValid ? { flourProteinPct: parsedStrength } : {}),
-      customBallWeight, method, bigaPct, poolishPct, bigaHours, poolishHours, hydration, saltPct, oilPct,
+      customBallWeight, method, bigaPct, poolishPct, bigaHours, poolishHours,
+      ...(!isBeginner ? {
+        bigaHydrationPct,
+        poolishHydrationPct,
+        poolishFermentationTempC,
+        spongeFlourPct,
+        spongeHydrationPct,
+        spongeFermentationTempC,
+        spongeFermentationHours,
+        spongeYeastType,
+        spongeYeastMode,
+        spongeManualYeastGrams,
+        methodYeastSettings,
+      } : {}),
+      hydration, saltPct, oilPct,
       roomTemp, roomHours, fridgeTemp, fridgeHours, useIce, oven, ovenTemp, mixing: mixingForExperience, beginnerScheduleMode,
     };
     AsyncStorage.setItem(CALCULATOR_SETTINGS_KEY, JSON.stringify(settings)).catch(() => {});
-  }, [settingsLoaded, settingsLoadStatus, experienceLoaded, pizzaStyle, romanFormat, trayWidth, trayLength, flour, flourStrengthSource, flourStrengthValue, blendA, blendB, blendPctA, pizzas, diameter, customBallWeight, method, bigaPct, poolishPct, bigaHours, poolishHours, hydration, saltPct, oilPct, roomTemp, roomHours, fridgeTemp, fridgeHours, useIce, oven, ovenTemp, mixing, mixingForExperience, beginnerScheduleMode]);
+  }, [settingsLoaded, settingsLoadStatus, experienceLoaded, pizzaStyle, romanFormat, trayWidth, trayLength, flour, flourStrengthSource, flourStrengthValue, blendA, blendB, blendPctA, pizzas, diameter, customBallWeight, method, bigaPct, bigaHydrationPct, poolishPct, poolishHydrationPct, poolishFermentationTempC, bigaHours, poolishHours, spongeFlourPct, spongeHydrationPct, spongeFermentationTempC, spongeFermentationHours, spongeYeastType, spongeYeastMode, spongeManualYeastGrams, methodYeastSettings, hydration, saltPct, oilPct, roomTemp, roomHours, fridgeTemp, fridgeHours, useIce, oven, ovenTemp, mixing, mixingForExperience, beginnerScheduleMode]);
+
+  useEffect(() => {
+    if (
+      !settingsLoaded
+      || settingsLoadStatus !== 'loaded'
+      || !experienceLoaded
+      || loadedSettingsExperience.current !== isBeginner
+    ) return;
+    void AsyncStorage.setItem(
+      `${CALCULATOR_OVEN_PREFERENCE_PREFIX}${isBeginner ? 'beginner' : 'pro'}`,
+      JSON.stringify({ oven, ovenTemp }),
+    ).catch((error) => {
+      console.error('Unable to save the oven preference for this experience mode:', error);
+    });
+  }, [settingsLoaded, settingsLoadStatus, experienceLoaded, isBeginner, oven, ovenTemp]);
 
   useEffect(() => {
     if (experienceLoaded && isBeginner) {
@@ -799,7 +1174,7 @@ export default function CalculatorHome() {
             endsAt: val.endsAt ?? (now + remainingMs),
           };
           const runningStillValid = hydrated.status === 'running' && hydrated.endsAt > now;
-          const pausedStillValid = hydrated.status === 'paused' && hydrated.remainingMs > 0;
+          const pausedStillValid = hydrated.status === 'paused' && (hydrated.remainingMs ?? 0) > 0;
           if ((runningStillValid || pausedStillValid) && !(isBeginner && /^(biga|poolish)[-_]/i.test(k))) {
             fresh[k] = hydrated;
           } else if (isBeginner && /^(biga|poolish)[-_]/i.test(k) && val?.notifId) {
@@ -998,7 +1373,9 @@ export default function CalculatorHome() {
   const flourProfile = FLOUR_PROFILES[flour];
   const temperatureUnit = useSyncExternalStore(subscribeTemperatureUnit, getCachedTemperatureUnit, getCachedTemperatureUnit) ?? 'celsius';
   const measurementSystem = useSyncExternalStore(subscribeMeasurementSystem, getCachedMeasurementSystem, getCachedMeasurementSystem) ?? 'metric';
-  const preferredYeastType = useSyncExternalStore(subscribePreferredYeastType, getCachedPreferredYeastType, getCachedPreferredYeastType) ?? 'fresh';
+  const globalPreferredYeastType = useSyncExternalStore(subscribePreferredYeastType, getCachedPreferredYeastType, getCachedPreferredYeastType) ?? 'fresh';
+  const preferredYeastType: PreferredYeastType = isBeginner ? globalPreferredYeastType : activeYeastSettings.yeastType;
+  const activeYeastType = preferredYeastType;
   // Default to the simpler, safe beginner presentation until a Pro choice is explicitly loaded.
   // Beginner-safe classification: only flag 'specific' once verified W/protein metadata actually exists for this flour.
   const flourStrengthCategory: 'specific' | 'generic' | 'custom' = flour === 'custom'
@@ -1028,12 +1405,32 @@ export default function CalculatorHome() {
     ny_style: require('../../assets/images/pizza-new-york.png'),
   };
   const isCustom = flour === 'custom';
+  const isProGlutenFreeBlend = !isBeginner && isCustom && isEffectivelyGlutenFreeBlend(blendA, blendB, blendPctA);
+  const isProEffectivelyGlutenFree = !isBeginner && (flour === 'glutenFree' || isProGlutenFreeBlend);
+  const isWorkflowGlutenFree = flour === 'glutenFree' || isProGlutenFreeBlend;
+  useEffect(() => {
+    if (isBeginner || isProMethodAllowedForFlour(selectedMethod, flour, blendA, blendB, blendPctA)) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Normalize saved or restored PRO methods before using the recipe.
+    setMethod('direct');
+  }, [isBeginner, selectedMethod, flour, blendA, blendB, blendPctA]);
   const customIdeal = useMemo(() => blendIdealHydration(blendA, blendB, blendPctA), [blendA, blendB, blendPctA]);
-  const idealHydration = isBeginner ? beginnerHydrationFor(pizzaStyle, flour) : flourProfile.ideal;
+  const idealHydration = isBeginner
+    ? beginnerHydrationFor(pizzaStyle, flour)
+    : isProGlutenFreeBlend
+      ? customIdeal
+      : flourProfile.ideal;
   const isIdealHydration = hydration === idealHydration;
   const inRange = isCustom
     ? Math.abs(hydration - customIdeal) <= 3
     : (hydration >= flourProfile.min && hydration <= flourProfile.max);
+  const hydrationRecommendation = isProGlutenFreeBlend
+    ? `${customIdeal - 3}–${customIdeal + 3}%`
+    : `${flourProfile.min}–${flourProfile.max}%`;
+  const defaultHydrationForStyle = (style: PizzaStyle) => {
+    if (isBeginner) return beginnerHydrationFor(style, flour);
+    if (isProEffectivelyGlutenFree) return isProGlutenFreeBlend ? customIdeal : FLOUR_PROFILES.glutenFree.ideal;
+    return PIZZA_STYLE_PROFILES[style].hydration;
+  };
 
   // Auto-adjust hydration when custom blend changes
   const changeFlour = (f: FlourType) => {
@@ -1043,9 +1440,11 @@ export default function CalculatorHome() {
       const previousIdeal = beginnerHydrationFor(pizzaStyle, flour);
       if (hydration === previousIdeal) setHydration(beginnerHydrationFor(pizzaStyle, f));
     } else if (f === 'custom') {
-      setHydration(blendIdealHydration(blendA, blendB, blendPctA));
+      const nextHydration = blendIdealHydration(blendA, blendB, blendPctA);
+      setHydration(!isBeginner ? Math.max(nextHydration, minimumTotalHydration) : nextHydration);
     } else {
-      setHydration(FLOUR_PROFILES[f].ideal);
+      const nextHydration = FLOUR_PROFILES[f].ideal;
+      setHydration(!isBeginner ? Math.max(nextHydration, minimumTotalHydration) : nextHydration);
     }
     try { Haptics.selectionAsync(); } catch {}
   };
@@ -1064,7 +1463,8 @@ export default function CalculatorHome() {
       setTrayWidthInput('30');
       setTrayLengthInput('40');
     }
-    setHydration(isBeginner ? beginnerHydrationFor(nextStyle, flour) : next.hydration);
+    const nextHydration = defaultHydrationForStyle(nextStyle);
+    setHydration(!isBeginner ? Math.max(nextHydration, minimumTotalHydration) : nextHydration);
     setSaltPct(next.saltPct);
     setOilPct(next.oilPct);
     setOven(nextStyle === 'neapolitan' ? 'ooni' : 'homeStone');
@@ -1090,11 +1490,84 @@ export default function CalculatorHome() {
     try { Haptics.selectionAsync(); } catch {}
   };
 
-  const selectOven = (nextOven: OvenType, temperature: number) => {
+  const selectOven = (nextOven: OvenType, temperature?: number) => {
     setOven(nextOven);
-    setOvenTemp(temperature);
+    if (nextOven !== 'kamado' && temperature !== undefined) setOvenTemp(temperature);
     setOvenTempEditing(false);
     if (isBeginner) scrollToBeginnerSection('plan');
+  };
+
+  const commitKamadoBakingTemperature = async () => {
+    const parsed = Number(kamadoBakingTemperatureInput.replace(',', '.'));
+    const bakingTemperatureC = temperatureInputToCelsius(parsed, temperatureUnit);
+    const validationMessage = !kamadoProfileReady || kamadoMaxTemperature === null
+      ? ({
+        hr: 'Najprije unesite i spremite maksimalnu dopuštenu temperaturu Kamada.',
+        en: 'Enter and save the maximum permitted Kamado temperature first.',
+        de: 'Geben Sie zuerst die maximal zulässige Kamado-Temperatur ein und speichern Sie sie.',
+        sl: 'Najprej vnesite in shranite najvišjo dovoljeno temperaturo Kamada.',
+      })[lang]
+      : !Number.isFinite(bakingTemperatureC) || bakingTemperatureC <= 0
+        ? ({
+          hr: 'Unesite valjanu pozitivnu temperaturu.',
+          en: 'Enter a valid positive temperature.',
+          de: 'Geben Sie eine gültige positive Temperatur ein.',
+          sl: 'Vnesite veljavno pozitivno temperaturo.',
+        })[lang]
+        : bakingTemperatureC > kamadoMaxTemperature
+          ? ({
+            hr: 'Odabrana temperatura pečenja ne smije biti viša od maksimalne dopuštene temperature Kamada.',
+            en: 'The selected baking temperature must not exceed the Kamado maximum.',
+            de: 'Die gewählte Backtemperatur darf die Kamado-Maximaltemperatur nicht überschreiten.',
+            sl: 'Izbrana temperatura peke ne sme biti višja od najvišje dovoljene temperature Kamada.',
+          })[lang]
+          : null;
+    if (validationMessage) {
+      Alert.alert(
+        ({ hr: 'Temperatura pečenja nije valjana', en: 'Baking temperature is invalid', de: 'Backtemperatur ist ungültig', sl: 'Temperatura peke ni veljavna' })[lang],
+        validationMessage,
+      );
+      setKamadoBakingTemperatureInput(kamadoProfile?.bakingTemperatureC === undefined
+        ? ''
+        : formatKamadoTemperatureInput(kamadoProfile.bakingTemperatureC, temperatureUnit));
+      setKamadoBakingTemperatureEditing(false);
+      return;
+    }
+    const profile = parseKamadoOvenProfile({
+      maximumTemperatureC: kamadoMaxTemperature ?? KAMADO_MAXIMUM_TEMPERATURE_C,
+      bakingTemperatureC,
+    });
+    if (!profile) {
+      console.error('Validated Kamado baking temperature produced an invalid profile.');
+      Alert.alert(
+        ({ hr: 'Temperatura pečenja nije spremljena', en: 'Baking temperature was not saved', de: 'Backtemperatur wurde nicht gespeichert', sl: 'Temperatura peke ni bila shranjena' })[lang],
+        ({
+          hr: 'Provjerite odabranu temperaturu i maksimalnu dopuštenu temperaturu uređaja.',
+          en: 'Check the selected temperature and the maximum permitted appliance temperature.',
+          de: 'Prüfen Sie die gewählte Temperatur und die maximal zulässige Gerätetemperatur.',
+          sl: 'Preverite izbrano temperaturo in najvišjo dovoljeno temperaturo naprave.',
+        })[lang],
+      );
+      setKamadoBakingTemperatureEditing(false);
+      return;
+    }
+    try {
+      await AsyncStorage.setItem(KAMADO_PROFILE_STORAGE_KEY, JSON.stringify(profile));
+      setKamadoProfile(profile);
+      setKamadoBakingTemperatureInput(formatKamadoTemperatureInput(bakingTemperatureC, temperatureUnit));
+    } catch (error) {
+      console.error('Failed to save Kamado baking temperature.', error);
+      Alert.alert(
+        ({ hr: 'Spremanje nije uspjelo', en: 'Save failed', de: 'Speichern fehlgeschlagen', sl: 'Shranjevanje ni uspelo' })[lang],
+        ({
+          hr: 'Temperatura pečenja nije spremljena. Pokušajte ponovno.',
+          en: 'The baking temperature was not saved. Please try again.',
+          de: 'Die Backtemperatur wurde nicht gespeichert. Bitte versuchen Sie es erneut.',
+          sl: 'Temperatura peke ni bila shranjena. Poskusite znova.',
+        })[lang],
+      );
+    }
+    setKamadoBakingTemperatureEditing(false);
   };
 
   const commitOvenTemperature = () => {
@@ -1110,7 +1583,8 @@ export default function CalculatorHome() {
 
   const resetStyleDefaults = () => {
     const profile = PIZZA_STYLE_PROFILES[pizzaStyle];
-    setHydration(isBeginner ? beginnerHydrationFor(pizzaStyle, flour) : profile.hydration);
+    const nextHydration = defaultHydrationForStyle(pizzaStyle);
+    setHydration(!isBeginner ? Math.max(nextHydration, minimumTotalHydration) : nextHydration);
     setSaltPct(profile.saltPct);
     setOilPct(profile.oilPct);
     setDiameter(profile.defaultDiameter);
@@ -1132,7 +1606,11 @@ export default function CalculatorHome() {
     if (which === 'a') { a = value; setBlendA(value); }
     if (which === 'b') { b = value; setBlendB(value); }
     if (which === 'pct') { p = value; setBlendPctA(value); }
-    if (flour === 'custom' && !isBeginner) setHydration(blendIdealHydration(a, b, p));
+    if (flour === 'custom' && !isBeginner) {
+      const nextHydration = blendIdealHydration(a, b, p);
+      setHydration(!isBeginner ? Math.max(nextHydration, minimumTotalHydration) : nextHydration);
+      if (!isProMethodAllowedForFlour(selectedMethod, flour, a, b, p)) setMethod('direct');
+    }
     try { Haptics.selectionAsync(); } catch {}
   };
 
@@ -1143,7 +1621,7 @@ export default function CalculatorHome() {
     : isBeginner
       ? customBallWeight ?? beginnerBallWeightForDiameter(pizzaStyle, diameter)
       : customBallWeight ?? (diameter === styleProfile.defaultDiameter ? styleProfile.ballWeight : dims.doughBall);
-  const prefermentHours = method === 'biga' ? bigaHours : method === 'poolish' ? poolishHours : 0;
+  const prefermentHours = method === 'biga' ? bigaHours : method === 'poolish' ? poolishHours : method === 'sponge' ? spongeFermentationHours : 0;
   const beginnerPlanInputKey = useMemo(() => createBeginnerPlanInputKeyFromState({
     bakeAt: sharedBakeAt?.getTime() ?? null,
     pizzaStyle, romanFormat, pizzas, effectiveBall, roomTemp, fridgeTemp, oven, ovenTemp,
@@ -1161,9 +1639,25 @@ export default function CalculatorHome() {
     setRestoredBeginnerPlanKey(canRestore ? snapshot.inputKey : null);
     setBeginnerPlanHydrated(true);
   }, [settingsLoaded, experienceLoaded, sharedBakeAt, beginnerPlanInputKey]);
-  const fermentationSchedule = useMemo(() => getFermentationSchedule({
-    method, prefermentHours, roomHours, roomTemp, fridgeHours, fridgeTemp,
-  }), [method, prefermentHours, roomHours, roomTemp, fridgeHours, fridgeTemp]);
+  const fermentationSchedule = useMemo(() => method === 'sponge'
+    ? getSpongeFermentationSchedule(
+      spongeFermentationHours,
+      spongeFermentationTempC,
+      roomHours,
+      roomTemp,
+      fridgeHours,
+      fridgeTemp,
+      fridgeHours > 0 ? roomHours : 0,
+    )
+    : getFermentationSchedule({
+      method,
+      prefermentHours,
+      prefermentTempC: !isBeginner && method === 'poolish' ? poolishFermentationTempC : undefined,
+      roomHours,
+      roomTemp,
+      fridgeHours,
+      fridgeTemp,
+    }), [isBeginner, method, prefermentHours, poolishFermentationTempC, roomHours, roomTemp, fridgeHours, fridgeTemp, spongeFermentationHours, spongeFermentationTempC]);
   const planCalculationNow = isBeginner && restoredBeginnerPlanKey === beginnerPlanInputKey && restoredBeginnerCalculationNow
     ? restoredBeginnerCalculationNow
     : scheduleCalculationNow;
@@ -1361,13 +1855,15 @@ export default function CalculatorHome() {
         actionable: true,
       });
     }
-    steps.push({
-      id: 'preheat',
-      label: `${t.beginnerCalc.preheat} · ${formatDuration(preheatMinutes * 60, lang)} · ${formatTemperature(ovenTemp, temperatureUnit)}`,
-      at: preheatAt,
-      activeUntil: bakeAt,
-      actionable: true,
-    });
+    if (oven !== 'kamado') {
+      steps.push({
+        id: 'preheat',
+        label: `${t.beginnerCalc.preheat} · ${formatDuration(preheatMinutes * 60, lang)} · ${formatTemperature(ovenTemp, temperatureUnit)}`,
+        at: preheatAt,
+        activeUntil: bakeAt,
+        actionable: true,
+      });
+    }
     const isTargetBeginnerDirect = beginnerDirectHome
       && pizzaStyle === 'neapolitan'
       && flour === 'caputo00'
@@ -1428,6 +1924,17 @@ export default function CalculatorHome() {
     if (method === 'direct' && activeProDirectHomeSchedule) {
       return getDirectHomeFermentationSchedule(activeProDirectHomeSchedule, roomTemp, fridgeTemp);
     }
+    if (method === 'sponge') {
+      return getSpongeFermentationSchedule(
+        spongeFermentationHours,
+        spongeFermentationTempC,
+        roomHours,
+        roomTemp,
+        fridgeHours,
+        fridgeTemp,
+        fridgeHours > 0 ? roomHours : 0,
+      );
+    }
     return getFermentationSchedule({
       method,
       prefermentHours,
@@ -1435,32 +1942,10 @@ export default function CalculatorHome() {
       roomTemp,
       fridgeHours,
       fridgeTemp,
-      roomAfterFridgeHours: fridgeHours > 0 ? getTemperingWindow(roomTemp).initialMinutes / 60 : 0,
+      prefermentTempC: method === 'poolish' ? poolishFermentationTempC : undefined,
+      roomAfterFridgeHours: fridgeHours > 0 ? roomHours : 0,
     });
-  }, [isBeginner, method, activeProDirectHomeSchedule, prefermentHours, roomHours, roomTemp, fridgeHours, fridgeTemp]);
-  useEffect(() => {
-    if (!settingsLoaded || !experienceLoaded) return;
-    setSharedCalculatorPlanSettings({
-      pizzaStyle,
-      romanFormat,
-      method,
-      mixing: toCalculatorMixing(mixingForExperience),
-      roomTemp,
-      roomHours,
-      fridgeTemp,
-      fridgeHours,
-      bigaHours,
-      poolishHours,
-      trayCount: pizzas,
-      doughPerTray: customBallWeight && customBallWeight > 0 ? customBallWeight : Math.round(trayWidth * trayLength * 0.4),
-      trayWidth,
-      trayLength,
-      proFermentationSchedule: proFermentationSchedule ?? null,
-    });
-  }, [
-    settingsLoaded, experienceLoaded, pizzaStyle, romanFormat, method, mixing, mixingForExperience, roomTemp, roomHours, fridgeTemp,
-    fridgeHours, bigaHours, poolishHours, pizzas, customBallWeight, trayWidth, trayLength, proFermentationSchedule,
-  ]);
+  }, [isBeginner, method, activeProDirectHomeSchedule, prefermentHours, poolishFermentationTempC, roomHours, roomTemp, fridgeHours, fridgeTemp, spongeFermentationHours, spongeFermentationTempC]);
   const bigaHomePlan = useMemo(() => {
     if (!isBeginner || method !== 'biga' || sharedBakeAt === null) return null;
     return createBigaHomePizzaPlan({
@@ -1817,6 +2302,18 @@ export default function CalculatorHome() {
   const dough = useMemo(() => doughCalc({
     pizzas, ballWeight: effectiveBall, hydration,
     saltPct, oilPct, method, bigaPct, poolishPct,
+    bigaHydrationPct: !isBeginner ? bigaHydrationPct : undefined,
+    poolishHydrationPct: !isBeginner ? poolishHydrationPct : undefined,
+    poolishFermentationTempC: !isBeginner && method === 'poolish' ? poolishFermentationTempC : undefined,
+    spongeFlourPct,
+    spongeHydrationPct,
+    spongeYeastMode,
+    spongeManualYeastGrams,
+    spongeYeastType,
+    yeastMode: !isBeginner ? activeYeastSettings.mode : 'automatic',
+    manualYeastGrams: !isBeginner ? activeYeastSettings.manualGrams : 0,
+    spongeFermentationTempC,
+    spongeFermentationHours,
     roomHours: legacyDoughHours.roomHours, roomTemp, fridgeHours: legacyDoughHours.fridgeHours, fridgeTemp,
     prefermentHours,
     mixing: toCalculatorMixing(mixingForExperience),
@@ -1830,17 +2327,151 @@ export default function CalculatorHome() {
             : 'neapolitan'
       : undefined,
     beginnerDirectMixing: isBeginner ? toBeginnerDirectMixing(mixingForExperience) : undefined,
-    yeastType: preferredYeastType,
-    flourType: flour,
+    yeastType: activeYeastType,
+    flourType: isProEffectivelyGlutenFree ? 'glutenFree' : flour,
     bigaHomeSchedule: bigaHomePlan?.schedule,
     poolishHomeSchedule: poolishHomePlan?.schedule,
     fermentationSchedule: proFermentationSchedule,
-  }), [pizzas, effectiveBall, hydration, saltPct, oilPct, method, bigaPct, poolishPct, prefermentHours, legacyDoughHours.roomHours, roomTemp, legacyDoughHours.fridgeHours, fridgeTemp, mixingForExperience, flour, pizzaStyle, isRomanTeglia, isBeginner, preferredYeastType, bigaHomePlan, poolishHomePlan, proFermentationSchedule]);
+  }), [pizzas, effectiveBall, hydration, saltPct, oilPct, method, bigaPct, bigaHydrationPct, poolishPct, poolishHydrationPct, poolishFermentationTempC, spongeFlourPct, spongeHydrationPct, spongeYeastMode, spongeManualYeastGrams, spongeYeastType, activeYeastSettings, activeYeastType, spongeFermentationTempC, spongeFermentationHours, prefermentHours, legacyDoughHours.roomHours, roomTemp, legacyDoughHours.fridgeHours, fridgeTemp, mixingForExperience, flour, blendA, blendB, blendPctA, pizzaStyle, isRomanTeglia, isBeginner, isProEffectivelyGlutenFree, preferredYeastType, bigaHomePlan, poolishHomePlan, proFermentationSchedule]);
+  const manualYeastBasisFlour = method === 'sponge' ? dough.preferment?.flour ?? 0 : dough.total.flour;
+  const activeManualYeastError = !isBeginner && activeYeastSettings.mode === 'manual'
+    ? validateManualYeastGrams(activeYeastSettings.manualInput, manualYeastBasisFlour)
+    : null;
+  const activeYeastQuantity = method === 'sponge' ? dough.preferment?.yeast ?? 0 : dough.total.yeast;
+  const activeYeastPercentage = method === 'sponge' ? dough.spongeYeastPct ?? 0 : dough.yeastPct;
+  const calculatorYeastSummary = useMemo(() => !isBeginner && !activeManualYeastError
+    ? {
+      method,
+      yeastType: activeYeastSettings.yeastType,
+      mode: activeYeastSettings.mode,
+      quantityGrams: activeYeastQuantity,
+      bakerPercentage: activeYeastPercentage,
+      ...(method === 'sponge' ? { finalDoughQuantityGrams: dough.main.yeast } : {}),
+    }
+    : null, [isBeginner, activeManualYeastError, method, activeYeastSettings, activeYeastQuantity, activeYeastPercentage, dough.main.yeast]);
+  useEffect(() => {
+    if (!settingsLoaded || !experienceLoaded) return;
+    const operation = isBeginner
+      ? AsyncStorage.removeItem(CALCULATOR_YEAST_SUMMARY_KEY)
+      : AsyncStorage.setItem(CALCULATOR_YEAST_SUMMARY_KEY, JSON.stringify(calculatorYeastSummary));
+    void operation.catch((error: unknown) => {
+      console.error('Unable to persist the current yeast summary for Planner.', error);
+    });
+  }, [settingsLoaded, experienceLoaded, isBeginner, calculatorYeastSummary]);
+  const spongePreparationPhase = useMemo(() => method === 'sponge' && dough.preferment
+    ? getSpongePreparationPhase(lang, {
+      flour: formatWeight(dough.preferment.flour, measurementSystem),
+      water: formatWeight(dough.preferment.water, measurementSystem),
+      yeast: formatWeight(dough.preferment.yeast, measurementSystem, true),
+      yeastType: spongeYeastType,
+      yeastPct: new Intl.NumberFormat(lang, { maximumFractionDigits: 2 }).format(dough.spongeYeastPct ?? 0),
+      fermentationTemp: formatTemperature(spongeFermentationTempC, temperatureUnit),
+      fermentationHours: spongeFermentationHours,
+    })
+    : null, [method, dough.preferment, dough.spongeYeastPct, lang, measurementSystem, spongeYeastType, spongeFermentationTempC, temperatureUnit, spongeFermentationHours]);
+  const spongePreparationByLanguage = useMemo(() => {
+    const preferment = dough.preferment;
+    if (method !== 'sponge' || !preferment) return null;
+    const forLanguage = (language: Lang) => getSpongePreparationPhase(language, {
+      flour: formatWeight(preferment.flour, measurementSystem),
+      water: formatWeight(preferment.water, measurementSystem),
+      yeast: formatWeight(preferment.yeast, measurementSystem, true),
+      yeastType: spongeYeastType,
+      yeastPct: new Intl.NumberFormat(language, { maximumFractionDigits: 2 }).format(dough.spongeYeastPct ?? 0),
+      fermentationTemp: formatTemperature(spongeFermentationTempC, temperatureUnit),
+      fermentationHours: spongeFermentationHours,
+    });
+    return {
+      hr: forLanguage('hr'),
+      en: forLanguage('en'),
+      de: forLanguage('de'),
+      sl: forLanguage('sl'),
+    };
+  }, [method, dough.preferment, dough.spongeYeastPct, measurementSystem, spongeYeastType, spongeFermentationTempC, temperatureUnit, spongeFermentationHours]);
+  useEffect(() => {
+    if (!settingsLoaded || !experienceLoaded) return;
+    const operation = !isBeginner && method === 'sponge' && spongePreparationByLanguage
+      ? AsyncStorage.setItem(SPONGE_PREPARATION_STORAGE_KEY, JSON.stringify({
+        byLanguage: spongePreparationByLanguage,
+      }))
+      : AsyncStorage.removeItem(SPONGE_PREPARATION_STORAGE_KEY);
+    void operation.catch((error: unknown) => {
+      console.error('Unable to persist the Sponge preparation phase for Planner.', error);
+    });
+  }, [settingsLoaded, experienceLoaded, isBeginner, method, spongePreparationByLanguage]);
+  useEffect(() => {
+    if (!settingsLoaded || !experienceLoaded) return;
+    setSharedCalculatorPlanSettings({
+      pizzaStyle,
+      romanFormat,
+      method,
+      mixing: toCalculatorMixing(mixingForExperience),
+      oven,
+      ovenTemp,
+      roomTemp,
+      roomHours,
+      fridgeTemp,
+      fridgeHours,
+      bigaHours,
+      bigaPct,
+      bigaHydrationPct,
+      poolishHours,
+      poolishPct,
+      poolishHydrationPct,
+      poolishFermentationTempC,
+      spongeFlourPct,
+      spongeHydrationPct,
+      spongeFermentationTempC,
+      spongeFermentationHours,
+      spongePreparation: spongePreparationPhase
+        ? { title: spongePreparationPhase.title, steps: spongePreparationPhase.steps }
+        : null,
+      spongePreparationByLanguage,
+      yeastSummary: calculatorYeastSummary,
+      trayCount: pizzas,
+      doughPerTray: customBallWeight && customBallWeight > 0 ? customBallWeight : Math.round(trayWidth * trayLength * 0.4),
+      trayWidth,
+      trayLength,
+      proFermentationSchedule: proFermentationSchedule ?? null,
+    });
+  }, [
+    settingsLoaded, experienceLoaded, pizzaStyle, romanFormat, method, mixing, mixingForExperience, oven, ovenTemp, roomTemp, roomHours, fridgeTemp,
+    fridgeHours, bigaHours, bigaPct, bigaHydrationPct, poolishHours, poolishPct, poolishHydrationPct, poolishFermentationTempC, spongeFlourPct, spongeHydrationPct, spongeFermentationTempC, spongeFermentationHours, spongePreparationPhase, spongePreparationByLanguage, calculatorYeastSummary, pizzas, customBallWeight, trayWidth, trayLength, proFermentationSchedule,
+  ]);
   const blendFlourAmounts = useMemo(() => splitFlourBlend(dough.main.flour, blendPctA), [dough.main.flour, blendPctA]);
   const selectedPrefermentHours = fermentationSchedule.prefermentHours;
   const prefermentRoomHours = fermentationSchedule.prefermentRoomHours;
   const prefermentFridgeHours = fermentationSchedule.prefermentFridgeHours;
-  const psylliumGrams = flour === 'glutenFree' ? (dough.total.psyllium ?? 0) : 0;
+  const prefermentRoomTemperature = method === 'sponge'
+    ? formatTemperature(spongeFermentationTempC, temperatureUnit)
+    : method === 'poolish' && !isBeginner
+      ? formatTemperature(poolishFermentationTempC, temperatureUnit)
+    : isBeginner ? `${roomTemp} °C` : formatTemperature(roomTemp, temperatureUnit);
+  const prefermentFridgeTemperature = isBeginner ? `${fridgeTemp} °C` : formatTemperature(fridgeTemp, temperatureUnit);
+  const spongeCopy = SPONGE_COPY[lang];
+  const spongeYeastTypeLabel = spongeCopy[spongeYeastType === 'fresh'
+    ? 'fresh'
+    : spongeYeastType === 'activeDry' ? 'activeDry' : 'instantDry'];
+  const prefermentTitle = method === 'biga'
+    ? `BIGA ${bigaPct}%`
+    : method === 'poolish'
+      ? `POOLISH ${poolishPct}%`
+      : method === 'sponge' ? 'SPONGE' : '';
+  const proPrefermentScheduleSummary = !isBeginner && method !== 'direct'
+    ? (() => {
+      const roomDuration = formatDuration(prefermentRoomHours * 3600, lang);
+      const fridgeDuration = formatDuration(prefermentFridgeHours * 3600, lang);
+      const totalDuration = formatDuration((prefermentRoomHours + prefermentFridgeHours) * 3600, lang);
+      const name = method === 'biga' ? 'Biga' : method === 'poolish' ? 'Poolish' : 'Sponge';
+      return ({
+        hr: `${name}: ${roomDuration} na sobnoj temperaturi (${prefermentRoomTemperature})${prefermentFridgeHours > 0 ? ` + ${fridgeDuration} u hladnjaku (${prefermentFridgeTemperature})` : ''}; ukupno ${totalDuration}.`,
+        en: `${name}: ${roomDuration} at room temperature (${prefermentRoomTemperature})${prefermentFridgeHours > 0 ? ` + ${fridgeDuration} refrigerated (${prefermentFridgeTemperature})` : ''}; ${totalDuration} total.`,
+        de: `${name}: ${roomDuration} bei Raumtemperatur (${prefermentRoomTemperature})${prefermentFridgeHours > 0 ? ` + ${fridgeDuration} im Kühlschrank (${prefermentFridgeTemperature})` : ''}; insgesamt ${totalDuration}.`,
+        sl: `${name}: ${roomDuration} pri sobni temperaturi (${prefermentRoomTemperature})${prefermentFridgeHours > 0 ? ` + ${fridgeDuration} v hladilniku (${prefermentFridgeTemperature})` : ''}; skupaj ${totalDuration}.`,
+      }[lang]);
+    })()
+    : '';
+  const psylliumGrams = isWorkflowGlutenFree ? (dough.total.psyllium ?? 0) : 0;
   const beginnerDisplayFlour = beginnerDirectHome
     ? Math.round((dough.totalDough - dough.total.water - dough.total.salt - dough.total.oil - dough.total.yeast - psylliumGrams) * 100) / 100
     : dough.total.flour;
@@ -1850,9 +2481,9 @@ export default function CalculatorHome() {
   const bigaHomeDisplayTotalFlour = beginnerNeapolitanBigaHome && dough.preferment
     ? dough.preferment.flour + bigaHomeDisplayMainFlour
     : dough.total.flour;
-  const yeastShortLabel = preferredYeastType === 'fresh'
+  const yeastShortLabel = activeYeastType === 'fresh'
     ? t.calc.freshYeastShort
-    : preferredYeastType === 'activeDry'
+    : activeYeastType === 'activeDry'
       ? t.calc.activeDryYeastShort
       : t.calc.dryYeastShort;
   const mixingInfo = ({
@@ -1862,7 +2493,7 @@ export default function CalculatorHome() {
     sl: 'Pri ročnem gnetenju testo obdelujete z rokami. Domači mešalnik uporabljajte po njegovih navodilih.',
   }[lang]);
   const yeastAwareHandMixSteps = {
-    A: { ...t.calc.handMixSteps.A, steps: adaptDirectMixingSteps(t.calc.handMixSteps.A.steps, lang, preferredYeastType, 'hand') },
+    A: { ...t.calc.handMixSteps.A, steps: adaptDirectMixingSteps(t.calc.handMixSteps.A.steps, lang, activeYeastType, 'hand', false, !isBeginner) },
   };
   const yeastAwareMixerSteps = {
     A: {
@@ -1871,9 +2502,10 @@ export default function CalculatorHome() {
       steps: adaptDirectMixingSteps(
         t.calc.mixerSteps.A.steps,
         lang,
-        preferredYeastType,
+        activeYeastType,
         mixingForExperience === 'spiral' ? 'spiral' : 'mixer',
         dough.total.oil > 0,
+        !isBeginner,
       ),
     },
   };
@@ -1889,13 +2521,18 @@ export default function CalculatorHome() {
   const ballInputValue = customBallInput !== '' && customBallInputSystem === measurementSystem
     ? customBallInput
     : ballWeightDisplay.split(' ')[0];
-  const idealFermentationText = method === 'biga'
-    ? ({
-      hr: `Idealno za Bigu: 8 sati RT na 18–20 °C + 16 sati hladnjak na 4–6 °C. Ukupno: 24 sata.`,
-      en: `Ideal for Biga: 8 hours at 18–20 °C + 16 hours refrigerated at 4–6 °C. Total: 24 hours.`,
-      de: `Ideal für Biga: 8 Stunden bei 18–20 °C + 16 Stunden im Kühlschrank bei 4–6 °C. Gesamt: 24 Stunden.`,
-      sl: `Idealno za Bigo: 8 ur pri 18–20 °C + 16 ur v hladilniku pri 4–6 °C. Skupaj: 24 ur.`,
-    }[lang])
+  const idealFermentationText = !isBeginner && method !== 'direct'
+    ? proPrefermentScheduleSummary
+    : method === 'biga'
+    ? (() => {
+      const coldTemperature = formatTemperature(fridgeTemp, temperatureUnit);
+      return ({
+        hr: `Idealno za Bigu: 8 sati RT na 18–20 °C + 16 sati hladnjak na ${coldTemperature}. Ukupno: 24 sata.`,
+        en: `Ideal for Biga: 8 hours at 18–20 °C + 16 hours refrigerated at ${coldTemperature}. Total: 24 hours.`,
+        de: `Ideal für Biga: 8 Stunden RT bei 18–20 °C + 16 Stunden im Kühlschrank bei ${coldTemperature}. Gesamt: 24 Stunden.`,
+        sl: `Idealno za Bigo: 8 ur pri 18–20 °C + 16 ur v hladilniku pri ${coldTemperature}. Skupaj: 24 ur.`,
+      }[lang]);
+    })()
     : ({
       hr: `Idealno za Poolish: 1 sat RT + 16–24 sata hladnjak.`,
       en: `Ideal for Poolish: 1 hour at room temperature + 16–24 hours refrigerated.`,
@@ -1912,8 +2549,12 @@ export default function CalculatorHome() {
     de: `Vorteig: ${selectedPrefermentHours} Std.\nEndgare Raumtemperatur: ${roomHours} Std.\nEndgare Kühlschrank: ${fridgeHours} Std.\nGesamt: ${selectedPrefermentHours + roomHours + fridgeHours} Std.\n\n${idealFermentationText}\n\nHefemenge (${yeastShortLabel}): ${dough.yeastPct}%`,
     sl: `Predtesto: ${selectedPrefermentHours} h\nKončna sobna temperatura: ${roomHours} h\nKončni hladilnik: ${fridgeHours} h\nSkupaj: ${selectedPrefermentHours + roomHours + fridgeHours} h\n\n${idealFermentationText}\n\nOdmerek kvasa (${yeastShortLabel}): ${dough.yeastPct}%`,
   }[lang]);
-  const ice = useMemo(() => !isBeginner && useIce ? iceCalc(dough.total.water, roomTemp, 4) : null, [isBeginner, useIce, dough.total.water, roomTemp]);
+  const iceWaterBase = method === 'direct' ? dough.total.water : dough.main.water;
+  const ice = useMemo(() => !isBeginner && useIce ? iceCalc(iceWaterBase, roomTemp, 4) : null, [isBeginner, useIce, iceWaterBase, roomTemp]);
   const waterTemperatureCalculation = dough.waterTemperature;
+  const instructionWaterTemperature = isBeginner
+    ? waterTemperatureCalculation?.recommendedWaterTemp
+    : dough.waterTemp;
   const isBeginnerDirectPhaseAStyle = pizzaStyle === 'neapolitan'
     || (pizzaStyle === 'romana' && romanFormat === 'tonda');
   const isTargetNeapolitanHandPhaseA = isBeginner
@@ -2082,10 +2723,10 @@ export default function CalculatorHome() {
       }[lang])
     : ice
     ? ({
-      hr: `Kalkulator je podijelio ukupno ${weight(dough.total.water)} vode na ${weight(ice.water)} vode i ${weight(ice.ice)} leda. Koristite te količine bez dodatne vode ili leda.`,
-      en: `The calculator splits ${weight(dough.total.water)} total water into ${weight(ice.water)} water and ${weight(ice.ice)} ice. Use these amounts without adding extra water or ice.`,
-      de: `Der Rechner teilt ${weight(dough.total.water)} Gesamtwasser in ${weight(ice.water)} Wasser und ${weight(ice.ice)} Eis auf. Verwenden Sie diese Mengen ohne zusätzliches Wasser oder Eis.`,
-      sl: `Kalkulator razdeli skupno ${weight(dough.total.water)} vode na ${weight(ice.water)} vode in ${weight(ice.ice)} ledu. Uporabite ti količini brez dodatne vode ali ledu.`,
+      hr: `Kalkulator je podijelio ${method === 'direct' ? 'ukupno' : 'preostalo'} ${weight(iceWaterBase)} vode na ${weight(ice.water)} vode i ${weight(ice.ice)} leda. Koristite te količine bez dodatne vode ili leda.`,
+      en: `The calculator splits ${method === 'direct' ? 'the total' : 'the remaining'} ${weight(iceWaterBase)} water into ${weight(ice.water)} water and ${weight(ice.ice)} ice. Use these amounts without adding extra water or ice.`,
+      de: `Der Rechner teilt ${method === 'direct' ? 'das gesamte' : 'das verbleibende'} Wasser (${weight(iceWaterBase)}) in ${weight(ice.water)} Wasser und ${weight(ice.ice)} Eis auf. Verwenden Sie diese Mengen ohne zusätzliches Wasser oder Eis.`,
+      sl: `Kalkulator razdeli ${method === 'direct' ? 'skupno' : 'preostalo'} ${weight(iceWaterBase)} vode na ${weight(ice.water)} vode in ${weight(ice.ice)} ledu. Uporabite te količine brez dodatne vode ali ledu.`,
     }[lang])
     : waterTemperatureCalculation
       ? ({
@@ -2134,16 +2775,38 @@ export default function CalculatorHome() {
       ...(flourStrengthSource === 'w' && Number.isFinite(parsedFlourStrength) && parsedFlourStrength > 0 ? { flourW: parsedFlourStrength } : {}),
       ...(flourStrengthSource === 'protein' && Number.isFinite(parsedFlourStrength) && parsedFlourStrength > 0 ? { flourProteinPct: parsedFlourStrength } : {}),
       pizzas, diameter, customBallWeight, method, bigaPct, poolishPct, bigaHours, poolishHours,
+      ...(!isBeginner ? {
+        bigaHydrationPct,
+        poolishHydrationPct,
+        poolishFermentationTempC,
+        spongeFlourPct,
+        spongeHydrationPct,
+        spongeFermentationTempC,
+        spongeFermentationHours,
+        spongeYeastType,
+        spongeYeastMode,
+        spongeManualYeastGrams,
+        methodYeastSettings,
+      } : {}),
       hydration, saltPct, oilPct, roomTemp, roomHours, fridgeTemp, fridgeHours, useIce, oven, ovenTemp, mixing,
-      preferredYeastType,
+      preferredYeastType: globalPreferredYeastType,
     },
     pizzas, diameter, hydration, method, flourType: flourName(lang, flour),
     style_id: pizzaStyle,
-    style_params: { ballWeight: effectiveBall, hydration, saltPct, oilPct, diameter, bigaPct, poolishPct },
+    style_params: { ballWeight: effectiveBall, hydration, saltPct, oilPct, diameter, bigaPct, poolishPct, ...(!isBeginner ? { bigaHydrationPct, poolishHydrationPct, poolishFermentationTempC } : {}) },
     ballWeight: effectiveBall,
     flour: dough.total.flour, water: dough.total.water,
     salt: dough.total.salt, oil: dough.total.oil, yeast: dough.total.yeast,
+    yeastType: activeYeastSettings.yeastType,
+    yeastMode: activeYeastSettings.mode,
+    manualYeastGrams: activeYeastSettings.manualGrams,
+    yeastQuantity: activeYeastQuantity,
+    yeastPercentage: activeYeastPercentage,
+    spongeYeastGrams: method === 'sponge' ? dough.preferment?.yeast ?? 0 : undefined,
+    finalDoughYeastGrams: method === 'sponge' ? dough.main.yeast : undefined,
+    spongeYeastType: method === 'sponge' ? spongeYeastType : undefined,
     psyllium: dough.total.psyllium ?? 0,
+    proMode: !isBeginner,
     sauce: dims.sauce * pizzas, cheese: dims.cheese * pizzas,
   });
 
@@ -2198,8 +2861,16 @@ export default function CalculatorHome() {
     }
     if (settings.pizzaStyle) setPizzaStyle(settings.pizzaStyle);
     if (settings.romanFormat) setRomanFormat(settings.romanFormat);
-    if (typeof settings.trayWidth === 'number') { setTrayWidth(settings.trayWidth); setTrayWidthInput(String(settings.trayWidth)); }
-    if (typeof settings.trayLength === 'number') { setTrayLength(settings.trayLength); setTrayLengthInput(String(settings.trayLength)); }
+    if (isBeginner || isValidProTrayDimension(settings.trayWidth)) {
+      if (typeof settings.trayWidth === 'number') { setTrayWidth(settings.trayWidth); setTrayWidthInput(String(settings.trayWidth)); }
+    } else if (settings.trayWidth !== undefined) {
+      console.warn('Saved PRO recipe tray width is invalid; the current value will be kept.');
+    }
+    if (isBeginner || isValidProTrayDimension(settings.trayLength)) {
+      if (typeof settings.trayLength === 'number') { setTrayLength(settings.trayLength); setTrayLengthInput(String(settings.trayLength)); }
+    } else if (settings.trayLength !== undefined) {
+      console.warn('Saved PRO recipe tray length is invalid; the current value will be kept.');
+    }
     if (settings.flour) setFlour(settings.flour);
     if (settings.flourStrengthSource === 'w' || settings.flourStrengthSource === 'protein' || settings.flourStrengthSource === 'unknown') {
       setFlourStrengthSource(settings.flourStrengthSource);
@@ -2215,11 +2886,38 @@ export default function CalculatorHome() {
     if (typeof settings.pizzas === 'number') setPizzas(settings.pizzas);
     if (typeof settings.diameter === 'number') setDiameter(settings.diameter);
     if (settings.customBallWeight !== undefined) setCustomBallWeight(settings.customBallWeight);
-    if (settings.method) setMethod(settings.flour === 'glutenFree' ? 'direct' : settings.method);
+    if (settings.method === 'direct' || settings.method === 'biga' || settings.method === 'poolish' || settings.method === 'sponge') {
+      setMethod(isBeginner || settings.flour === 'glutenFree' ? 'direct' : settings.method);
+    }
     if (typeof settings.bigaPct === 'number') setBigaPct(settings.bigaPct);
     if (typeof settings.poolishPct === 'number') setPoolishPct(settings.poolishPct);
     if (typeof settings.bigaHours === 'number') setBigaHours(settings.bigaHours);
     if (typeof settings.poolishHours === 'number') setPoolishHours(settings.poolishHours);
+    if (!isBeginner) {
+      if (typeof settings.bigaHydrationPct === 'number' && Number.isFinite(settings.bigaHydrationPct) && settings.bigaHydrationPct >= 10 && settings.bigaHydrationPct <= 200) setBigaHydrationPct(settings.bigaHydrationPct);
+      if (typeof settings.poolishHydrationPct === 'number' && Number.isFinite(settings.poolishHydrationPct) && settings.poolishHydrationPct >= 10 && settings.poolishHydrationPct <= 200) setPoolishHydrationPct(settings.poolishHydrationPct);
+      if (typeof settings.poolishFermentationTempC === 'number' && Number.isFinite(settings.poolishFermentationTempC) && settings.poolishFermentationTempC >= 4 && settings.poolishFermentationTempC <= 35) setPoolishFermentationTempC(settings.poolishFermentationTempC);
+      const restoredSpongeFlourPct = typeof settings.spongeFlourPct === 'number' ? settings.spongeFlourPct : SPONGE_YEAST_REFERENCE.flourShare;
+      const restoredSpongeHydrationPct = typeof settings.spongeHydrationPct === 'number' ? settings.spongeHydrationPct : 62;
+      const restoredTotalHydration = typeof settings.hydration === 'number' && Number.isFinite(settings.hydration) ? settings.hydration : hydration;
+      if (isValidSpongeWaterAllocation(restoredSpongeFlourPct, restoredSpongeHydrationPct, restoredTotalHydration)) {
+        setSpongeFlourPct(restoredSpongeFlourPct);
+        setSpongeHydrationPct(restoredSpongeHydrationPct);
+      } else {
+        console.warn('Saved Sponge recipe has an invalid flour and water allocation; Sponge will be changed to direct dough.');
+        if (settings.method === 'sponge') setMethod('direct');
+      }
+      if (typeof settings.spongeFermentationTempC === 'number' && Number.isFinite(settings.spongeFermentationTempC) && settings.spongeFermentationTempC >= 4 && settings.spongeFermentationTempC <= 35) setSpongeFermentationTempC(settings.spongeFermentationTempC);
+      if (typeof settings.spongeFermentationHours === 'number' && Number.isFinite(settings.spongeFermentationHours) && settings.spongeFermentationHours >= 0.5 && settings.spongeFermentationHours <= 48) setSpongeFermentationHours(settings.spongeFermentationHours);
+      setMethodYeastSettings(restoreMethodYeastSettings(settings.methodYeastSettings, {
+        mode: settings.spongeYeastMode,
+        yeastType: settings.spongeYeastType,
+        manualGrams: settings.spongeManualYeastGrams,
+      }, {
+        method: settings.method,
+        yeastType: settings.preferredYeastType,
+      }));
+    }
     if (typeof settings.hydration === 'number') setHydration(settings.hydration);
     if (typeof settings.saltPct === 'number') setSaltPct(settings.saltPct);
     if (typeof settings.oilPct === 'number') setOilPct(settings.oilPct);
@@ -2228,17 +2926,19 @@ export default function CalculatorHome() {
     if (typeof settings.fridgeTemp === 'number') setFridgeTemp(settings.fridgeTemp);
     if (typeof settings.fridgeHours === 'number') setFridgeHours(settings.fridgeHours);
     if (typeof settings.useIce === 'boolean') setUseIce(settings.useIce);
-    if (settings.oven) setOven(settings.oven);
+    if (isOvenType(settings.oven)) setOven(settings.oven);
     if (typeof settings.ovenTemp === 'number') { setOvenTemp(settings.ovenTemp); setOvenTempInput(String(settings.ovenTemp)); }
     const savedMixing = parseMixingSelection(settings.mixing);
     if (savedMixing) setMixing(isBeginner && savedMixing === 'spiral' ? 'mixer' : savedMixing);
-    if (isBeginner) applyBeginnerNormalized(settings);
+    if (isBeginner) {
+      applyBeginnerNormalized(settings.oven === 'kamado' ? { ...settings, oven, ovenTemp } : settings);
+    }
   };
 
   const saveNamedRecipe = async (name: string, recipeId?: string | null) => {
     const recipe = await saveRecipe();
-    const saved = !user
-      ? await saveProRecipe(name, recipe, recipeId)
+    const saved = OFFLINE_ONLY_MODE || !user
+      ? await saveLocalRecipe(name, recipe, recipeId)
       : recipeId
         ? await api(`/api/recipes/${recipeId}`, { method: 'PATCH', body: JSON.stringify({ name: name.trim(), recipe }) })
         : await api('/api/recipes', { method: 'POST', body: JSON.stringify({ name: name.trim(), recipe }) });
@@ -2247,7 +2947,7 @@ export default function CalculatorHome() {
   };
 
   const openSavedRecipes = () => {
-    if (!user && isBeginner) { router.push('/login'); return; }
+    if (!OFFLINE_ONLY_MODE && !user && isBeginner) { router.push('/login'); return; }
     setMoreTool('savedRecipes');
   };
 
@@ -2264,103 +2964,567 @@ export default function CalculatorHome() {
     setMoreTool('shopping');
   };
 
-  const bakingTimeRange = formatBakingTimeRange(oven, ovenTemp, lang);
-  const bakingDuration = `${formatTemperature(ovenTemp, temperatureUnit)} · ${bakingTimeRange}`;
+  const kamadoProfileForExperience = isBeginner && kamadoProfile?.isDefault ? null : kamadoProfile;
+  const kamadoMaxTemperature = getKamadoProfileTemperature(kamadoProfileForExperience);
+  const kamadoProfileReady = kamadoMaxTemperature !== null && Number.isFinite(kamadoMaxTemperature) && kamadoMaxTemperature > 0;
+  const kamadoBakingTemperature = kamadoProfileForExperience?.bakingTemperatureC ?? null;
+  const kamadoTemperatureDraft = kamadoBakingTemperatureEditing
+    ? temperatureInputToCelsius(Number(kamadoBakingTemperatureInput), temperatureUnit)
+    : kamadoBakingTemperature;
+  const kamadoTemperatureWithinMaximum = kamadoProfileReady
+    && isKamadoBakingTemperatureAllowed(kamadoTemperatureDraft, kamadoMaxTemperature);
+  const kamadoPizzaStyle = isRomanTeglia
+    ? 'romanaTeglia'
+    : pizzaStyle === 'romana'
+      ? 'romanaTonda'
+      : pizzaStyle === 'ny_style'
+        ? 'newYork'
+        : 'neapolitan';
+  const kamadoBakeTimeRange = !isBeginner && kamadoTemperatureWithinMaximum && kamadoTemperatureDraft !== null
+    ? getKamadoBakeTimeRange(kamadoTemperatureDraft, kamadoPizzaStyle)
+    : null;
+  const formattedKamadoBakeTimeRange = kamadoBakeTimeRange
+    ? formatKamadoBakeTimeRange(kamadoBakeTimeRange, lang)
+    : null;
+  const kamadoBakeTimeRecommendation = formatKamadoBakeTimeRecommendation(
+    kamadoTemperatureDraft,
+    kamadoPizzaStyle,
+    kamadoMaxTemperature,
+    lang,
+  );
+  const selectedKamadoTemperature = kamadoTemperatureWithinMaximum && kamadoTemperatureDraft !== null
+    ? kamadoTemperatureDraft
+    : null;
+  const bakingOvenTemperature = oven === 'kamado' ? null : ovenTemp;
+  const bakingTimeRange = oven === 'kamado' ? formattedKamadoBakeTimeRange ?? '' : formatBakingTimeRange(oven, ovenTemp, lang);
+  const bakingDuration = oven === 'kamado'
+    ? formattedKamadoBakeTimeRange && selectedKamadoTemperature !== null
+      ? `${formatTemperature(selectedKamadoTemperature, temperatureUnit)} · ${formattedKamadoBakeTimeRange}`
+      : ({
+        hr: 'Preporučeno vrijeme nije dostupno za ovu temperaturu i stil.',
+        en: 'No bake-time recommendation is available for this temperature and style.',
+        de: 'Für diese Temperatur und diesen Stil ist keine Backzeitempfehlung verfügbar.',
+        sl: 'Za to temperaturo in slog priporočeni čas peke ni na voljo.',
+      })[lang]
+    : `${formatTemperature(ovenTemp, temperatureUnit)} · ${bakingTimeRange}`;
   const ovenTempLabel = { hr: 'Temperatura pećnice', en: 'Oven temperature', de: 'Ofentemperatur', sl: 'Temperatura pečice' }[lang];
   const directStepIngredients = { ...dough.total, flour: beginnerDisplayFlour };
+  const proDirectStepIngredients = {
+    ...directStepIngredients,
+    water: !isBeginner && mixingForExperience !== 'hand' && ice?.ice ? ice.water : dough.total.water,
+  };
   const proFinalRestMinutes = proFermentationSchedule?.phases
     .filter((phase) => phase.kind === 'final-rest')
     .reduce((total, phase) => total + phase.hours * 60, 0) ?? 0;
-  const generatedDetailedDirectSteps = method === 'direct' && lang === 'hr'
-    ? getDetailedDirectSteps(mixingForExperience, directStepIngredients, dough.totalDough, pizzas, effectiveBall, diameter, directRecipeFridgeHours, directRecipeRoomHours, oven, ovenTemp, roomTemp, dims.cheese, dims.sauce, undefined, undefined, flour, pizzaStyle === 'romana' && romanFormat === 'tonda', isRomanTeglia, pizzaStyle === 'ny_style', pizzaStyle === 'neapolitan', { width: trayWidth, length: trayLength }, bakingTimeRange, waterTemperatureCalculation?.recommendedWaterTemp, isBeginner, isBeginner ? getBeginnerPhaseAFlourBehavior(flour, blendA, blendB) : undefined, waterTemperatureCalculation?.targetFinalDoughTemp, proFinalRestMinutes, preferredYeastType)
+  const proInitialRoomFermentationSeconds = proFermentationSchedule?.phases
+    .filter((phase) => phase.kind === 'final' && phase.environment === 'room')
+    .reduce((total, phase) => total + phase.hours * 3600, 0);
+  const proHasColdFermentation = proFermentationSchedule?.phases
+    .some((phase) => phase.kind === 'final' && phase.environment === 'fridge' && phase.hours > 0);
+  const proTegliaPrefermentP3Steps = (steps: readonly string[]) => {
+    if (isBeginner || !isRomanTeglia) return steps;
+    const proofWindowMinutes = proFermentationSchedule
+      ? getTegliaFinalProofWindowMinutes(proFermentationSchedule)
+      : 0;
+    const proofPlan = getTegliaFinalProofPlan(proofWindowMinutes);
+    const proofDuration = formatDuration(proofPlan.proofMinutes * 60, lang);
+    const bake = ({
+      hr: `Ravnomjerno rasporedite ${Math.round(dims.sauce)} g umaka i ${Math.round(dims.cheese)} g dobro ocijeđene mozzarelle, zatim pecite ${bakingTimeRange} na ${ovenTemp} °C prema uputama odabrane pećnice.`,
+      en: `Spread ${Math.round(dims.sauce)} g sauce and ${Math.round(dims.cheese)} g well-drained mozzarella evenly, then bake for ${bakingTimeRange} at ${ovenTemp} °C according to the selected oven instructions.`,
+      de: `Verteilen Sie ${Math.round(dims.sauce)} g Sauce und ${Math.round(dims.cheese)} g gut abgetropfte Mozzarella gleichmäßig und backen Sie anschließend ${bakingTimeRange} bei ${ovenTemp} °C nach den Anweisungen des ausgewählten Ofens.`,
+      sl: `Enakomerno razporedite ${Math.round(dims.sauce)} g omake in ${Math.round(dims.cheese)} g dobro odcejene mocarele, nato pecite ${bakingTimeRange} pri ${ovenTemp} °C po navodilih izbrane pečice.`,
+    }[lang]);
+    return [
+      steps[0],
+      steps[1],
+      proofPlan.proofMinutes > 0
+        ? ({
+          hr: `Po utiskivanju pokrijte tepsije i ostavite tijesto da se završno diže još ${proofDuration}; taj je odmor već uključen u raspored.`,
+          en: `After pressing, cover the trays and let the dough complete its final rise for ${proofDuration}; this rest is already included in the schedule.`,
+          de: `Decken Sie die Bleche nach dem Eindrücken ab und lassen Sie den Teig ${proofDuration} endgaren; diese Ruhezeit ist bereits im Zeitplan enthalten.`,
+          sl: `Po vtiskovanju pekače pokrijte in pustite testo končno vzhajati še ${proofDuration}; ta počitek je že vključen v načrt.`,
+        }[lang])
+        : ({
+          hr: 'Raspored ne ostavlja barem 75 minuta za pripremu tepsija i završno dizanje; pomaknite pečenje umjesto da dodajete zaseban odmor.',
+          en: 'The schedule does not leave at least 75 minutes for tray preparation and final proof; move the bake time rather than adding a separate rest.',
+          de: 'Der Zeitplan lässt weniger als 75 Minuten für die Blechvorbereitung und Endgare; verschieben Sie den Backzeitpunkt, statt eine zusätzliche Ruhezeit einzuplanen.',
+          sl: 'Načrt ne pušča vsaj 75 minut za pripravo pekačev in končno vzhajanje; prestavite peko, namesto da dodate ločen počitek.',
+        }[lang]),
+      bake,
+    ];
+  };
+  const buildDetailedDirectSteps = (beginnerTextMode: boolean): DetailedPhase[] | null => method === 'direct' && lang === 'hr'
+    ? getDetailedDirectSteps(mixingForExperience, beginnerTextMode ? directStepIngredients : proDirectStepIngredients, dough.totalDough, pizzas, effectiveBall, diameter, directRecipeFridgeHours, directRecipeRoomHours, oven, ovenTemp, roomTemp, dims.cheese, dims.sauce, undefined, undefined, !beginnerTextMode && isProEffectivelyGlutenFree ? 'glutenFree' : flour, pizzaStyle === 'romana' && romanFormat === 'tonda', isRomanTeglia, pizzaStyle === 'ny_style', pizzaStyle === 'neapolitan', { width: trayWidth, length: trayLength }, bakingTimeRange, instructionWaterTemperature, beginnerTextMode, beginnerTextMode ? getBeginnerPhaseAFlourBehavior(flour, blendA, blendB) : undefined, waterTemperatureCalculation?.targetFinalDoughTemp, proFinalRestMinutes, activeYeastType, fridgeTemp)
     : method === 'biga' && lang === 'hr'
       ? getDetailedDirectSteps(mixingForExperience, dough.total, dough.totalDough, pizzas, effectiveBall, diameter, fridgeHours, roomHours, oven, ovenTemp, roomTemp, dims.cheese, dims.sauce, {
         flour: dough.preferment?.flour ?? 0,
         water: dough.preferment?.water ?? 0,
         yeast: dough.preferment?.yeast ?? 0,
         remainingFlour: dough.main.flour,
-        remainingWater: dough.main.water,
+        remainingWater: !beginnerTextMode && !isBeginner && mixingForExperience !== 'hand' && ice?.ice ? ice.water : dough.main.water,
         pct: bigaPct,
-      }, undefined, flour, pizzaStyle === 'romana' && romanFormat === 'tonda', isRomanTeglia, pizzaStyle === 'ny_style', pizzaStyle === 'neapolitan', { width: trayWidth, length: trayLength }, bakingTimeRange, undefined, false, undefined, undefined, proFinalRestMinutes)
+      }, undefined, !beginnerTextMode && isProEffectivelyGlutenFree ? 'glutenFree' : flour, pizzaStyle === 'romana' && romanFormat === 'tonda', isRomanTeglia, pizzaStyle === 'ny_style', pizzaStyle === 'neapolitan', { width: trayWidth, length: trayLength }, bakingTimeRange, isBeginner ? undefined : dough.waterTemp, beginnerTextMode, undefined, undefined, proFinalRestMinutes, undefined, fridgeTemp)
     : method === 'poolish' && lang === 'hr'
       ? getDetailedDirectSteps(mixingForExperience, dough.total, dough.totalDough, pizzas, effectiveBall, diameter, fridgeHours, roomHours, oven, ovenTemp, roomTemp, dims.cheese, dims.sauce, undefined, {
         flour: dough.preferment?.flour ?? 0,
         water: dough.preferment?.water ?? 0,
         yeast: dough.preferment?.yeast ?? 0,
         remainingFlour: dough.main.flour,
-        remainingWater: dough.main.water,
+        remainingWater: !beginnerTextMode && !isBeginner && mixingForExperience !== 'hand' && ice?.ice ? ice.water : dough.main.water,
         pct: poolishPct,
-      }, flour, pizzaStyle === 'romana' && romanFormat === 'tonda', isRomanTeglia, pizzaStyle === 'ny_style', pizzaStyle === 'neapolitan', { width: trayWidth, length: trayLength }, bakingTimeRange, undefined, false, undefined, undefined, proFinalRestMinutes)
-    : method === 'direct' && (lang === 'de' || lang === 'en' || lang === 'sl') && (oven === 'homeStone' || oven === 'ooni' || oven === 'homePan')
-      ? getDetailedDirectStepsLocalized(lang, directStepIngredients, dough.totalDough, pizzas, effectiveBall, diameter, directRecipeFridgeHours, directRecipeRoomHours, roomTemp, dims.cheese, dims.sauce, oven, ovenTemp, bakingTimeRange, mixingForExperience, isRomanTeglia ? 'romanaTeglia' : pizzaStyle === 'romana' ? 'romanaTonda' : pizzaStyle === 'ny_style' ? 'newYork' : 'napolitana', flour, { width: trayWidth, length: trayLength }, waterTemperatureCalculation?.recommendedWaterTemp, isBeginner, isBeginner ? getBeginnerPhaseAFlourBehavior(flour, blendA, blendB) : undefined, waterTemperatureCalculation?.targetFinalDoughTemp, proFinalRestMinutes, preferredYeastType)
+      }, !beginnerTextMode && isProEffectivelyGlutenFree ? 'glutenFree' : flour, pizzaStyle === 'romana' && romanFormat === 'tonda', isRomanTeglia, pizzaStyle === 'ny_style', pizzaStyle === 'neapolitan', { width: trayWidth, length: trayLength }, bakingTimeRange, isBeginner ? undefined : dough.waterTemp, beginnerTextMode, undefined, undefined, proFinalRestMinutes, undefined, fridgeTemp)
+    : method === 'direct' && (lang === 'de' || lang === 'en' || lang === 'sl') && (oven === 'homeStone' || oven === 'ooni' || oven === 'homePan' || oven === 'kamado')
+      ? getDetailedDirectStepsLocalized(lang, beginnerTextMode ? directStepIngredients : proDirectStepIngredients, dough.totalDough, pizzas, effectiveBall, diameter, directRecipeFridgeHours, directRecipeRoomHours, roomTemp, fridgeTemp, dims.cheese, dims.sauce, oven, ovenTemp, bakingTimeRange, mixingForExperience, isRomanTeglia ? 'romanaTeglia' : pizzaStyle === 'romana' ? 'romanaTonda' : pizzaStyle === 'ny_style' ? 'newYork' : 'napolitana', !beginnerTextMode && isProEffectivelyGlutenFree ? 'glutenFree' : flour, { width: trayWidth, length: trayLength }, instructionWaterTemperature, beginnerTextMode, beginnerTextMode ? getBeginnerPhaseAFlourBehavior(flour, blendA, blendB) : undefined, waterTemperatureCalculation?.targetFinalDoughTemp, proFinalRestMinutes, activeYeastType)
     : null;
-  const detailedDirectSteps = mixingForExperience === 'spiral' && generatedDetailedDirectSteps
-    ? generatedDetailedDirectSteps.map((phase, phaseIndex) => {
-      const mixingPhaseIndex = method === 'direct' ? 0 : 1;
-      if (phaseIndex !== mixingPhaseIndex) return phase;
+  const generatedDetailedDirectSteps = (() => {
+    const phases = buildDetailedDirectSteps(isBeginner);
+    if (!phases) return null;
+    if (isBeginner) return oven === 'kamado' ? insertKamadoPreheatPhase(phases, lang, kamadoProfileForExperience) : phases;
+    const zeroIngredientInstruction = /\b0(?:\.0+)?\s*g\b.*(?:salt|soli|Salz|ulje|oil|Olivenöl|oljčnega|olja)/i;
+    return phases.map((phase) => ({
+      ...phase,
+      steps: phase.steps.filter((step) => !zeroIngredientInstruction.test(step)),
+    }));
+  })();
+  const proTextReferenceSteps = !isBeginner && generatedDetailedDirectSteps ? buildDetailedDirectSteps(true) : null;
+  if (!isBeginner && generatedDetailedDirectSteps && proTextReferenceSteps && generatedDetailedDirectSteps.length !== proTextReferenceSteps.length) {
+    console.error('PRO/Beginner phase alignment mismatch', {
+      generated: generatedDetailedDirectSteps.length,
+      reference: proTextReferenceSteps.length,
+      method,
+    });
+  }
+  const textAlignedDetailedDirectSteps = generatedDetailedDirectSteps && proTextReferenceSteps
+    ? alignProDirectSteps(generatedDetailedDirectSteps, proTextReferenceSteps, {
+      isProGlutenFreeBlend,
+      isProEffectivelyGlutenFree,
+      fridgeTemperatureText: formatTemperature(fridgeTemp, 'celsius'),
+    })
+    : generatedDetailedDirectSteps;
+  const addProPrefermentFinalYeast = !isBeginner
+    && (method === 'biga' || method === 'poolish')
+    && (mixingForExperience === 'hand' || mixingForExperience === 'mixer' || mixingForExperience === 'spiral');
+  const proPrefermentFinalYeastStep = preferredYeastType === 'fresh'
+    ? `Svježi kvasac za završno tijesto (${weight(dough.main.yeast, true)}) otopite u manjem dijelu prve porcije izmjerene preostale vode; otopinu uračunajte u sljedeće korake za dodavanje vode, ne povrh njih.`
+    : preferredYeastType === 'activeDry'
+      ? `Aktivni suhi kvasac za završno tijesto (${weight(dough.main.yeast, true)}) pripremite u dijelu tople prve porcije preostale vode prema uputama na pakiranju; otopinu uračunajte u sljedeće korake za dodavanje vode, ne povrh njih.`
+      : `Instant suhi kvasac za završno tijesto (${weight(dough.main.yeast, true)}) ravnomjerno umiješajte u preostalo brašno.`;
+  const proPrefermentDetailedSteps = addProPrefermentFinalYeast && textAlignedDetailedDirectSteps
+    ? textAlignedDetailedDirectSteps.map((phase, index) => {
+      if (index !== 0) return phase;
+      const insertionIndex = mixingForExperience === 'hand' ? 2 : 3;
+      return {
+        ...phase,
+        steps: [
+          ...phase.steps.slice(0, insertionIndex),
+          proPrefermentFinalYeastStep,
+          ...phase.steps.slice(insertionIndex),
+        ],
+      };
+    })
+    : textAlignedDetailedDirectSteps;
+  const applyBeginnerCustomFlourText = (labelled: string, phaseIndex: number): string => {
+    if (!isCustom || phaseIndex !== 0) return labelled;
+    const blendDetail = ` (${blendFlourAmounts.first} g ${flourName(lang, blendA)} + ${blendFlourAmounts.second} g ${flourName(lang, blendB)})`;
+    const blendFlourLabel = {
+      hr: 'mješavine brašna',
+      en: 'flour blend',
+      de: 'Mehlmischung',
+      sl: 'mešanice moke',
+    }[lang];
+    const neutralLabelled = labelled.replace(
+      /(\d+(?:\.\d+)? g )(?:of flour|(?:pirovog )?brašna|Mehl|moke)/,
+      `$1${blendFlourLabel}`,
+    );
+    return neutralLabelled.replace(/(\d+(?:\.\d+)? g (?:mješavine brašna|flour blend|Mehlmischung|mešanice moke))/, `$1${blendDetail}`);
+  };
+  const directInitialWaterPct: 80 | 90 = isRomanTeglia || (!isBeginner && pizzaStyle === 'romana' && romanFormat === 'tonda') ? 80 : 90;
+  const proIceWaterInstructions = !isBeginner && method !== 'sponge' && ice && ice.ice > 0
+    ? getProIceWaterInstructions({
+      lang,
+      method,
+      mixing: mixingForExperience,
+      waterBaseGrams: iceWaterBase,
+      liquidWaterGrams: ice.water,
+      iceGrams: ice.ice,
+      initialWaterPct: method === 'direct' ? directInitialWaterPct : 90,
+      formatWeight: weight,
+    })
+    : null;
+  const proSpiralFlourGrams = method === 'direct' ? dough.total.flour : dough.main.flour;
+  const proSpiralBlendAmounts = isCustom ? splitFlourBlend(proSpiralFlourGrams, blendPctA) : null;
+  const proSpiralFlourLabel = isCustom
+    ? ({ hr: 'mješavine brašna', en: 'flour blend', de: 'Mehlmischung', sl: 'mešanice moke' }[lang])
+    : flourName(lang, flour);
+  const proSpiralFlourBlendDescription = proSpiralBlendAmounts
+    ? [
+      ...(proSpiralBlendAmounts.first > 0 ? [`${weight(proSpiralBlendAmounts.first)} ${flourName(lang, blendA)}`] : []),
+      ...(proSpiralBlendAmounts.second > 0 ? [`${weight(proSpiralBlendAmounts.second)} ${flourName(lang, blendB)}`] : []),
+    ].join(' + ')
+    : undefined;
+  const proSpiralBlendBase = isCustom
+    ? blendPctA === 100 || blendA === blendB
+      ? blendA
+      : blendPctA === 0
+        ? blendB
+        : undefined
+    : flour;
+  const proSpiralFlourBehavior = isProEffectivelyGlutenFree
+    ? 'glutenFree'
+    : proSpiralBlendBase === 'manitoba'
+      ? 'manitoba'
+      : proSpiralBlendBase === 'spelt'
+        ? 'spelt'
+        : proSpiralBlendBase === 'wholeWheat'
+          ? 'wholeWheat'
+          : 'standard';
+  const directMixerRestSeconds = isWorkflowGlutenFree
+    ? undefined
+    : getDirectPhaseTimers('direct-mixer-A', roomHours, fridgeHours)
+      .find((timer) => timer.kind === 'rest')?.seconds;
+  const directMixerRestMinutes = directMixerRestSeconds === undefined
+    ? undefined
+    : directMixerRestSeconds / 60;
+  const proSpiralRecipe: SpiralMixingRecipe | undefined = !isBeginner
+    ? {
+      flourGrams: proSpiralFlourGrams,
+      flourLabel: proSpiralFlourLabel,
+      flourBlendDescription: proSpiralFlourBlendDescription,
+      prefermentGrams: method === 'direct'
+        ? undefined
+        : dough.preferment
+          ? dough.preferment.flour + dough.preferment.water + dough.preferment.yeast
+          : 0,
+      waterBaseGrams: iceWaterBase,
+      liquidWaterGrams: ice?.water ?? iceWaterBase,
+      iceGrams: ice?.ice ?? 0,
+      initialWaterPct: method === 'direct' ? directInitialWaterPct : 90,
+      yeastGrams: method === 'direct' ? dough.total.yeast : dough.main.yeast,
+      saltGrams: method === 'direct' ? dough.total.salt : dough.main.salt,
+      oilGrams: method === 'direct' ? dough.total.oil : dough.main.oil,
+      psylliumGrams: method === 'direct' && isWorkflowGlutenFree ? psylliumGrams : 0,
+      flourBehavior: proSpiralFlourBehavior,
+      restMinutes: method === 'direct' ? directMixerRestMinutes : undefined,
+      targetDoughTemperature: method === 'direct' ? waterTemperatureCalculation?.targetFinalDoughTemp : undefined,
+      formatWeight: weight,
+    }
+    : undefined;
+  const proHomeMixerDirectSteps = !isBeginner && method === 'direct' && mixingForExperience === 'mixer' && proSpiralRecipe
+    ? getProHomeMixerDirectSteps(lang, preferredYeastType, proSpiralRecipe)
+    : null;
+  const proDirectSpiralSteps = !isBeginner && method === 'direct' && mixingForExperience === 'spiral'
+    ? yeastAwareMixerSteps.A.steps
+    : null;
+  const generatedMixingSteps = !isBeginner && method !== 'sponge' && mixingForExperience === 'spiral' && textAlignedDetailedDirectSteps
+    ? textAlignedDetailedDirectSteps.map((phase, phaseIndex) => {
+      if (phaseIndex !== 0) return phase;
+      const steps = adaptSpiralMixerSourceSteps(
+        phase.steps.map((step) => labelSelectedYeast(
+          adaptDirectYeastStep(step, lang, preferredYeastType, true),
+          lang,
+          preferredYeastType,
+        )),
+        lang,
+      );
       return {
         ...phase,
         title: getSpiralMixingTitle(lang, method),
-        steps: getSpiralMixingSteps(lang, preferredYeastType, {
-          method,
-          hasOil: (method === 'direct' ? dough.total.oil : dough.main.oil) > 0,
-          ...(method === 'direct'
-            ? {
-              directStyle: isRomanTeglia
-                ? 'romanaTeglia'
-                : pizzaStyle === 'romana'
-                  ? 'romanaTonda'
-                  : pizzaStyle === 'ny_style'
-                    ? 'newYork'
-                    : 'napolitana',
-              directInitialWaterPct: isRomanTeglia ? 80 : 90,
-              directInitialWaterGrams: Math.round(directStepIngredients.water * (isRomanTeglia ? 0.8 : 0.9)),
-            }
-            : {}),
-        }),
-        stepInfo: undefined,
+        steps,
+        stepInfo: proSpiralRecipe ? getProSpiralMixingStepInfo(lang, proSpiralRecipe, steps) : phase.stepInfo,
       };
     })
-    : generatedDetailedDirectSteps;
-  const yeastAwareDetailedDirectSteps = method === 'direct' && !isBeginner && detailedDirectSteps
-    ? detailedDirectSteps.map((phase) => ({
-      ...phase,
-      steps: phase.steps.map((step) => adaptDirectYeastStep(step, lang, preferredYeastType)),
-    }))
+    : proPrefermentDetailedSteps;
+  const detailedDirectSteps = generatedMixingSteps && proIceWaterInstructions
+    ? generatedMixingSteps.map((phase, phaseIndex) => phaseIndex === 0
+      ? {
+        ...phase,
+        steps: mixingForExperience !== 'hand' || !proIceWaterInstructions.step
+          ? phase.steps
+          : [proIceWaterInstructions.step, ...phase.steps],
+        waterInfo: proIceWaterInstructions.waterInfo,
+      }
+      : phase)
+    : generatedMixingSteps;
+  const withProIceWaterInstruction = (steps: string[]) => proIceWaterInstructions
+    ? mixingForExperience !== 'hand' || !proIceWaterInstructions.step ? steps : [proIceWaterInstructions.step, ...steps]
+    : steps;
+  const getProIceWaterInfoStepIndex = (steps: string[]) => {
+    if (!proIceWaterInstructions) return undefined;
+    if (mixingForExperience === 'hand') return 0;
+    const preparationIndex = steps.findIndex((step) => {
+      const hasYeast = /kvas|yeast|hefe/i.test(step);
+      const hasWater = /vod|water|Wasser/i.test(step);
+      const prepares = /otop|rastop|dissolv|auflös|aufbereit|prepare|priprav|add|pour|ulij|dodaj|mix|misch|meš|miješ|mijes|umij|lös/i.test(step);
+      return hasYeast && hasWater && prepares;
+    });
+    if (preparationIndex >= 0) return preparationIndex;
+    const waterAdditionIndex = steps.findIndex((step) =>
+      /vod|water|Wasser/i.test(step)
+      && /add|pour|gradual|stream|postup|dolij|ulij|dodaj|hinzu|zugeb|gieß|nach und nach|wäss|vodo/i.test(step),
+    );
+    if (waterAdditionIndex < 0) throw new Error('PRO mixer water/yeast preparation step is missing from the displayed phase.');
+    return waterAdditionIndex;
+  };
+  const proPhaseEOptions: ProPhaseEOptions = {
+    lang,
+    variant: isRomanTeglia ? 'romanaTeglia' : pizzaStyle === 'romana' ? 'romanaTonda' : pizzaStyle === 'ny_style' ? 'newYork' : 'napolitana',
+    mixing: mixingForExperience,
+    oven,
+    ovenTemp: oven === 'kamado' ? selectedKamadoTemperature ?? 0 : bakingOvenTemperature ?? 0,
+    fridgeHours: method === 'direct' ? directRecipeFridgeHours : fridgeHours,
+    finalRestMinutes: proFinalRestMinutes,
+    diameter,
+    sauceAmount: dims.sauce,
+    cheeseAmount: dims.cheese,
+    trayCount: pizzas,
+    bakingTimeRange,
+    trayDimensions: { width: trayWidth, length: trayLength },
+    glutenFree: isWorkflowGlutenFree,
+  };
+  const proPhaseEStepsBase = !isBeginner && detailedDirectSteps
+    ? replaceProPhaseE(detailedDirectSteps, proPhaseEOptions)
     : detailedDirectSteps;
+  const proPhaseESteps = oven === 'kamado' && proPhaseEStepsBase
+    ? insertKamadoPreheatPhase(proPhaseEStepsBase, lang, kamadoProfileForExperience)
+    : proPhaseEStepsBase;
+  const proHomeMixerDetailedSteps = proHomeMixerDirectSteps && proPhaseESteps
+    ? proPhaseESteps.map((phase, index) => index === 0
+      ? {
+        ...phase,
+        steps: proHomeMixerDirectSteps,
+        stepInfo: proSpiralRecipe ? getProHomeMixerStepInfo(lang, proSpiralRecipe, proHomeMixerDirectSteps) : phase.stepInfo,
+        waterInfo: proIceWaterInstructions?.waterInfo,
+      }
+      : phase)
+    : null;
+  const proDirectRoomDurationSteps = !isBeginner
+    && method === 'direct'
+    && !isProEffectivelyGlutenFree
+    && proPhaseESteps
+    ? proPhaseESteps.map((phase, phaseIndex) => phaseIndex === 1
+      ? {
+        ...phase,
+        steps: [
+          ...phase.steps,
+          ({
+            hr: `Odabrano trajanje fermentacije na sobnoj temperaturi: ${formatDuration(directRecipeRoomHours * 3600, lang)}.`,
+            en: `Selected room-temperature fermentation duration: ${formatDuration(directRecipeRoomHours * 3600, lang)}.`,
+            de: `Ausgewählte Fermentationsdauer bei Raumtemperatur: ${formatDuration(directRecipeRoomHours * 3600, lang)}.`,
+            sl: `Izbrano trajanje fermentacije pri sobni temperaturi: ${formatDuration(directRecipeRoomHours * 3600, lang)}.`,
+          }[lang]),
+        ],
+      }
+      : phase)
+    : proPhaseESteps;
+  const proGlutenFreeRoomSteps = !isBeginner
+    && method === 'direct'
+    && isWorkflowGlutenFree
+    && proPhaseESteps
+    ? proPhaseESteps.map((phase, phaseIndex) => {
+      if (phaseIndex === 0) return adaptProGlutenFreeMixingPhaseA(phase, mixingForExperience);
+      if (phaseIndex !== 1 || proInitialRoomFermentationSeconds === undefined || proHasColdFermentation === undefined) return phase;
+      return adaptProGlutenFreeRoomPhaseB(
+          phase,
+          lang,
+          isRomanTeglia
+            ? 'romanaTeglia'
+            : pizzaStyle === 'romana'
+              ? 'romanaTonda'
+              : pizzaStyle === 'ny_style'
+                ? 'newYork'
+                : 'neapolitan',
+          Math.round(proInitialRoomFermentationSeconds),
+          formatTemperature(roomTemp, temperatureUnit),
+          proHasColdFermentation,
+        );
+    })
+    : proDirectRoomDurationSteps;
+  const proCroatianBulkSteps = [
+    'Lagano nauljite fermentacijsku posudu i prebacite tijesto u nju.',
+    `Pokrijte posudu i ostavite tijesto da odmori ${croatianMinutes(phaseBBulkRestMinutes(roomTemp))} na sobnoj temperaturi.`,
+    'Napravite prvi Stretch & Fold.',
+    `Ponovno pokrijte posudu i ostavite tijesto da odmori ${croatianMinutes(phaseBBulkRestMinutes(roomTemp))}.`,
+    'Napravite drugi Stretch & Fold.',
+    `Pokrijte posudu i ostavite tijesto da nastavi fermentirati još ${croatianMinutes(phaseBBulkRestMinutes(roomTemp))}.`,
+    'Provjerite prve znakove fermentacije prije nastavka.',
+  ];
+  const proTextDetailedDirectSteps = !isBeginner
+    && lang === 'hr'
+    && method === 'direct'
+    && mixingForExperience !== 'spiral'
+    && !isRomanTeglia
+    && !isWorkflowGlutenFree
+    && proGlutenFreeRoomSteps
+    ? proGlutenFreeRoomSteps.map((phase, phaseIndex) => phaseIndex === 1 ? { ...phase, steps: proCroatianBulkSteps } : phase)
+    : proGlutenFreeRoomSteps;
+  const proPhaseCDSteps = !isBeginner && !isRomanTeglia && !isWorkflowGlutenFree && proTextDetailedDirectSteps
+    ? proTextDetailedDirectSteps.map((phase) => {
+      const isDivisionPhase = /podjela|division|teilung|teilen|delitev/i.test(phase.title);
+      const isColdPhase = /hladna fermentacija|cold fermentation|kalte fermentation/i.test(phase.title);
+      if (isDivisionPhase) {
+        return {
+          ...phase,
+          steps: ({
+            hr: [
+              'Lagano pospite čistu radnu površinu brašnom. Brašno za radnu površinu nije uključeno u izračun recepta.',
+              'Nježno izvadite tijesto iz posude uz minimalno istiskivanje plinova.',
+              `Podijelite ukupno ${dough.totalDough} g tijesta na ${pizzas} jednakih komada od približno ${effectiveBall} g.`,
+              'Svaki komad nježno oblikujte u kuglicu. Podvucite rubove prema donjoj strani i zatvorite spoj kako biste stvorili blagu površinsku napetost bez trganja tijesta.',
+              'Stavite kuglice u fermentacijsku kutiju sa spojem prema dolje. Ostavite dovoljno razmaka između njih i zatvorite kutiju.',
+            ],
+            en: [
+              'Lightly flour a clean work surface. The flour used for the work surface is not included in the recipe calculation.',
+              'Gently remove the dough from the container while minimizing degassing.',
+              `Divide the total ${dough.totalDough} g of dough into ${pizzas} equal pieces of approximately ${effectiveBall} g each.`,
+              'Gently shape each piece into a dough ball. Tuck the edges underneath and seal the seam to create gentle surface tension without tearing the dough.',
+              'Place the dough balls in a fermentation box seam-side down. Leave enough space between them and close the box.',
+            ],
+            de: [
+              'Bestäuben Sie eine saubere Arbeitsfläche leicht mit Mehl. Das Mehl für die Arbeitsfläche ist nicht in der Rezeptberechnung enthalten.',
+              'Nehmen Sie den Teig vorsichtig aus dem Behälter und drücken Sie dabei möglichst wenig Gas aus.',
+              `Teilen Sie die insgesamt ${dough.totalDough} g Teig in ${pizzas} gleich große Stücke von jeweils etwa ${effectiveBall} g.`,
+              'Formen Sie jedes Stück vorsichtig zu einer Teigkugel. Schlagen Sie die Ränder nach unten ein und verschließen Sie die Naht, damit eine leichte Oberflächenspannung entsteht, ohne den Teig zu zerreißen.',
+              'Legen Sie die Teigkugeln mit der Naht nach unten in eine Gärbox. Lassen Sie genügend Abstand zwischen ihnen und schließen Sie die Box.',
+            ],
+            sl: [
+              'Rahlo pomokajte čisto delovno površino. Moka za delovno površino ni vključena v izračun recepta.',
+              'Testo nežno vzemite iz posode in pri tem čim manj iztisnite pline.',
+              `Skupno količino ${dough.totalDough} g testa razdelite na ${pizzas} enakih kosov po približno ${effectiveBall} g.`,
+              'Vsak kos nežno oblikujte v kroglico. Robove spodvihajte na spodnjo stran in spoj zaprite, da ustvarite rahlo površinsko napetost brez trganja testa.',
+              'Kroglice položite v posodo za fermentacijo s spojem navzdol. Med njimi pustite dovolj prostora in posodo zaprite.',
+            ],
+          }[lang]),
+        };
+      }
+      if (isColdPhase && fridgeHours > 0) {
+        return {
+          ...phase,
+          steps: ({
+            hr: [
+              `Premjestite zatvorenu fermentacijsku kutiju s kuglicama u hladnjak na približno ${formatTemperature(fridgeTemp, temperatureUnit)}.`,
+              `Ostavite kuglice da fermentiraju u hladnjaku ${formatDuration(fridgeHours * 3600, lang)}.`,
+            ],
+            en: [
+              `Move the closed fermentation box with the dough balls to the refrigerator at approximately ${formatTemperature(fridgeTemp, temperatureUnit)}.`,
+              `Leave the dough balls to ferment in the refrigerator for ${formatDuration(fridgeHours * 3600, lang)}.`,
+            ],
+            de: [
+              `Stellen Sie die geschlossene Gärbox mit den Teigkugeln bei etwa ${formatTemperature(fridgeTemp, temperatureUnit)} in den Kühlschrank.`,
+              `Lassen Sie die Teigkugeln ${formatDuration(fridgeHours * 3600, lang)} im Kühlschrank fermentieren.`,
+            ],
+            sl: [
+              `Zaprto posodo s testnimi kroglicami prestavite v hladilnik na približno ${formatTemperature(fridgeTemp, temperatureUnit)}.`,
+              `Kroglice pustite fermentirati v hladilniku ${formatDuration(fridgeHours * 3600, lang)}.`,
+            ],
+          }[lang]),
+        };
+      }
+      return phase;
+    })
+    : proTextDetailedDirectSteps;
+  const proTegliaPhaseCDSteps = method === 'direct' && !isBeginner && isRomanTeglia && proGlutenFreeRoomSteps
+    ? proGlutenFreeRoomSteps.map((phase, phaseIndex) => {
+      const isColdPhase = /hladna fermentacija|cold fermentation|kalte fermentation/i.test(phase.title);
+      if (phaseIndex === 2) {
+        return {
+          ...phase,
+          title: ({ hr: 'Faza C: Fermentacija jedne mase tijesta', en: 'Phase C: Fermentation of the Dough Mass', de: 'Phase C: Fermentation der Teigmasse', sl: 'Faza C: Fermentacija mase testa' }[lang]),
+          steps: ({
+            hr: [
+              'Nježno izvadite tijesto iz posude uz minimalno istiskivanje plinova.',
+              'Tijesto zadržite kao jednu masu; nemojte ga dijeliti u kuglice.',
+              'Nježno skupite tijesto u kompaktnu masu bez agresivnog zatezanja.',
+              'Prebacite masu u odgovarajuću pokrivenu posudu za fermentaciju i ostavite dovoljno prostora za širenje.',
+            ],
+            en: [
+              'Gently remove the dough from the container while minimizing degassing.',
+              'Keep the dough as one mass; do not divide it into dough balls.',
+              'Gently gather the dough into a compact mass without aggressively tightening it.',
+              'Transfer the mass to a suitable covered fermentation container and leave room for expansion.',
+            ],
+            de: [
+              'Nehmen Sie den Teig vorsichtig aus dem Behälter und drücken Sie dabei möglichst wenig Gas heraus.',
+              'Lassen Sie den Teig als eine Masse; teilen Sie ihn nicht in Teigkugeln.',
+              'Sammeln Sie den Teig vorsichtig zu einer kompakten Masse, ohne ihn stark zu straffen.',
+              'Geben Sie die Masse in einen geeigneten abgedeckten Gärbehälter und lassen Sie Platz zum Aufgehen.',
+            ],
+            sl: [
+              'Testo nežno vzemite iz posode in pri tem čim manj iztisnite pline.',
+              'Testo ohranite kot eno maso; ne delite ga na kroglice.',
+              'Testo nežno zberite v kompaktno maso brez močnega zategovanja.',
+              'Maso prenesite v ustrezno pokrito posodo za fermentacijo in pustite dovolj prostora za širjenje.',
+            ],
+          }[lang]),
+        };
+      }
+      if (isColdPhase && directRecipeFridgeHours > 0) {
+        return {
+          ...phase,
+          title: ({ hr: 'Faza D: Hladna fermentacija mase tijesta', en: 'Phase D: Cold Fermentation of the Dough Mass', de: 'Phase D: Kalte Fermentation der Teigmasse', sl: 'Faza D: Hladna fermentacija mase testa' }[lang]),
+          steps: ({
+            hr: [`Zatvorenu posudu s jednom masom tijesta prebacite u hladnjak na približno ${formatTemperature(fridgeTemp, temperatureUnit)}.`, `Ostavite cijelu masu da fermentira u hladnjaku ${formatDuration(directRecipeFridgeHours * 3600, lang)}.`],
+            en: [`Move the closed container with the single dough mass to the refrigerator at approximately ${formatTemperature(fridgeTemp, temperatureUnit)}.`, `Leave the complete dough mass to ferment in the refrigerator for ${formatDuration(directRecipeFridgeHours * 3600, lang)}.`],
+            de: [`Stellen Sie den geschlossenen Behälter mit der einzelnen Teigmasse bei etwa ${formatTemperature(fridgeTemp, temperatureUnit)} in den Kühlschrank.`, `Lassen Sie die gesamte Teigmasse ${formatDuration(directRecipeFridgeHours * 3600, lang)} im Kühlschrank fermentieren.`],
+            sl: [`Zaprto posodo z eno maso testa prestavite v hladilnik na približno ${formatTemperature(fridgeTemp, temperatureUnit)}.`, `Celotna masa naj fermentira v hladilniku ${formatDuration(directRecipeFridgeHours * 3600, lang)}.`],
+          }[lang]),
+        };
+      }
+      return phase;
+    })
+    : proPhaseCDSteps;
+  const yeastAwareDetailedDirectSteps = method === 'direct' && !isBeginner && proTegliaPhaseCDSteps
+    ? proTegliaPhaseCDSteps.map((phase, phaseIndex) => ({
+      ...phase,
+      steps: phase.steps.map((step) => applyBeginnerCustomFlourText(adaptDirectYeastStep(step, lang, preferredYeastType, true), phaseIndex)),
+    }))
+    : proPhaseCDSteps;
+  const kamadoProDirectSteps = oven === 'kamado'
+    && !isBeginner
+    && yeastAwareDetailedDirectSteps
+    ? insertKamadoPreheatPhase(
+      replaceProPhaseE(yeastAwareDetailedDirectSteps, proPhaseEOptions),
+      lang,
+      kamadoProfileForExperience,
+    )
+    : null;
+  const kamadoProHomeMixerSteps = mixingForExperience === 'mixer'
+    && proHomeMixerDirectSteps
+    && kamadoProDirectSteps
+    ? kamadoProDirectSteps.map((phase, phaseIndex) => phaseIndex === 0
+      ? {
+        ...phase,
+        steps: proHomeMixerDirectSteps,
+        stepInfo: proSpiralRecipe ? getProHomeMixerStepInfo(lang, proSpiralRecipe, proHomeMixerDirectSteps) : phase.stepInfo,
+        waterInfo: proIceWaterInstructions?.waterInfo,
+      }
+      : phase)
+    : null;
+  const proSpiralDirectInstructions = !isBeginner && method === 'direct' && mixingForExperience === 'spiral' && detailedDirectSteps
+    ? detailedDirectSteps.map((phase, phaseIndex) => phaseIndex === 0 ? phase : yeastAwareDetailedDirectSteps?.[phaseIndex] ?? phase)
+    : null;
   const beginnerDirectRecipeSteps = isBeginner && method === 'direct' && detailedDirectSteps
     ? detailedDirectSteps.map((phase, phaseIndex) => ({
       ...phase,
-      steps: phase.steps.map((step) => {
-        const labelled = adaptDirectYeastStep(step, lang, preferredYeastType);
-        if (!isCustom || phaseIndex !== 0) return labelled;
-        const blendDetail = ` (${blendFlourAmounts.first} g ${flourName(lang, blendA)} + ${blendFlourAmounts.second} g ${flourName(lang, blendB)})`;
-        const blendFlourLabel = {
-          hr: 'mješavine brašna',
-          en: 'flour blend',
-          de: 'Mehlmischung',
-          sl: 'mešanice moke',
-        }[lang];
-        const neutralLabelled = labelled.replace(
-          /(\d+(?:\.\d+)? g )(?:of flour|(?:pirovog )?brašna|Mehl|moke)/,
-          `$1${blendFlourLabel}`,
-        );
-        return neutralLabelled.replace(/(\d+(?:\.\d+)? g (?:mješavine brašna|flour blend|Mehlmischung|mešanice moke))/, `$1${blendDetail}`);
-      }),
+      steps: phase.steps.map((step) => applyBeginnerCustomFlourText(adaptDirectYeastStep(step, lang, preferredYeastType), phaseIndex)),
     }))
     : null;
   const beginnerDirectHomeSteps = beginnerDirectHome && beginnerDirectRecipeSteps
     ? isRomanTeglia
       ? buildBeginnerTegliaHomeSteps(beginnerDirectRecipeSteps, directHomeSchedule, beginnerPhaseBPlan!, roomTemp, lang, ovenTemp, bakingTimeRange, { width: trayWidth, length: trayLength }, flour, dims.sauce, dims.cheese, temperatureUnit, pizzas, weight(effectiveBall), weight(dough.totalDough))
-      : buildBeginnerDirectHomeSteps(beginnerDirectRecipeSteps, directHomeSchedule, beginnerPhaseBPlan!, roomTemp, fridgeTemp, ovenTemp, oven, bakingTimeRange, lang, preferredYeastType, pizzaStyle, diameter, dims.sauce, dims.cheese, flour, weight(dough.totalDough), weight(effectiveBall), pizzas)
+      : buildBeginnerDirectHomeSteps(beginnerDirectRecipeSteps, directHomeSchedule, beginnerPhaseBPlan!, roomTemp, fridgeTemp, bakingOvenTemperature ?? 0, oven, bakingTimeRange, lang, preferredYeastType, pizzaStyle, diameter, dims.sauce, dims.cheese, flour, weight(dough.totalDough), weight(effectiveBall), pizzas, kamadoProfileForExperience)
     : null;
   const beginnerUnscheduledDirectSteps = beginnerDirectRecipeSteps && !directHomeSchedule
-    ? buildBeginnerUnscheduledDirectSteps(beginnerDirectRecipeSteps, fridgeTemp, lang)
+    ? buildBeginnerUnscheduledDirectSteps(beginnerDirectRecipeSteps, fridgeTemp, lang, oven, pizzaStyle, kamadoProfileForExperience)
     : null;
   const bigaPreparation = method === 'biga'
     ? {
       title: ({ hr: 'Faza A: Priprema Bige', en: 'Phase A: Biga preparation', de: 'Phase A: Biga-Vorbereitung', sl: 'Faza A: Priprava bige' }[lang]),
-      info: ({ hr: `Biga čini ${bigaPct}% ukupnog brašna.`, en: `The biga makes up ${bigaPct}% of the total flour.`, de: `Die Biga enthält ${bigaPct}% des Gesamtmehls.`, sl: `Biga predstavlja ${bigaPct}% celotne moke.` }[lang]),
+      info: ({
+        hr: `Biga čini ${bigaPct}% ukupnog brašna uz ${bigaHydrationPct}% hidratacije.`,
+        en: `The biga uses ${bigaPct}% of the total flour at ${bigaHydrationPct}% hydration.`,
+        de: `Die Biga enthält ${bigaPct}% des Gesamtmehls bei ${bigaHydrationPct}% Hydration.`,
+        sl: `Biga vsebuje ${bigaPct}% celotne moke pri ${bigaHydrationPct}% hidraciji.`,
+      }[lang]),
       steps: [
         ({ hr: 'Operite i temeljito osušite ruke.', en: 'Wash and thoroughly dry your hands.', de: 'Waschen und trocknen Sie Ihre Hände gründlich.', sl: 'Umijte in temeljito osušite roke.' }[lang]),
         ({ hr: `Pripremite ${dough.preferment?.flour ?? 0} g brašna, ${dough.preferment?.water ?? 0} g vode i ${dough.preferment?.yeast ?? 0} g kvasca (${yeastShortLabel}).`, en: `Prepare ${dough.preferment?.flour ?? 0} g flour, ${dough.preferment?.water ?? 0} g water, and ${dough.preferment?.yeast ?? 0} g yeast (${yeastShortLabel}).`, de: `Bereiten Sie ${dough.preferment?.flour ?? 0} g Mehl, ${dough.preferment?.water ?? 0} g Wasser und ${dough.preferment?.yeast ?? 0} g Hefe (${yeastShortLabel}) vor.`, sl: `Pripravite ${dough.preferment?.flour ?? 0} g moke, ${dough.preferment?.water ?? 0} g vode in ${dough.preferment?.yeast ?? 0} g kvasa (${yeastShortLabel}).` }[lang]),
@@ -2386,8 +3550,10 @@ export default function CalculatorHome() {
               ? 'Aktivni suhi kvas raztopite v delu odmerjene tople vode po navodilih na embalaži; to vodo vštejte v vodo za bigo.'
               : 'Instant suhi kvas vmešajte v moko, nato dodajte vodo.',
         }[lang]),
-        ({ hr: `Rukama kratko povežite sastojke; smjesa treba ostati mrvičasta. Ostavite Bigu ${croatianHours(prefermentRoomHours)} na ${roomTemp} °C.`, en: `Briefly combine the ingredients; keep the mixture crumbly. Leave the Biga for ${prefermentRoomHours} hours at ${roomTemp} °C.`, de: `Vermengen Sie die Zutaten kurz; die Masse soll krümelig bleiben. Lassen Sie die Biga ${prefermentRoomHours} Stunden bei ${roomTemp} °C stehen.`, sl: `Sestavine na kratko povežite; zmes naj ostane drobtinasta. Bigo pustite ${prefermentRoomHours} ur pri ${roomTemp} °C.` }[lang]),
-        ({ hr: `Pokrijte Bigu i prebacite je u hladnjak na ${croatianHours(prefermentFridgeHours)} pri ${fridgeTemp} °C. Ukupno: ${croatianHours(bigaHours)}.`, en: `Cover the Biga and refrigerate it for ${prefermentFridgeHours} hours at ${fridgeTemp} °C. Total: ${bigaHours} hours.`, de: `Decken Sie die Biga ab und stellen Sie sie ${prefermentFridgeHours} Stunden bei ${fridgeTemp} °C in den Kühlschrank. Gesamt: ${bigaHours} Stunden.`, sl: `Bigo pokrijte in jo prestavite v hladilnik za ${prefermentFridgeHours} ur pri ${fridgeTemp} °C. Skupaj: ${bigaHours} ur.` }[lang]),
+        ({ hr: `Rukama kratko povežite sastojke; smjesa treba ostati mrvičasta. Ostavite Bigu ${croatianHours(prefermentRoomHours)} na ${prefermentRoomTemperature}.`, en: `Briefly combine the ingredients; keep the mixture crumbly. Leave the Biga for ${prefermentRoomHours} hours at ${prefermentRoomTemperature}.`, de: `Vermengen Sie die Zutaten kurz; die Masse soll krümelig bleiben. Lassen Sie die Biga ${prefermentRoomHours} Stunden bei ${prefermentRoomTemperature} stehen.`, sl: `Sestavine na kratko povežite; zmes naj ostane drobtinasta. Bigo pustite ${prefermentRoomHours} ur pri ${prefermentRoomTemperature}.` }[lang]),
+        ...((isBeginner || prefermentFridgeHours > 0) ? [
+          ({ hr: `Pokrijte Bigu i prebacite je u hladnjak na ${croatianHours(prefermentFridgeHours)} pri ${prefermentFridgeTemperature}. Ukupno: ${croatianHours(bigaHours)}.`, en: `Cover the Biga and refrigerate it for ${prefermentFridgeHours} hours at ${prefermentFridgeTemperature}. Total: ${bigaHours} hours.`, de: `Decken Sie die Biga ab und stellen Sie sie ${prefermentFridgeHours} Stunden bei ${prefermentFridgeTemperature} in den Kühlschrank. Gesamt: ${bigaHours} Stunden.`, sl: `Bigo pokrijte in jo prestavite v hladilnik za ${prefermentFridgeHours} ur pri ${prefermentFridgeTemperature}. Skupaj: ${bigaHours} ur.` }[lang]),
+        ] : []),
       ],
       timers: [{ id: `biga-fermentation-${mixingForExperience}`, seconds: bigaHours * 3600, kind: 'preferment' as const }],
     }
@@ -2469,10 +3635,10 @@ export default function CalculatorHome() {
     ? {
       title: ({ hr: 'Faza A: Priprema Poolisha', en: 'Phase A: Poolish preparation', de: 'Phase A: Poolish-Vorbereitung', sl: 'Faza A: Priprava Poolisha' }[lang]),
       info: ({
-        hr: `Poolish čini ${poolishPct}% ukupnog brašna uz 100% hidrataciju predfermenta.`,
-        en: `The Poolish uses ${poolishPct}% of the total flour at 100% preferment hydration.`,
-        de: `Der Poolish enthält ${poolishPct}% des Gesamtmehls bei 100% Vorteighydration.`,
-        sl: `Poolish vsebuje ${poolishPct}% celotne moke pri 100% hidraciji predtesta.`,
+        hr: `Poolish čini ${poolishPct}% ukupnog brašna uz ${poolishHydrationPct}% hidratacije predfermenta.`,
+        en: `The Poolish uses ${poolishPct}% of the total flour at ${poolishHydrationPct}% preferment hydration.`,
+        de: `Der Poolish enthält ${poolishPct}% des Gesamtmehls bei ${poolishHydrationPct}% Vorteighydration.`,
+        sl: `Poolish vsebuje ${poolishPct}% celotne moke pri ${poolishHydrationPct}% hidraciji predtesta.`,
       }[lang]),
       steps: [
         ({ hr: 'Operite i temeljito osušite ruke.', en: 'Wash and thoroughly dry your hands.', de: 'Waschen und trocknen Sie Ihre Hände gründlich.', sl: 'Umijte in temeljito osušite roke.' }[lang]),
@@ -2507,37 +3673,37 @@ export default function CalculatorHome() {
         }[lang]),
         ({
           hr: preferredYeastType === 'dry'
-            ? `Postupno dodajte ${dough.preferment?.water ?? 0} g vode uz miješanje pjenjačom ili vilicom dok smjesa ne bude glatka i tekuća.`
-            : `Dodajte ${dough.preferment?.flour ?? 0} g brašna i ostatak izmjerene vode uz miješanje pjenjačom ili vilicom dok smjesa ne bude glatka i tekuća.`,
+            ? `Postupno dodajte ${dough.preferment?.water ?? 0} g vode uz miješanje pjenjačom ili vilicom dok se sastojci ravnomjerno ne povežu.`
+            : `Dodajte ${dough.preferment?.flour ?? 0} g brašna i ostatak izmjerene vode uz miješanje pjenjačom ili vilicom dok se sastojci ravnomjerno ne povežu.`,
           en: preferredYeastType === 'dry'
-            ? `Gradually add ${dough.preferment?.water ?? 0} g water while whisking or stirring with a fork until smooth and liquid.`
-            : `Add ${dough.preferment?.flour ?? 0} g flour and the remaining measured water while whisking or stirring with a fork until smooth and liquid.`,
+            ? `Gradually add ${dough.preferment?.water ?? 0} g water while whisking or stirring with a fork until evenly combined.`
+            : `Add ${dough.preferment?.flour ?? 0} g flour and the remaining measured water while whisking or stirring with a fork until evenly combined.`,
           de: preferredYeastType === 'dry'
-            ? `${dough.preferment?.water ?? 0} g Wasser nach und nach einrühren, bis die Mischung glatt und flüssig ist.`
-            : `${dough.preferment?.flour ?? 0} g Mehl und das restliche abgemessene Wasser unter Rühren zugeben, bis die Mischung glatt und flüssig ist.`,
+            ? `${dough.preferment?.water ?? 0} g Wasser nach und nach einrühren, bis alles gleichmäßig vermischt ist.`
+            : `${dough.preferment?.flour ?? 0} g Mehl und das restliche abgemessene Wasser unter Rühren zugeben, bis alles gleichmäßig vermischt ist.`,
           sl: preferredYeastType === 'dry'
-            ? `Med mešanjem z metlico ali vilicami postopoma dodajte ${dough.preferment?.water ?? 0} g vode, da dobite gladko tekočo zmes.`
-            : `Dodajte ${dough.preferment?.flour ?? 0} g moke in preostalo odmerjeno vodo ter mešajte z metlico ali vilicami, dokler zmes ni gladka in tekoča.`,
+            ? `Med mešanjem z metlico ali vilicami postopoma dodajte ${dough.preferment?.water ?? 0} g vode, da se sestavine enakomerno povežejo.`
+            : `Dodajte ${dough.preferment?.flour ?? 0} g moke in preostalo odmerjeno vodo ter mešajte z metlico ali vilicami, da se sestavine enakomerno povežejo.`,
         }[lang]),
         ({
-          hr: `Pokrijte Poolish i ostavite ga ${croatianHours(prefermentRoomHours)} na ${roomTemp} °C.`,
-          en: `Cover the Poolish and leave it at ${roomTemp} °C for ${prefermentRoomHours} hours.`,
-          de: `Decken Sie den Poolish ab und lassen Sie ihn ${prefermentRoomHours} Stunden bei ${roomTemp} °C stehen.`,
-          sl: `Poolish pokrijte in ga pustite ${prefermentRoomHours} ur pri ${roomTemp} °C.`,
+          hr: `Pokrijte Poolish i ostavite ga ${croatianHours(prefermentRoomHours)} na ${prefermentRoomTemperature}.`,
+          en: `Cover the Poolish and leave it at ${prefermentRoomTemperature} for ${prefermentRoomHours} hours.`,
+          de: `Decken Sie den Poolish ab und lassen Sie ihn ${prefermentRoomHours} Stunden bei ${prefermentRoomTemperature} stehen.`,
+          sl: `Poolish pokrijte in ga pustite ${prefermentRoomHours} ur pri ${prefermentRoomTemperature}.`,
         }[lang]),
-        ({
-          hr: `Prebacite Poolish u hladnjak na ${croatianHours(prefermentFridgeHours)} pri ${fridgeTemp} °C. Ukupna fermentacija Poolisha traje ${croatianHours(poolishHours)}.`,
-          en: `Move the Poolish to the refrigerator at ${fridgeTemp} °C for ${prefermentFridgeHours} hours. Total Poolish fermentation: ${poolishHours} hours.`,
-          de: `Stellen Sie den Poolish für ${prefermentFridgeHours} Stunden bei ${fridgeTemp} °C in den Kühlschrank. Gesamte Poolish-Fermentation: ${poolishHours} Stunden.`,
-          sl: `Poolish prestavite v hladilnik pri ${fridgeTemp} °C za ${prefermentFridgeHours} ur. Skupna fermentacija Poolisha traja ${poolishHours} ur.`,
-        }[lang]),
+        ...((isBeginner || prefermentFridgeHours > 0) ? [({
+          hr: `Prebacite Poolish u hladnjak na ${croatianHours(prefermentFridgeHours)} pri ${prefermentFridgeTemperature}. Ukupna fermentacija Poolisha traje ${croatianHours(poolishHours)}.`,
+          en: `Move the Poolish to the refrigerator at ${prefermentFridgeTemperature} for ${prefermentFridgeHours} hours. Total Poolish fermentation: ${poolishHours} hours.`,
+          de: `Stellen Sie den Poolish für ${prefermentFridgeHours} Stunden bei ${prefermentFridgeTemperature} in den Kühlschrank. Gesamte Poolish-Fermentation: ${poolishHours} Stunden.`,
+          sl: `Poolish prestavite v hladilnik pri ${prefermentFridgeTemperature} za ${prefermentFridgeHours} ur. Skupna fermentacija Poolisha traja ${poolishHours} ur.`,
+        }[lang])] : []),
       ],
       timers: [
         { id: 'poolish-fermentation', seconds: poolishHours * 3600, kind: 'preferment' as const },
       ],
     }
     : null;
-  const poolishMixSteps = method === 'poolish' ? ({
+  const poolishMixSteps = method === 'poolish' && mixingForExperience === 'hand' ? ({
     hr: [
       'Operite i temeljito osušite ruke.',
       'Zreli Poolish prelijte u posudu za ručni zamjes.',
@@ -2552,8 +3718,8 @@ export default function CalculatorHome() {
         : preferredYeastType === 'activeDry'
           ? `Dodajte otopinu kvasca i ostatak prvih ${Math.round(dough.main.water * 0.9)} g vode tako da taj dio ukupno iznosi ${Math.round(dough.main.water * 0.9)} g, zatim postupno dodajte završnih ${Math.max(0, dough.main.water - Math.round(dough.main.water * 0.9))} g.`
         : `Dodajte ostatak prvih ${Math.round(dough.main.water * 0.9)} g vode, uključujući vodu s kvascem, zatim postupno dodajte završnih ${Math.max(0, dough.main.water - Math.round(dough.main.water * 0.9))} g.`,
-      `Dodajte ${dough.total.salt} g soli kao zaseban korak i nastavite mijesiti.`,
-      `Dodajte ${dough.total.oil} g maslinovog ulja i mijesite dok ga tijesto potpuno ne upije.`,
+      ...(dough.total.salt > 0 ? [`Dodajte ${dough.total.salt} g soli kao zaseban korak i nastavite mijesiti.`] : []),
+      ...(dough.total.oil > 0 ? [`Dodajte ${dough.total.oil} g maslinovog ulja i mijesite dok ga tijesto potpuno ne upije.`] : []),
     ],
     en: [
       'Wash and thoroughly dry your hands.',
@@ -2569,8 +3735,8 @@ export default function CalculatorHome() {
         : preferredYeastType === 'activeDry'
           ? `Add the reserved yeast solution and the remaining part of the first ${Math.round(dough.main.water * 0.9)} g water, making that portion total ${Math.round(dough.main.water * 0.9)} g; then gradually add the final ${Math.max(0, dough.main.water - Math.round(dough.main.water * 0.9))} g.`
           : `Add the rest of the first ${Math.round(dough.main.water * 0.9)} g portion, including the yeast solution, then gradually add the final ${Math.max(0, dough.main.water - Math.round(dough.main.water * 0.9))} g.`,
-      `Add ${dough.total.salt} g of salt as a separate step and continue kneading.`,
-      `Add ${dough.total.oil} g of olive oil and knead until fully absorbed.`,
+      ...(dough.total.salt > 0 ? [`Add ${dough.total.salt} g of salt as a separate step and continue kneading.`] : []),
+      ...(dough.total.oil > 0 ? [`Add ${dough.total.oil} g of olive oil and knead until fully absorbed.`] : []),
     ],
     de: [
       'Waschen und trocknen Sie Ihre Hände gründlich.',
@@ -2586,8 +3752,8 @@ export default function CalculatorHome() {
         : preferredYeastType === 'activeDry'
           ? `Geben Sie die Hefelösung und den restlichen Teil der ersten ${Math.round(dough.main.water * 0.9)} g Wasser dazu, sodass dieser Anteil insgesamt ${Math.round(dough.main.water * 0.9)} g beträgt; anschließend die letzten ${Math.max(0, dough.main.water - Math.round(dough.main.water * 0.9))} g nach und nach zugeben.`
         : `Geben Sie den restlichen Teil der ersten ${Math.round(dough.main.water * 0.9)} g einschließlich der Hefelösung dazu und anschließend die letzten ${Math.max(0, dough.main.water - Math.round(dough.main.water * 0.9))} g nach und nach.`,
-      `Geben Sie ${dough.total.salt} g Salz als separaten Schritt hinzu und kneten Sie weiter.`,
-      `Geben Sie ${dough.total.oil} g Olivenöl hinzu und kneten Sie, bis es vollständig aufgenommen ist.`,
+      ...(dough.total.salt > 0 ? [`Geben Sie ${dough.total.salt} g Salz als separaten Schritt hinzu und kneten Sie weiter.`] : []),
+      ...(dough.total.oil > 0 ? [`Geben Sie ${dough.total.oil} g Olivenöl hinzu und kneten Sie, bis es vollständig aufgenommen ist.`] : []),
     ],
     sl: [
       'Umijte in temeljito osušite roke.',
@@ -2603,8 +3769,8 @@ export default function CalculatorHome() {
         : preferredYeastType === 'activeDry'
           ? `Dodajte raztopino kvasa in preostali del prvih ${Math.round(dough.main.water * 0.9)} g vode, tako da ta delež skupaj znaša ${Math.round(dough.main.water * 0.9)} g; nato postopoma dodajte še zadnjih ${Math.max(0, dough.main.water - Math.round(dough.main.water * 0.9))} g.`
         : `Dodajte preostanek prvih ${Math.round(dough.main.water * 0.9)} g vode skupaj z raztopino kvasa, nato postopoma dodajte še zadnjih ${Math.max(0, dough.main.water - Math.round(dough.main.water * 0.9))} g.`,
-      `Dodajte ${dough.total.salt} g soli kot ločen korak in nadaljujte z gnetenjem.`,
-      `Dodajte ${dough.total.oil} g oljčnega olja in gnetite, dokler se popolnoma ne vpije.`,
+      ...(dough.total.salt > 0 ? [`Dodajte ${dough.total.salt} g soli kot ločen korak in nadaljujte z gnetenjem.`] : []),
+      ...(dough.total.oil > 0 ? [`Dodajte ${dough.total.oil} g oljčnega olja in gnetite, dokler se popolnoma ne vpije.`] : []),
     ],
   }[lang]) : null;
   const bigaHomeRecipePhases = beginnerNeapolitanBigaHome ? (() => {
@@ -2612,7 +3778,7 @@ export default function CalculatorHome() {
     const duration = (hours: number) => formatDuration(hours * 3600, lang);
     const roomTemperature = formatTemperature(roomTemp, temperatureUnit);
     const coldTemperature = formatTemperature(fridgeTemp, temperatureUnit);
-    const bakeTemperature = formatTemperature(ovenTemp, temperatureUnit);
+    const bakeTemperature = oven === 'kamado' ? '' : formatTemperature(ovenTemp, temperatureUnit);
     const preheatMinutes = oven === 'homeStone' ? 60 : 20;
     const shapingWindowHours = Math.min(0.25, schedule.finalBallRestHours);
     const finalRestBeforeShaping = Math.max(0, schedule.finalBallRestHours - shapingWindowHours);
@@ -2650,9 +3816,9 @@ export default function CalculatorHome() {
         ballingTitle: 'Faza D: Oblikovanje kuglica',
         bakeTitle: 'Faza E: Završni odmor, oblikovanje i pečenje',
         finalMixStart: 'U planirano vrijeme završnog zamjesa narežite ili natrgajte zrelu Bigu u posudu za zamjes.',
-        flourAndYeast: preferredYeastType === 'dry'
+        flourAndYeast: activeYeastType === 'dry'
           ? `Umiješajte ${weight(dough.main.yeast, true)} instant suhog kvasca u ${weight(bigaHomeDisplayMainFlour)} preostalog brašna pa ih povežite s Bigom.`
-          : preferredYeastType === 'activeDry'
+          : activeYeastType === 'activeDry'
             ? `Otopite ${weight(dough.main.yeast, true)} aktivnog suhog kvasca u dijelu tople izmjerene vode prema uputama na pakiranju i odložite otopinu. Povežite Bigu s ${weight(bigaHomeDisplayMainFlour)} preostalog brašna; otopinu dodajte u sljedećem koraku zajedno s preostalom vodom.`
             : `Svježi kvasac (${weight(dough.main.yeast, true)}) ravnomjerno izmrvite u ${weight(bigaHomeDisplayMainFlour)} preostalog brašna pa ih povežite s Bigom.`,
         salt: `Kad se brašno i voda povežu, dodajte ${weight(dough.main.salt)} soli i nastavite mijesiti.`,
@@ -2663,7 +3829,7 @@ export default function CalculatorHome() {
         finalRest: (before: string, total: string) => `Držite kuglice pokrivene. Završni odmor traje ${total} na ${roomTemperature} od planiranog vremena kuglanja do pečenja; oblikujte i nadjenite ih tijekom zadnjih ${duration(shapingWindowHours)} nakon ${before} odmora te lansirajte u planirano vrijeme.`,
         preheatStone: (minutes: number) => `U planirano vrijeme zagrijavanja postavite kamen ili čelik dvije rešetke ispod gornjeg grijača i zagrijte ga ${minutes} minuta na ${bakeTemperature} uz uključen grill.`,
         preheatOther: (minutes: number) => `U planirano vrijeme zagrijavanja zagrijte pećnicu ${minutes} minuta na ${bakeTemperature}.`,
-        shape: `Na semoli razvucite kuglu prstima od sredine prema rubu, ostavite rub oko 1–2 cm i oblikujte pizzu promjera ${diameter} cm; ne koristite valjak.`,
+        shape: `Neposredno prije oblikovanja lagano pospite kuglicu tijesta semolom sa svih strana. Na radnu površinu stavite nešto više semole, zatim položite kuglicu na nju i započnite oblikovanje pizze promjera ${diameter} cm; ne koristite valjak.`,
         sauce: `Ravnomjerno rasporedite ${weight(dims.sauce)} umaka po sredini i ostavite rub bez nadjeva.`,
         cheese: `Dodajte približno ${weight(dims.cheese)} mozzarelle i nemojte preopteretiti pizzu.`,
         launch: 'Lansirajte pizzu u pećnicu točno u planirano vrijeme pečenja.',
@@ -2690,7 +3856,7 @@ export default function CalculatorHome() {
         finalRest: (before: string, total: string) => `Keep the dough balls covered. The scheduled final ball rest runs for ${total} at ${roomTemperature} from Balling time to bake time; shape and top during the final ${duration(shapingWindowHours)} after ${before} of rest, then launch at T.`,
         preheatStone: (minutes: number) => `At the scheduled preheat time, place the stone or steel two rack positions below the upper heating element and preheat it for ${minutes} minutes at ${bakeTemperature} with the grill on.`,
         preheatOther: (minutes: number) => `At the scheduled preheat time, preheat the oven for ${minutes} minutes to ${bakeTemperature}.`,
-        shape: `Stretch the dough on semolina from the center outward, leave a 1–2 cm rim, and shape to ${diameter} cm; do not use a rolling pin.`,
+        shape: `Immediately before shaping, lightly coat the dough ball with semolina on all sides. Put a little more semolina on the work surface, then place the ball on it and begin shaping the pizza to ${diameter} cm; do not use a rolling pin.`,
         sauce: `Spread ${weight(dims.sauce)} sauce over the center, leaving the rim clear.`,
         cheese: `Add approximately ${weight(dims.cheese)} mozzarella without overloading the pizza.`,
         launch: 'Launch the pizza into the oven exactly at the scheduled bake time.',
@@ -2717,7 +3883,7 @@ export default function CalculatorHome() {
         finalRest: (before: string, total: string) => `Halten Sie die Teiglinge abgedeckt. Die geplante Endgare dauert ${total} bei ${roomTemperature} von der Ballzeit bis zum Backen; formen und belegen Sie sie nach ${before} Ruhezeit in den letzten ${duration(shapingWindowHours)} und backen Sie zur geplanten Zeit.`,
         preheatStone: (minutes: number) => `Platzieren Sie den Stein oder Stahl zum geplanten Zeitpunkt zwei Einschubebenen unter dem oberen Heizelement und heizen Sie ihn ${minutes} Minuten bei ${bakeTemperature} mit eingeschaltetem Grill vor.`,
         preheatOther: (minutes: number) => `Heizen Sie den Ofen zum geplanten Zeitpunkt ${minutes} Minuten lang auf ${bakeTemperature} vor.`,
-        shape: `Drücken und ziehen Sie den Teig auf Semola von der Mitte nach außen, lassen Sie einen 1–2 cm breiten Rand und formen Sie ihn auf ${diameter} cm; verwenden Sie kein Nudelholz.`,
+        shape: `Bestäuben Sie die Teigkugel unmittelbar vor dem Formen von allen Seiten leicht mit Semola. Geben Sie etwas mehr Semola auf die Arbeitsfläche, legen Sie die Kugel darauf und beginnen Sie, die Pizza auf ${diameter} cm zu formen; verwenden Sie kein Nudelholz.`,
         sauce: `Verteilen Sie ${weight(dims.sauce)} Sauce in der Mitte und lassen Sie den Rand frei.`,
         cheese: `Belegen Sie die Pizza mit ungefähr ${weight(dims.cheese)} Mozzarella, ohne sie zu überladen.`,
         launch: 'Schieben Sie die Pizza genau zur geplanten Backzeit in den Ofen.',
@@ -2744,7 +3910,7 @@ export default function CalculatorHome() {
         finalRest: (before: string, total: string) => `Kroglice hranite pokrite. Načrtovani končni počitek traja ${total} pri ${roomTemperature} od oblikovanja do peke; po ${before} počitka jih v zadnjih ${duration(shapingWindowHours)} oblikujte in obložite ter pico vstavite ob načrtovanem času.`,
         preheatStone: (minutes: number) => `Ob načrtovanem času segrevanja postavite kamen ali jeklo dve rešetki pod zgornji grelni element in ga ${minutes} minut segrevajte pri ${bakeTemperature} z vklopljenim žarom.`,
         preheatOther: (minutes: number) => `Ob načrtovanem času segrevajte pečico ${minutes} minut na ${bakeTemperature}.`,
-        shape: `Na zdrobu testo razprite od sredine navzven, pustite rob 1–2 cm in oblikujte pico premera ${diameter} cm; ne uporabljajte valjarja.`,
+        shape: `Tik pred oblikovanjem kroglico testa z vseh strani rahlo posujte z zdrobom. Na delovno površino dajte nekoliko več zdroba, nato nanjo položite kroglico in začnite oblikovati pico do premera ${diameter} cm; ne uporabljajte valjarja.`,
         sauce: `Po sredini enakomerno razporedite ${weight(dims.sauce)} omake in pustite rob prost.`,
         cheese: `Dodajte približno ${weight(dims.cheese)} mocarele in pice ne preobložite.`,
         launch: 'Pico vstavite v pečico točno ob načrtovanem času peke.',
@@ -2767,16 +3933,16 @@ export default function CalculatorHome() {
         sl: 'Ob načrtovanem končnem mešanju bigo natrgajte v posodo mešalnika, namestite kavelj za testo in začnite pri hitrosti 1.',
       }[lang]),
       ({
-        hr: preferredYeastType === 'activeDry'
+        hr: activeYeastType === 'activeDry'
           ? `Otopite ${weight(dough.main.yeast, true)} aktivnog suhog kvasca u dijelu tople izmjerene vode prema uputama na pakiranju i odložite otopinu. Dodajte ${weight(bigaHomeDisplayMainFlour)} preostalog brašna i miješajte s Bigom u 1. brzini; otopinu dodajte sa preostalom vodom u sljedećem koraku.`
           : `Dodajte ${weight(bigaHomeDisplayMainFlour)} preostalog brašna i ${weight(dough.main.yeast, true)} završnog kvasca (${yeastShortLabel}); miješajte s Bigom u 1. brzini.`,
-        en: preferredYeastType === 'activeDry'
+        en: activeYeastType === 'activeDry'
           ? `Dissolve ${weight(dough.main.yeast, true)} active dry yeast in part of the measured warm water according to the package directions and set the solution aside. Add ${weight(bigaHomeDisplayMainFlour)} remaining flour and mix with the Biga on speed 1; add the solution with the remaining water in the next step.`
           : `Add ${weight(bigaHomeDisplayMainFlour)} remaining flour and ${weight(dough.main.yeast, true)} final-dough yeast (${yeastShortLabel}); mix with the Biga on speed 1.`,
-        de: preferredYeastType === 'activeDry'
+        de: activeYeastType === 'activeDry'
           ? `Lösen Sie ${weight(dough.main.yeast, true)} Aktiv-Trockenhefe nach Packungsanleitung in einem Teil des abgemessenen warmen Wassers auf und stellen Sie die Lösung beiseite. Geben Sie ${weight(bigaHomeDisplayMainFlour)} restliches Mehl dazu und mischen Sie mit der Biga auf Stufe 1; geben Sie die Lösung im nächsten Schritt mit dem restlichen Wasser dazu.`
           : `Geben Sie ${weight(bigaHomeDisplayMainFlour)} restliches Mehl und ${weight(dough.main.yeast, true)} Hefe für den Hauptteig (${yeastShortLabel}) dazu und mischen Sie mit der Biga auf Stufe 1.`,
-        sl: preferredYeastType === 'activeDry'
+        sl: activeYeastType === 'activeDry'
           ? `${weight(dough.main.yeast, true)} aktivnega suhega kvasa raztopite v delu odmerjene tople vode po navodilih na embalaži in raztopino odložite. Dodajte ${weight(bigaHomeDisplayMainFlour)} preostale moke in mešajte z bigo pri hitrosti 1; raztopino dodajte v naslednjem koraku skupaj s preostalo vodo.`
           : `Dodajte ${weight(bigaHomeDisplayMainFlour)} preostale moke in ${weight(dough.main.yeast, true)} kvasa za končno testo (${yeastShortLabel}) ter mešajte z bigo pri hitrosti 1.`,
       }[lang]),
@@ -2795,7 +3961,7 @@ export default function CalculatorHome() {
       }[lang]),
     ];
     const finalMixSteps = mixingForExperience === 'spiral'
-      ? getSpiralMixingSteps(lang, preferredYeastType, { method: 'biga', hasOil: dough.main.oil > 0 })
+      ? getSpiralMixingSteps(lang, activeYeastType, { method: 'biga', hasOil: dough.main.oil > 0 })
       : mixingForExperience === 'mixer'
         ? mixerFinalMixSteps
         : [copy.finalMixStart, copy.flourAndYeast, remainingWater, copy.salt, copy.oil];
@@ -2808,12 +3974,22 @@ export default function CalculatorHome() {
     const preheat = oven === 'homeStone'
       ? copy.preheatStone(preheatMinutes)
       : copy.preheatOther(preheatMinutes);
-    const baking = oven === 'homeStone'
+    const baking = oven === 'kamado'
+      ? getKamadoBakeBlockedText(lang)
+      : oven === 'homeStone'
       ? copy.stoneBake(bakingTimeRange)
-      : oven === 'ooni'
+      : usesPizzaOvenBehavior(oven)
         ? copy.ooniBake(bakingTimeRange)
         : copy.panBake(bakingTimeRange);
-    return [
+    const launch = oven === 'kamado'
+      ? ({
+        hr: 'Pažljivo prenesite pizzu na zagrijani kamen u Kamadu i zatvorite poklopac.',
+        en: 'Carefully transfer the pizza to the heated stone in the Kamado and close the lid.',
+        de: 'Legen Sie die Pizza vorsichtig auf den erhitzten Stein im Kamado und schließen Sie den Deckel.',
+        sl: 'Pico previdno prenesite na segret kamen v Kamadu in zaprite pokrov.',
+      })[lang]
+      : copy.launch;
+    const phases = [
       { title: mixingForExperience === 'spiral' ? getSpiralMixingTitle(lang, 'biga') : copy.finalMixTitle, steps: finalMixSteps },
       { title: copy.finalDoughTitle, steps: finalDoughSteps },
       { title: copy.ballingTitle, steps: [copy.ball] },
@@ -2821,27 +3997,28 @@ export default function CalculatorHome() {
         title: copy.bakeTitle,
         steps: [
           copy.finalRest(beforeShape, finalRest),
-          preheat,
+          ...(oven === 'kamado' ? [] : [preheat]),
           copy.shape,
           copy.sauce,
           copy.cheese,
-          copy.launch,
+          launch,
           baking,
         ],
       },
     ];
+    return oven === 'kamado' ? insertKamadoPreheatPhase(phases, lang, kamadoProfileForExperience) : phases;
   })() : null;
   const recipeIngredients = (
     <>
       {dough.preferment ? (
         <>
           <Text style={styles.recipeSection}>
-            {beginnerHomeRecipeLayout ? t.calc.preferment : `7 · ${t.calc.preferment}`} · {method === 'biga' ? `BIGA ${bigaPct}%` : `POOLISH ${poolishPct}%`}
+            {beginnerHomeRecipeLayout ? t.calc.preferment : `7 · ${t.calc.preferment}`} · {prefermentTitle}
           </Text>
           <ResultRow label={t.calc.totalFlour} value={weight(dough.preferment.flour)} highlight />
           <ResultRow label={t.calc.totalWater} value={weight(dough.preferment.water)} highlight />
-          <ResultRow label={t.calc.yeastAmount + ' (' + yeastShortLabel + ')'} value={weight(dough.preferment.yeast, true)} />
-              {method === 'poolish' ? <Text style={styles.hint}>{t.calc.poolishHint}</Text> : <Text style={styles.hint}>{bigaHomeScheduleHint ?? t.calc.bigaHint}</Text>}
+          <ResultRow label={method === 'sponge' ? `${spongeCopy.spongeYeastLabel} (${spongeYeastTypeLabel})` : t.calc.yeastAmount + ' (' + yeastShortLabel + ')'} value={weight(dough.preferment.yeast, true)} />
+              {method === 'poolish' ? <Text style={styles.hint}>{t.calc.poolishHint}</Text> : method === 'biga' ? <Text style={styles.hint}>{bigaHomeScheduleHint ?? t.calc.bigaHint}</Text> : null}
 
           <Text style={[styles.recipeSection, { marginTop: SPACING.md }]}>{t.calc.mainDough}</Text>
           <ResultRow label={t.calc.remainingFlour} value={weight(beginnerNeapolitanBigaHome ? bigaHomeDisplayMainFlour : dough.main.flour)} highlight />
@@ -2933,6 +4110,7 @@ export default function CalculatorHome() {
   ) : null;
 
   return (
+    <ProWebInfoContext.Provider value={!isBeginner && Platform.OS === 'web'}>
     <ImageBackground
       source={require('../../assets/images/bg-wood-flour.png')}
       style={[styles.root, { paddingTop: insets.top }]}
@@ -3381,12 +4559,22 @@ export default function CalculatorHome() {
                   testID="tray-width"
                   value={trayWidthInput}
                   onChangeText={(value) => {
-                    const clean = value.replace(/[^0-9]/g, '').slice(0, 2);
-                    setTrayWidthInput(clean);
-                    const next = Number(clean);
-                    if (next >= 20 && next <= 60) { setTrayWidth(next); setCustomBallWeight(null); setCustomBallInput(''); }
+                    if (isBeginner) {
+                      const clean = value.replace(/[^0-9]/g, '').slice(0, 2);
+                      setTrayWidthInput(clean);
+                      const next = Number(clean);
+                      if (next >= 20 && next <= 60) { setTrayWidth(next); setCustomBallWeight(null); setCustomBallInput(''); }
+                      return;
+                    }
+                    setTrayWidthInput(value);
+                    const next = parseProTrayDimensionInput(value);
+                    if (next !== null) { setTrayWidth(next); setCustomBallWeight(null); setCustomBallInput(''); }
                   }}
-                  onBlur={() => { if (trayWidth < 20 || trayWidth > 60) setTrayWidthInput(String(trayWidth)); }}
+                  onBlur={() => {
+                    if (isBeginner) {
+                      if (trayWidth < 20 || trayWidth > 60) setTrayWidthInput(String(trayWidth));
+                    } else if (parseProTrayDimensionInput(trayWidthInput) === null) setTrayWidthInput(String(trayWidth));
+                  }}
                   keyboardType="number-pad"
                   style={styles.customInput}
                 />
@@ -3395,12 +4583,22 @@ export default function CalculatorHome() {
                   testID="tray-length"
                   value={trayLengthInput}
                   onChangeText={(value) => {
-                    const clean = value.replace(/[^0-9]/g, '').slice(0, 2);
-                    setTrayLengthInput(clean);
-                    const next = Number(clean);
-                    if (next >= 20 && next <= 60) { setTrayLength(next); setCustomBallWeight(null); setCustomBallInput(''); }
+                    if (isBeginner) {
+                      const clean = value.replace(/[^0-9]/g, '').slice(0, 2);
+                      setTrayLengthInput(clean);
+                      const next = Number(clean);
+                      if (next >= 20 && next <= 60) { setTrayLength(next); setCustomBallWeight(null); setCustomBallInput(''); }
+                      return;
+                    }
+                    setTrayLengthInput(value);
+                    const next = parseProTrayDimensionInput(value);
+                    if (next !== null) { setTrayLength(next); setCustomBallWeight(null); setCustomBallInput(''); }
                   }}
-                  onBlur={() => { if (trayLength < 20 || trayLength > 60) setTrayLengthInput(String(trayLength)); }}
+                  onBlur={() => {
+                    if (isBeginner) {
+                      if (trayLength < 20 || trayLength > 60) setTrayLengthInput(String(trayLength));
+                    } else if (parseProTrayDimensionInput(trayLengthInput) === null) setTrayLengthInput(String(trayLength));
+                  }}
                   keyboardType="number-pad"
                   style={styles.customInput}
                 />
@@ -3450,10 +4648,10 @@ export default function CalculatorHome() {
             <View style={{ flex: 1 }}>
               <Text style={styles.cardTitle}>{isBeginner ? t.beginnerCalc.stepMethod : `4 · ${t.calc.method} + ${t.calc.hydration}`}</Text>
               {!methodExpanded ? isBeginner ? (
-                <Text style={styles.hint}>{method === 'direct' ? t.calc.direct : method === 'biga' ? t.calc.biga : t.calc.poolish}</Text>
+                <Text style={styles.hint}>{method === 'direct' ? t.calc.direct : method === 'biga' ? t.calc.biga : method === 'poolish' ? t.calc.poolish : t.calc.sponge}</Text>
               ) : (
                 <Text testID="pro-method-summary" style={styles.hint}>
-                  {method === 'direct' ? t.calc.direct : method === 'biga' ? t.calc.biga : t.calc.poolish} · {hydration}%
+                  {method === 'direct' ? t.calc.direct : method === 'biga' ? t.calc.biga : method === 'poolish' ? t.calc.poolish : t.calc.sponge} · {hydration}%
                 </Text>
               ) : null}
             </View>
@@ -3601,13 +4799,21 @@ export default function CalculatorHome() {
           ) : null}
           {methodExpanded && !isBeginner ? <>
           <Text style={styles.label}>{t.calc.method}</Text>
-          {flour === 'glutenFree' ? <Text style={styles.hint}>Za bezglutensko brašno dostupna je samo direktna metoda.</Text> : null}
+          {isProEffectivelyGlutenFree ? <Text style={styles.hint}>{({
+            hr: 'Za bezglutensko brašno ili mješavinu dostupna je samo direktna metoda.',
+            en: 'Only the direct method is available with gluten-free flour or blends.',
+            de: 'Mit glutenfreiem Mehl oder einer glutenfreien Mischung ist nur die direkte Methode verfügbar.',
+            sl: 'Pri brezglutenski moki ali mešanici je na voljo samo direktna metoda.',
+          }[lang])}</Text> : null}
           <View style={styles.pillGroup}>
             {[
               { k: 'direct' as const, l: t.calc.direct },
               { k: 'biga' as const, l: t.calc.biga },
               { k: 'poolish' as const, l: t.calc.poolish },
-            ].filter((m) => isBeginner ? m.k === 'direct' : flour !== 'glutenFree' || m.k === 'direct').map((m) => (
+              { k: 'sponge' as const, l: t.calc.sponge },
+            ].filter((m) => isBeginner
+              ? m.k === 'direct'
+              : isProMethodAllowedForFlour(m.k, flour, blendA, blendB, blendPctA)).map((m) => (
               <View
                 key={m.k}
                 style={[styles.pill, method === m.k && styles.pillActive]}
@@ -3626,6 +4832,265 @@ export default function CalculatorHome() {
             ))}
           </View>
 
+          <View testID={`yeast-settings-${method}`} style={{ gap: SPACING.sm, marginTop: SPACING.md }}>
+            <Text style={styles.label}>{yeastSettingsCopy.title}</Text>
+            <Text style={styles.label}>{yeastSettingsCopy.mode}</Text>
+            <View style={styles.segmentedRow}>
+              {(['automatic', 'manual'] as const).map((mode) => (
+                <Pressable
+                  key={mode}
+                  testID={`yeast-mode-${method}-${mode}`}
+                  onPress={() => updateMethodYeastSettings(method, { mode })}
+                  style={[styles.segBtn, activeYeastSettings.mode === mode && styles.segBtnActive]}
+                >
+                  <Text style={[styles.segText, activeYeastSettings.mode === mode && { color: '#fff' }]}>{yeastSettingsCopy[mode]}</Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={styles.label}>{yeastSettingsCopy.type}</Text>
+            <View style={styles.segmentedRow}>
+              {([
+                { key: 'fresh' as const, label: yeastSettingsCopy.fresh },
+                { key: 'activeDry' as const, label: yeastSettingsCopy.activeDry },
+                { key: 'dry' as const, label: yeastSettingsCopy.instantDry },
+              ]).map(({ key, label }) => (
+                <Pressable
+                  key={key}
+                  testID={`yeast-type-${method}-${key}`}
+                  onPress={() => updateMethodYeastSettings(method, { yeastType: key })}
+                  style={[styles.segBtn, activeYeastSettings.yeastType === key && styles.segBtnActive]}
+                >
+                  <Text style={[styles.segText, activeYeastSettings.yeastType === key && { color: '#fff' }]}>{label}</Text>
+                </Pressable>
+              ))}
+            </View>
+            {activeYeastSettings.mode === 'manual' ? (
+              <>
+                <Text style={styles.label}>{yeastSettingsCopy.manualQuantity}</Text>
+                <TextInput
+                  testID={`manual-yeast-${method}`}
+                  value={activeYeastSettings.manualInput}
+                  onChangeText={(manualInput) => {
+                    const error = validateManualYeastGrams(manualInput, manualYeastBasisFlour);
+                    updateMethodYeastSettings(method, {
+                      manualInput,
+                      ...(!error ? { manualGrams: Number(manualInput.trim().replace(',', '.')) } : {}),
+                    });
+                  }}
+                  keyboardType="decimal-pad"
+                  style={styles.customInput}
+                />
+                {activeManualYeastError ? (
+                  <Text style={[styles.hint, { color: COLORS.warning }]}>{yeastSettingsCopy.errors[activeManualYeastError]}</Text>
+                ) : null}
+              </>
+            ) : null}
+            <Text style={styles.hint}>
+              {yeastSettingsCopy.quantity}: {new Intl.NumberFormat(lang, { maximumFractionDigits: 2 }).format(activeYeastQuantity)} g · {yeastSettingsCopy.percentage}: {new Intl.NumberFormat(lang, { maximumFractionDigits: 2 }).format(activeYeastPercentage)}%
+            </Text>
+            <Text style={styles.hint}>{yeastSettingsCopy.conversionHelp}</Text>
+            {method === 'sponge' ? (
+              <>
+                <Text style={styles.hint}>{yeastSettingsCopy.spongeHelp}</Text>
+                {activeYeastSettings.mode === 'automatic' ? (
+                  <>
+                    <Text style={styles.hint}>{SPONGE_COPY[lang].automaticReference}</Text>
+                    <Text style={styles.hint}>{SPONGE_COPY[lang].automaticCaution}</Text>
+                  </>
+                ) : null}
+              </>
+            ) : activeYeastSettings.mode === 'automatic' ? (
+              <Text style={styles.hint}>{yeastSettingsCopy.automaticHelp}</Text>
+            ) : null}
+          </View>
+
+          {method === 'sponge' ? (() => {
+            const copy = SPONGE_COPY[lang];
+            const maxSpongeFlourPct = Math.min(100, Math.floor(hydration * 100 / spongeHydrationPct));
+            const minTotalHydration = spongeMinimumTotalHydration;
+            const maxSpongeHydrationPct = Math.min(200, Math.floor(hydration * 100 / spongeFlourPct));
+            return (
+              <View testID="sponge-settings" style={{ gap: SPACING.sm, marginTop: SPACING.md }}>
+                <View style={styles.row}>
+                  <Text style={[styles.label, { flex: 1 }]}>{copy.flourShare}</Text>
+                  <View style={styles.stepper}>
+                    <Pressable testID="sponge-flour-minus" onPress={() => step(() => setSpongeFlourPct(Math.max(1, spongeFlourPct - 5)))} style={styles.stepBtn}>
+                      <Icon name="remove" size={20} color={COLORS.brand} />
+                    </Pressable>
+                    <Text style={styles.stepVal}>{spongeFlourPct}%</Text>
+                    <Pressable testID="sponge-flour-plus" onPress={() => step(() => setSpongeFlourPct(Math.min(maxSpongeFlourPct, spongeFlourPct + 5)))} disabled={spongeFlourPct + 5 > maxSpongeFlourPct} style={styles.stepBtn}>
+                      <Icon name="add" size={20} color={spongeFlourPct + 5 > maxSpongeFlourPct ? COLORS.muted : COLORS.brand} />
+                    </Pressable>
+                  </View>
+                </View>
+                <View style={styles.row}>
+                  <Text style={[styles.label, { flex: 1 }]}>{copy.hydration}</Text>
+                  <View style={styles.stepper}>
+                    <Pressable testID="sponge-hydration-minus" onPress={() => step(() => setSpongeHydrationPct(Math.max(10, spongeHydrationPct - 1)))} disabled={spongeHydrationPct <= 10} style={styles.stepBtn}>
+                      <Icon name="remove" size={20} color={spongeHydrationPct <= 10 ? COLORS.muted : COLORS.brand} />
+                    </Pressable>
+                    <Text style={styles.stepVal}>{spongeHydrationPct}%</Text>
+                    <Pressable testID="sponge-hydration-plus" onPress={() => step(() => setSpongeHydrationPct(Math.min(maxSpongeHydrationPct, spongeHydrationPct + 1)))} disabled={spongeHydrationPct >= maxSpongeHydrationPct} style={styles.stepBtn}>
+                      <Icon name="add" size={20} color={spongeHydrationPct >= maxSpongeHydrationPct ? COLORS.muted : COLORS.brand} />
+                    </Pressable>
+                  </View>
+                </View>
+                <View style={styles.row}>
+                  <Text style={[styles.label, { flex: 1 }]}>{copy.fermentationTemp}</Text>
+                  <View style={styles.stepper}>
+                    <Pressable testID="sponge-temp-minus" onPress={() => step(() => setSpongeFermentationTempC(Math.max(4, spongeFermentationTempC - 1)))} disabled={spongeFermentationTempC <= 4} style={styles.stepBtn}>
+                      <Icon name="remove" size={20} color={spongeFermentationTempC <= 4 ? COLORS.muted : COLORS.brand} />
+                    </Pressable>
+                    <Text style={styles.stepVal}>{formatTemperature(spongeFermentationTempC, temperatureUnit)}</Text>
+                    <Pressable testID="sponge-temp-plus" onPress={() => step(() => setSpongeFermentationTempC(Math.min(35, spongeFermentationTempC + 1)))} disabled={spongeFermentationTempC >= 35} style={styles.stepBtn}>
+                      <Icon name="add" size={20} color={spongeFermentationTempC >= 35 ? COLORS.muted : COLORS.brand} />
+                    </Pressable>
+                  </View>
+                </View>
+                <View style={styles.row}>
+                  <Text style={[styles.label, { flex: 1 }]}>{copy.fermentationDuration}</Text>
+                  <View style={styles.stepper}>
+                    <Pressable testID="sponge-hours-minus" onPress={() => step(() => setSpongeFermentationHours(Math.max(0.5, spongeFermentationHours - 0.5)))} disabled={spongeFermentationHours <= 0.5} style={styles.stepBtn}>
+                      <Icon name="remove" size={20} color={spongeFermentationHours <= 0.5 ? COLORS.muted : COLORS.brand} />
+                    </Pressable>
+                    <Text style={styles.stepVal}>{spongeFermentationHours}h</Text>
+                    <Pressable testID="sponge-hours-plus" onPress={() => step(() => setSpongeFermentationHours(Math.min(48, spongeFermentationHours + 0.5)))} disabled={spongeFermentationHours >= 48} style={styles.stepBtn}>
+                      <Icon name="add" size={20} color={spongeFermentationHours >= 48 ? COLORS.muted : COLORS.brand} />
+                    </Pressable>
+                  </View>
+                </View>
+                {minTotalHydration > hydration ? (
+                  <Text style={[styles.hint, { color: COLORS.warning }]}>{copy.allocationInvalid}</Text>
+                ) : null}
+              </View>
+            );
+          })() : null}
+
+          {method === 'biga' ? (
+            <View testID="biga-settings" style={{ gap: SPACING.sm, marginTop: SPACING.md }}>
+              <View style={styles.row}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>{({ hr: 'Biga u zamjesu', en: 'Biga in final mix', de: 'Biga im Hauptteig', sl: 'Biga v končnem testu' }[lang])} ({bigaPct}%)</Text>
+                  <Text style={styles.subLabel}>{({ hr: 'Postotak brašna koji ide u bigu', en: 'Percentage of flour used in the biga', de: 'Mehlanteil für die Biga', sl: 'Odstotek moke za bigo' }[lang])}</Text>
+                </View>
+                <View style={styles.stepper}>
+                  <Pressable testID="biga-minus" onPress={() => step(() => setBigaPct(Math.max(20, bigaPct - 5)))} style={styles.stepBtn}>
+                    <Icon name="remove" size={20} color={COLORS.brand} />
+                  </Pressable>
+                  <Text style={styles.stepVal}>{bigaPct}%</Text>
+                  <Pressable testID="biga-plus" onPress={() => step(() => setBigaPct(Math.min(maxProBigaPct, bigaPct + 5)))} disabled={bigaPct + 5 > maxProBigaPct} style={styles.stepBtn}>
+                    <Icon name="add" size={20} color={bigaPct + 5 > maxProBigaPct ? COLORS.muted : COLORS.brand} />
+                  </Pressable>
+                </View>
+              </View>
+              {proBigaWaterError ? (
+                <Text style={[styles.hint, { color: COLORS.warning }]}>
+                  {({
+                    hr: `Biga od ${bigaPct}% nije moguća uz ${hydration}% ukupne hidratacije. Najveći izvedivi postotak je ${maxProBigaPct}%.`,
+                    en: `A ${bigaPct}% Biga is not feasible with ${hydration}% total hydration. The maximum feasible percentage is ${maxProBigaPct}%.`,
+                    de: `Eine Biga mit ${bigaPct}% ist bei ${hydration}% Gesamthydration nicht möglich. Der maximal mögliche Anteil beträgt ${maxProBigaPct}%.`,
+                    sl: `Biga s ${bigaPct}% pri skupni hidraciji ${hydration}% ni izvedljiva. Največji izvedljivi delež je ${maxProBigaPct}%.`,
+                  }[lang])}
+                </Text>
+              ) : null}
+              <Text style={[styles.hint, { color: COLORS.warning }]}>
+                {bigaPct === 100
+                  ? ({ hr: 'Upozorenje: nema preostalog brašna. U završni zamjes dodaje se samo preostala voda.', en: 'Warning: no flour remains. Only the remaining water is added to the final mix.', de: 'Warnung: Es bleibt kein Mehl übrig. Zum Hauptteig wird nur das restliche Wasser gegeben.', sl: 'Opozorilo: preostale moke ni. V končno mešanico dodate samo preostalo vodo.' }[lang])
+                  : ({ hr: 'Upozorenje: provjerite postotak bige i količine za završni zamjes.', en: 'Warning: check the biga percentage and final-mix quantities.', de: 'Warnung: Prüfen Sie den Biga-Anteil und die Mengen für den Hauptteig.', sl: 'Opozorilo: preverite odstotek bige in količine za končno mešanico.' }[lang])}
+              </Text>
+              <View style={styles.row}>
+                <Text style={[styles.label, { flex: 1 }]}>{({ hr: 'Hidratacija Bige', en: 'Biga hydration', de: 'Biga-Hydration', sl: 'Hidracija Bige' }[lang])}</Text>
+                <View style={styles.stepper}>
+                  <Pressable testID="biga-hydration-minus" onPress={() => step(() => setBigaHydrationPct(Math.max(10, bigaHydrationPct - 1)))} disabled={bigaHydrationPct <= 10} style={styles.stepBtn}>
+                    <Icon name="remove" size={20} color={bigaHydrationPct <= 10 ? COLORS.muted : COLORS.brand} />
+                  </Pressable>
+                  <Text style={styles.stepVal}>{bigaHydrationPct}%</Text>
+                  <Pressable testID="biga-hydration-plus" onPress={() => step(() => setBigaHydrationPct(Math.min(maxBigaHydrationPct, bigaHydrationPct + 1)))} disabled={bigaHydrationPct >= maxBigaHydrationPct} style={styles.stepBtn}>
+                    <Icon name="add" size={20} color={bigaHydrationPct >= maxBigaHydrationPct ? COLORS.muted : COLORS.brand} />
+                  </Pressable>
+                </View>
+              </View>
+              <View style={styles.row}>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.labelWithInfo}>
+                    <Text style={styles.label}>{({ hr: 'Trajanje fermentacije Bige', en: 'Biga fermentation time', de: 'Biga-Fermentationszeit', sl: 'Čas fermentacije Bige' }[lang])}</Text>
+                    <Pressable testID="biga-fermentation-info" onPress={() => Alert.alert(fermentationInfoTitle, formatUnitText(fermentationInfoBody, temperatureUnit, measurementSystem))} style={styles.infoBtn} hitSlop={8}><Icon name="information-circle-outline" size={18} color={COLORS.brand} /></Pressable>
+                  </View>
+                  <Text style={styles.subLabel}>{({ hr: 'Ovo vrijeme ulazi u izračun kvasca', en: 'This time is included in the yeast calculation', de: 'Diese Zeit wird in die Hefeberechnung einbezogen', sl: 'Ta čas je vključen v izračun kvasa' }[lang])}</Text>
+                </View>
+                <View style={[styles.stepper, idealPreferment && styles.stepperIdeal]}>
+                  <Pressable testID="biga-hours-minus" onPress={() => step(() => setBigaHours(Math.max(4, bigaHours - 1)))} style={styles.stepBtn}><Icon name="remove" size={20} color={COLORS.brand} /></Pressable>
+                  <Text style={[styles.stepVal, idealPreferment && styles.stepValIdeal]}>{bigaHours}h</Text>
+                  <Pressable testID="biga-hours-plus" onPress={() => step(() => setBigaHours(Math.min(48, bigaHours + 1)))} style={styles.stepBtn}><Icon name="add" size={20} color={COLORS.brand} /></Pressable>
+                </View>
+              </View>
+            </View>
+          ) : null}
+
+          {method === 'poolish' ? (
+            <View testID="poolish-settings" style={{ gap: SPACING.sm, marginTop: SPACING.md }}>
+              <View style={styles.row}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>{({ hr: 'Poolish u zamjesu', en: 'Poolish in final mix', de: 'Poolish im Hauptteig', sl: 'Poolish v končnem testu' }[lang])} ({poolishPct}%)</Text>
+                  <Text style={styles.subLabel}>{({ hr: 'Postotak brašna koji ide u Poolish', en: 'Percentage of flour used in the Poolish', de: 'Mehlanteil für den Poolish', sl: 'Odstotek moke za Poolish' }[lang])}</Text>
+                </View>
+                <View style={styles.stepper}>
+                  <Pressable testID="poolish-minus" onPress={() => step(() => setPoolishPct(Math.max(20, poolishPct - 5)))} style={styles.stepBtn}><Icon name="remove" size={20} color={COLORS.brand} /></Pressable>
+                  <Text style={styles.stepVal}>{poolishPct}%</Text>
+                  <Pressable testID="poolish-plus" onPress={() => step(() => setPoolishPct(Math.min(maxProPoolishPct, poolishPct + 5)))} disabled={poolishPct + 5 > maxProPoolishPct} style={styles.stepBtn}><Icon name="add" size={20} color={poolishPct + 5 > maxProPoolishPct ? COLORS.muted : COLORS.brand} /></Pressable>
+                </View>
+              </View>
+              {proPoolishWaterError ? (
+                <Text style={[styles.hint, { color: COLORS.warning }]}>
+                  {({
+                    hr: `Poolish od ${poolishPct}% nije moguć uz ${hydration}% ukupne hidracije. Najveći izvedivi postotak je ${maxProPoolishPct}%; vrijednost je smanjena kako preostala voda ne bi bila negativna.`,
+                    en: `A ${poolishPct}% Poolish is not feasible with ${hydration}% total hydration. The maximum feasible percentage is ${maxProPoolishPct}%; the value is reduced so remaining water cannot be negative.`,
+                    de: `Ein Poolish mit ${poolishPct}% ist bei ${hydration}% Gesamthydration nicht möglich. Der maximal mögliche Anteil beträgt ${maxProPoolishPct}%; der Wert wird reduziert, damit kein negatives Restwasser entsteht.`,
+                    sl: `Poolish s ${poolishPct}% pri skupni hidraciji ${hydration}% ni izvedljiv. Največji izvedljivi delež je ${maxProPoolishPct}%; vrednost je zmanjšana, da preostala voda ne bo negativna.`,
+                  }[lang])}
+                </Text>
+              ) : null}
+              <View style={styles.row}>
+                <Text style={[styles.label, { flex: 1 }]}>{({ hr: 'Hidratacija Poolisha', en: 'Poolish hydration', de: 'Poolish-Hydration', sl: 'Hidracija Poolisha' }[lang])}</Text>
+                <View style={styles.stepper}>
+                  <Pressable testID="poolish-hydration-minus" onPress={() => step(() => setPoolishHydrationPct(Math.max(10, poolishHydrationPct - 1)))} disabled={poolishHydrationPct <= 10} style={styles.stepBtn}>
+                    <Icon name="remove" size={20} color={poolishHydrationPct <= 10 ? COLORS.muted : COLORS.brand} />
+                  </Pressable>
+                  <Text style={styles.stepVal}>{poolishHydrationPct}%</Text>
+                  <Pressable testID="poolish-hydration-plus" onPress={() => step(() => setPoolishHydrationPct(Math.min(maxPoolishHydrationPct, poolishHydrationPct + 1)))} disabled={poolishHydrationPct >= maxPoolishHydrationPct} style={styles.stepBtn}>
+                    <Icon name="add" size={20} color={poolishHydrationPct >= maxPoolishHydrationPct ? COLORS.muted : COLORS.brand} />
+                  </Pressable>
+                </View>
+              </View>
+              <View style={styles.row}>
+                <Text style={[styles.label, { flex: 1 }]}>{({ hr: 'Temperatura fermentacije Poolisha', en: 'Poolish fermentation temperature', de: 'Poolish-Fermentationstemperatur', sl: 'Temperatura fermentacije Poolisha' }[lang])}</Text>
+                <View style={styles.stepper}>
+                  <Pressable testID="poolish-temp-minus" onPress={() => step(() => setPoolishFermentationTempC(Math.max(4, poolishFermentationTempC - 1)))} disabled={poolishFermentationTempC <= 4} style={styles.stepBtn}>
+                    <Icon name="remove" size={20} color={poolishFermentationTempC <= 4 ? COLORS.muted : COLORS.brand} />
+                  </Pressable>
+                  <Text style={styles.stepVal}>{formatTemperature(poolishFermentationTempC, temperatureUnit)}</Text>
+                  <Pressable testID="poolish-temp-plus" onPress={() => step(() => setPoolishFermentationTempC(Math.min(35, poolishFermentationTempC + 1)))} disabled={poolishFermentationTempC >= 35} style={styles.stepBtn}>
+                    <Icon name="add" size={20} color={poolishFermentationTempC >= 35 ? COLORS.muted : COLORS.brand} />
+                  </Pressable>
+                </View>
+              </View>
+              <View style={styles.row}>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.labelWithInfo}>
+                    <Text style={styles.label}>{({ hr: 'Trajanje fermentacije Poolisha', en: 'Poolish fermentation time', de: 'Poolish-Fermentationszeit', sl: 'Čas fermentacije Poolisha' }[lang])}</Text>
+                    <Pressable testID="poolish-fermentation-info" onPress={() => Alert.alert(fermentationInfoTitle, formatUnitText(fermentationInfoBody, temperatureUnit, measurementSystem))} style={styles.infoBtn} hitSlop={8}><Icon name="information-circle-outline" size={18} color={COLORS.brand} /></Pressable>
+                  </View>
+                  <Text style={styles.subLabel}>{({ hr: 'Vrijeme i temperatura ulaze u izračun kvasca', en: 'Time and temperature are included in the yeast calculation', de: 'Zeit und Temperatur fließen in die Hefeberechnung ein', sl: 'Čas in temperatura sta vključena v izračun kvasa' }[lang])}</Text>
+                </View>
+                <View style={[styles.stepper, idealPreferment && styles.stepperIdeal]}>
+                  <Pressable testID="poolish-hours-minus" onPress={() => step(() => setPoolishHours(Math.max(4, poolishHours - 1)))} style={styles.stepBtn}><Icon name="remove" size={20} color={COLORS.brand} /></Pressable>
+                  <Text style={[styles.stepVal, idealPreferment && styles.stepValIdeal]}>{poolishHours}h</Text>
+                  <Pressable testID="poolish-hours-plus" onPress={() => step(() => setPoolishHours(Math.min(48, poolishHours + 1)))} style={styles.stepBtn}><Icon name="add" size={20} color={COLORS.brand} /></Pressable>
+                </View>
+              </View>
+            </View>
+          ) : null}
+
           <View style={[styles.segmentedRow, styles.mixingSegmentedRow]}>
             <Pressable testID="mix-hand" onPress={() => step(() => { setMixing('hand'); setShowMixSteps(true); })} style={[styles.segBtn, styles.mixingSegBtn, mixing === 'hand' && styles.segBtnActive]}>
               <Image source={require('../../assets/images/hand-left-outline.png')} style={styles.mixIcon} resizeMode="contain" />
@@ -3641,84 +5106,17 @@ export default function CalculatorHome() {
             </Pressable>
           </View>
 
-          {method === 'biga' ? (
-            <>
-            <View style={[styles.row, { marginTop: SPACING.md }] }>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.label}>{({ hr: 'Biga u zamjesu', en: 'Biga in final mix', de: 'Biga im Hauptteig', sl: 'Biga v končnem testu' }[lang])} ({bigaPct}%)</Text>
-                <Text style={styles.subLabel}>{({ hr: 'Postotak brašna koji ide u bigu', en: 'Percentage of flour used in the biga', de: 'Mehlanteil für die Biga', sl: 'Odstotek moke za bigo' }[lang])}</Text>
-              </View>
-              <View style={styles.stepper}>
-                <Pressable testID="biga-minus" onPress={() => step(() => setBigaPct(Math.max(20, bigaPct - 5)))} style={styles.stepBtn}>
-                  <Icon name="remove" size={20} color={COLORS.brand} />
-                </Pressable>
-                <Text style={styles.stepVal}>{bigaPct}%</Text>
-                <Pressable testID="biga-plus" onPress={() => step(() => setBigaPct(Math.min(100, bigaPct + 5)))} style={styles.stepBtn}>
-                  <Icon name="add" size={20} color={COLORS.brand} />
-                </Pressable>
-              </View>
-            </View>
-            {method === 'biga' ? (
-              <Text style={[styles.hint, { color: COLORS.warning }]}>
-                {bigaPct === 100
-                  ? ({ hr: 'Upozorenje: nema preostalog brašna. U završni zamjes dodaje se samo preostala voda.', en: 'Warning: no flour remains. Only the remaining water is added to the final mix.', de: 'Warnung: Es bleibt kein Mehl übrig. Zum Hauptteig wird nur das restliche Wasser gegeben.', sl: 'Opozorilo: preostale moke ni. V končno mešanico dodate samo preostalo vodo.' }[lang])
-                  : ({ hr: 'Upozorenje: provjerite postotak bige i količine za završni zamjes.', en: 'Warning: check the biga percentage and final-mix quantities.', de: 'Warnung: Prüfen Sie den Biga-Anteil und die Mengen für den Hauptteig.', sl: 'Opozorilo: preverite odstotek bige in količine za končno mešanico.' }[lang])}
-              </Text>
-            ) : null}
-            <View style={[styles.row, { marginTop: SPACING.sm }] }>
-              <View style={{ flex: 1 }}>
-                <View style={styles.labelWithInfo}>
-                  <Text style={styles.label}>{({ hr: 'Trajanje fermentacije Bige', en: 'Biga fermentation time', de: 'Biga-Fermentationszeit', sl: 'Čas fermentacije Bige' }[lang])}</Text>
-                  <Pressable testID="biga-fermentation-info" onPress={() => Alert.alert(fermentationInfoTitle, formatUnitText(fermentationInfoBody, temperatureUnit, measurementSystem))} style={styles.infoBtn} hitSlop={8}><Icon name="information-circle-outline" size={18} color={COLORS.brand} /></Pressable>
-                </View>
-                <Text style={styles.subLabel}>{({ hr: 'Ovo vrijeme ulazi u izračun kvasca', en: 'This time is included in the yeast calculation', de: 'Diese Zeit wird in die Hefeberechnung einbezogen', sl: 'Ta čas je vključen v izračun kvasa' }[lang])}</Text>
-              </View>
-              <View style={[styles.stepper, idealPreferment && styles.stepperIdeal]}>
-                <Pressable testID="biga-hours-minus" onPress={() => step(() => setBigaHours(Math.max(4, bigaHours - 1)))} style={styles.stepBtn}><Icon name="remove" size={20} color={COLORS.brand} /></Pressable>
-                <Text style={[styles.stepVal, idealPreferment && styles.stepValIdeal]}>{bigaHours}h</Text>
-                <Pressable testID="biga-hours-plus" onPress={() => step(() => setBigaHours(Math.min(48, bigaHours + 1)))} style={styles.stepBtn}><Icon name="add" size={20} color={COLORS.brand} /></Pressable>
-              </View>
-            </View>
-            </>
-          ) : null}
-
-          {method === 'poolish' ? (
-            <>
-              <View style={[styles.row, { marginTop: SPACING.md }] }>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>{({ hr: 'Poolish u zamjesu', en: 'Poolish in final mix', de: 'Poolish im Hauptteig', sl: 'Poolish v končnem testu' }[lang])} ({poolishPct}%)</Text>
-                  <Text style={styles.subLabel}>{({ hr: 'Postotak brašna koji ide u Poolish', en: 'Percentage of flour used in the Poolish', de: 'Mehlanteil für den Poolish', sl: 'Odstotek moke za Poolish' }[lang])}</Text>
-                </View>
-                <View style={styles.stepper}>
-                  <Pressable testID="poolish-minus" onPress={() => step(() => setPoolishPct(Math.max(20, poolishPct - 5)))} style={styles.stepBtn}><Icon name="remove" size={20} color={COLORS.brand} /></Pressable>
-                  <Text style={styles.stepVal}>{poolishPct}%</Text>
-                  <Pressable testID="poolish-plus" onPress={() => step(() => setPoolishPct(Math.min(100, poolishPct + 5)))} style={styles.stepBtn}><Icon name="add" size={20} color={COLORS.brand} /></Pressable>
-                </View>
-              </View>
-              <View style={[styles.row, { marginTop: SPACING.sm }] }>
-                <View style={{ flex: 1 }}>
-                  <View style={styles.labelWithInfo}>
-                    <Text style={styles.label}>{({ hr: 'Trajanje fermentacije Poolisha', en: 'Poolish fermentation time', de: 'Poolish-Fermentationszeit', sl: 'Čas fermentacije Poolisha' }[lang])}</Text>
-                    <Pressable testID="poolish-fermentation-info" onPress={() => Alert.alert(fermentationInfoTitle, formatUnitText(fermentationInfoBody, temperatureUnit, measurementSystem))} style={styles.infoBtn} hitSlop={8}><Icon name="information-circle-outline" size={18} color={COLORS.brand} /></Pressable>
-                  </View>
-                  <Text style={styles.subLabel}>{({ hr: 'Ovo vrijeme ulazi u izračun kvasca', en: 'This time is included in the yeast calculation', de: 'Diese Zeit wird in die Hefeberechnung einbezogen', sl: 'Ta čas je vključen v izračun kvasa' }[lang])}</Text>
-                </View>
-                <View style={[styles.stepper, idealPreferment && styles.stepperIdeal]}>
-                  <Pressable testID="poolish-hours-minus" onPress={() => step(() => setPoolishHours(Math.max(4, poolishHours - 1)))} style={styles.stepBtn}><Icon name="remove" size={20} color={COLORS.brand} /></Pressable>
-                  <Text style={[styles.stepVal, idealPreferment && styles.stepValIdeal]}>{poolishHours}h</Text>
-                  <Pressable testID="poolish-hours-plus" onPress={() => step(() => setPoolishHours(Math.min(48, poolishHours + 1)))} style={styles.stepBtn}><Icon name="add" size={20} color={COLORS.brand} /></Pressable>
-                </View>
-              </View>
-            </>
-          ) : null}
-
           <View style={styles.hydRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.label}>{isBeginner ? t.beginnerCalc.stepHydration : t.calc.hydration}</Text>
-              <Text style={styles.subLabel}>{isBeginner ? `${t.beginnerCalc.hydrationIdeal}: ${idealHydration}%` : `${t.calc.idealHydration}: ${flourProfile.min}–${flourProfile.max}% (◎ ${styleProfile.hydration}%)`}</Text>
+              <Text style={styles.label}>{isBeginner
+                ? t.beginnerCalc.stepHydration
+                : method !== 'direct'
+                  ? ({ hr: 'Hidratacija završnog tijesta', en: 'Final dough hydration', de: 'Hydration des Hauptteigs', sl: 'Hidracija končnega testa' }[lang])
+                  : t.calc.hydration}</Text>
+              <Text style={styles.subLabel}>{isBeginner ? `${t.beginnerCalc.hydrationIdeal}: ${idealHydration}%` : `${t.calc.idealHydration}: ${hydrationRecommendation}${isProEffectivelyGlutenFree ? '' : ` (◎ ${styleProfile.hydration}%)`}`}</Text>
             </View>
             <View style={[styles.stepper, isIdealHydration && styles.stepperIdeal, !isIdealHydration && inRange && styles.stepperInRange]}>
-              <Pressable testID="hyd-minus" onPress={() => step(() => setHydration(Math.max(50, hydration - 1)))} style={styles.stepBtn}>
+              <Pressable testID="hyd-minus" onPress={() => step(() => setHydration(Math.max(minimumTotalHydration, hydration - 1)))} style={styles.stepBtn}>
                 <Icon name="remove" size={20} color={isIdealHydration ? COLORS.success : COLORS.brand} />
               </Pressable>
               <Text accessibilityLabel={`${hydration}%${isBeginner && isIdealHydration ? `, ${t.beginnerCalc.hydrationIdealState}` : ''}`} style={[styles.stepVal, isIdealHydration && { color: COLORS.success }]}>{hydration}%{isBeginner && isIdealHydration ? ` ✓ ${t.beginnerCalc.hydrationIdealState}` : ''}</Text>
@@ -3818,7 +5216,7 @@ export default function CalculatorHome() {
             {isBeginner ? (
               <Pressable
                 testID="beginner-oven-info"
-                onPress={() => Alert.alert(t.beginnerCalc.stepOven, buildBeginnerOvenInfo(lang, oven, ovenTemp, isRomanTeglia))}
+                onPress={() => Alert.alert(t.beginnerCalc.stepOven, buildBeginnerOvenInfo(lang, oven, ovenTemp, isRomanTeglia, kamadoProfileForExperience))}
                 hitSlop={8}
                 style={styles.infoBtn}
               >
@@ -3826,14 +5224,15 @@ export default function CalculatorHome() {
               </Pressable>
             ) : null}
           </View>
-          <View style={styles.ovenRow}>
+          <View style={[styles.ovenRow, !isRomanTeglia && styles.ovenRowWrap]}>
             {isRomanTeglia ? (
               <OvenCard active={oven === 'homePan'} onPress={() => step(() => selectOven('homePan', 250))} imageSrc={require('../../assets/images/oven-home-pan.png')} title={t.calc.homePan} testID="oven-homePan" />
             ) : (
               <>
-                <OvenCard active={oven === 'homeStone'} onPress={() => step(() => selectOven('homeStone', 300))} imageSrc={require('../../assets/images/oven-home-stone.png')} title={t.calc.homeStone} testID="oven-homeStone" />
-                <OvenCard active={oven === 'ooni'} onPress={() => step(() => selectOven('ooni', 450))} imageSrc={require('../../assets/images/oven-ooni.png')} title={t.calc.ooni} testID="oven-ooni" />
-                <OvenCard active={oven === 'homePan'} onPress={() => step(() => selectOven('homePan', 250))} imageSrc={require('../../assets/images/oven-home-pan.png')} title={t.calc.homePan} testID="oven-homePan" />
+                <OvenCard cardStyle={styles.ovenCardTwoColumns} active={oven === 'homeStone'} onPress={() => step(() => selectOven('homeStone', 300))} imageSrc={require('../../assets/images/oven-home-stone.png')} title={t.calc.homeStone} testID="oven-homeStone" />
+                <OvenCard cardStyle={styles.ovenCardTwoColumns} active={oven === 'ooni'} onPress={() => step(() => selectOven('ooni', 450))} imageSrc={require('../../assets/images/oven-ooni.png')} title={t.calc.ooni} testID="oven-ooni" />
+                <OvenCard cardStyle={styles.ovenCardTwoColumns} active={oven === 'homePan'} onPress={() => step(() => selectOven('homePan', 250))} imageSrc={require('../../assets/images/oven-home-pan.png')} title={t.calc.homePan} testID="oven-homePan" />
+                <OvenCard cardStyle={styles.ovenCardTwoColumns} active={oven === 'kamado'} onPress={() => step(() => selectOven('kamado'))} imageSrc={require('../../assets/images/Roter Kamado-Keramikgrill mit Holztischen.png')} title={t.calc.kamado} testID="oven-kamado" />
               </>
             )}
           </View>
@@ -3841,9 +5240,22 @@ export default function CalculatorHome() {
             <View style={styles.bakeTemperatureInputRow}>
               <Text style={styles.bakeTempLabel}>{ovenTempLabel}</Text>
               <TextInput
-                testID="oven-temperature"
-                value={ovenTempEditing ? ovenTempInput : String(displayTemperature(ovenTemp, temperatureUnit))}
+                testID={oven === 'kamado' ? 'kamado-baking-temperature' : 'oven-temperature'}
+                value={oven === 'kamado'
+                  ? kamadoBakingTemperatureEditing
+                    ? kamadoBakingTemperatureInput
+                    : kamadoBakingTemperature !== null
+                      ? String(displayTemperature(kamadoBakingTemperature, temperatureUnit))
+                      : ''
+                  : ovenTempEditing
+                    ? ovenTempInput
+                    : String(displayTemperature(ovenTemp, temperatureUnit))}
                 onChangeText={(value) => {
+                  if (oven === 'kamado') {
+                    setKamadoBakingTemperatureInput(sanitizeKamadoTemperatureInput(value).slice(0, 6));
+                    setKamadoBakingTemperatureEditing(true);
+                    return;
+                  }
                   const clean = value.replace(/[^0-9]/g, '').slice(0, 4);
                   setOvenTempInput(clean);
                   setOvenTempEditing(true);
@@ -3851,13 +5263,19 @@ export default function CalculatorHome() {
                   const celsius = temperatureInputToCelsius(parsed, temperatureUnit);
                   if (clean !== '' && Number.isFinite(celsius) && celsius >= 200 && celsius <= 500) setOvenTemp(Math.round(celsius));
                 }}
-                onBlur={commitOvenTemperature}
+                onBlur={() => {
+                  if (oven === 'kamado') void commitKamadoBakingTemperature();
+                  else commitOvenTemperature();
+                }}
                 keyboardType="numeric"
+                editable={oven !== 'kamado' || kamadoProfileLoaded}
                 style={styles.customInput}
               />
               <Text style={styles.bakeTempUnit}>{temperatureUnit === 'fahrenheit' ? '°F' : '°C'}</Text>
             </View>
-            <Text style={styles.bakeText}>{bakingDuration}</Text>
+            {oven === 'kamado'
+              ? !isBeginner ? <Text testID="kamado-bake-time-recommendation" style={styles.bakeText}>{kamadoBakeTimeRecommendation}</Text> : null
+              : <Text style={styles.bakeText}>{bakingDuration}</Text>}
           </View>
         </View>
 
@@ -3955,16 +5373,12 @@ export default function CalculatorHome() {
           {dough.preferment ? (
             <>
               <Text style={styles.recipeSection}>
-                6 · {t.calc.preferment} · {method === 'biga' ? `BIGA ${bigaPct}%` : `POOLISH ${poolishPct}%`}
+                6 · {t.calc.preferment} · {prefermentTitle}
               </Text>
               <ResultRow label={t.calc.totalFlour} value={weight(dough.preferment.flour)} highlight />
               <ResultRow label={t.calc.totalWater} value={weight(dough.preferment.water)} highlight />
-              <ResultRow label={t.calc.yeastAmount + ' (' + yeastShortLabel + ')'} value={weight(dough.preferment.yeast, true)} />
-              {method === 'poolish' ? (
-                <Text style={styles.hint}>{t.calc.poolishHint}</Text>
-              ) : (
-                <Text style={styles.hint}>{t.calc.bigaHint}</Text>
-              )}
+              <ResultRow label={method === 'sponge' ? `${spongeCopy.spongeYeastLabel} (${spongeYeastTypeLabel})` : t.calc.yeastAmount + ' (' + yeastShortLabel + ')'} value={weight(dough.preferment.yeast, true)} />
+              <Text style={styles.hint}>{proPrefermentScheduleSummary}</Text>
 
               <Text style={[styles.recipeSection, { marginTop: SPACING.md }]}>{t.calc.mainDough}</Text>
               <ResultRow label={t.calc.remainingFlour} value={weight(dough.main.flour)} highlight />
@@ -3993,7 +5407,7 @@ export default function CalculatorHome() {
                 {psylliumGrams > 0 ? <ResultRow label="Psyllium" value={weight(psylliumGrams)} /> : null}
                 <ResultRow label={t.calc.totalWater} value={weight(dough.total.water)} />
                 <ResultRow label={t.calc.saltAmount} value={weight(dough.total.salt, true)} />
-                <ResultRow label={t.calc.yeastAmount} value={weight(dough.total.yeast, true)} />
+                <ResultRow label={`${t.calc.yeastAmount} (${yeastShortLabel})`} value={weight(dough.total.yeast, true)} />
               </View>
             </>
           ) : (
@@ -4088,7 +5502,7 @@ export default function CalculatorHome() {
                   infoTitleOverrides={{ biga: bigaPreparation ? ({ hr: 'Postotak bige', en: 'Biga percentage', de: 'Biga-Anteil', sl: 'Odstotek bige' }[lang]) : ({ hr: 'Postotak Poolisha', en: 'Poolish percentage', de: 'Poolish-Anteil', sl: 'Odstotek Poolisha' }[lang]) }}
                   phaseKey={`${method}-${mixing}-preparation`}
                   timers={bigaPreparation ? [
-                    { id: `biga-fermentation-${mixingForExperience}`, seconds: bigaHours * 3600, kind: 'rt' as const },
+                    { id: `biga-fermentation-${mixingForExperience}`, seconds: bigaHours * 3600, kind: isBeginner ? 'rt' as const : 'preferment' as const },
                   ] : (poolishPreparation || { timers: [] }).timers}
                   completed={completedSteps}
                   onToggle={toggleStep}
@@ -4198,7 +5612,14 @@ export default function CalculatorHome() {
                   />
                 ))
               ) : detailedDirectSteps ? (
-                (beginnerDirectHomeSteps ?? beginnerUnscheduledDirectSteps ?? beginnerDirectRecipeSteps ?? yeastAwareDetailedDirectSteps ?? detailedDirectSteps).map((phase, index) => (
+                ((oven === 'kamado' && !isBeginner
+                  ? kamadoProHomeMixerSteps ?? kamadoProDirectSteps ?? yeastAwareDetailedDirectSteps ?? proPhaseESteps
+                  : proHomeMixerDetailedSteps ?? proSpiralDirectInstructions)
+                  ?? beginnerDirectHomeSteps
+                  ?? beginnerUnscheduledDirectSteps
+                  ?? beginnerDirectRecipeSteps
+                  ?? yeastAwareDetailedDirectSteps
+                  ?? detailedDirectSteps).map((phase, index) => (
                   <PhaseBlock
                     key={`detailed-direct-${pizzaStyle}-${mixing}-${index}`}
                     title={phase.title}
@@ -4208,11 +5629,27 @@ export default function CalculatorHome() {
                         ? phase.stepInfo ?? (index === 1 && beginnerPhaseBPlan ? buildBeginnerPhaseBStepInfo(beginnerPhaseBPlan, lang, isRomanTeglia, flour) : undefined)
                         : undefined
                       : phase.stepInfo}
-                    waterInfo={isBeginner && index === 0 ? beginnerWaterInfo : phase.waterInfo}
-                    waterInfoStepIndex={(isTargetNeapolitanHandPhaseA || isTargetNeapolitanGlutenFreeHandPhaseA || isTargetNeapolitanGlutenFreeMixerPhaseA || isTargetTegliaGlutenFreeHandPhaseA || isTargetTegliaGlutenFreeMixerPhaseA || isTargetNeapolitanCustomHandPhaseA || isTargetNeapolitanCustomMixerPhaseA || isTargetNeapolitanMixerPhaseA || isTargetNeapolitanManitobaHandPhaseA || isTargetNeapolitanManitobaMixerPhaseA || isTargetNeapolitanSpeltHandPhaseA || isTargetNeapolitanSpeltMixerPhaseA || isTargetNeapolitanWholeWheatHandPhaseA || isTargetNeapolitanWholeWheatMixerPhaseA || isTargetTegliaTipo00HandPhaseA || isTargetTegliaTipo00MixerPhaseA || isTargetTegliaManitobaHandPhaseA || isTargetTegliaManitobaMixerPhaseA || isTargetTegliaSpeltHandPhaseA || isTargetTegliaSpeltMixerPhaseA || isTargetTegliaWholeWheatHandPhaseA || isTargetTegliaWholeWheatMixerPhaseA || isTargetTegliaCustomHandPhaseA || isTargetTegliaCustomMixerPhaseA) && index === 0 ? 2 : undefined}
+                    waterInfo={!isBeginner && mixingForExperience !== 'hand' && index === 0
+                      ? proIceWaterInstructions?.waterInfo
+                      : isBeginner && index === 0
+                        ? beginnerWaterInfo
+                        : phase.waterInfo}
+                    waterInfoStepIndex={proIceWaterInstructions && index === 0 ? getProIceWaterInfoStepIndex(phase.steps) : (isTargetNeapolitanHandPhaseA || isTargetNeapolitanGlutenFreeHandPhaseA || isTargetNeapolitanGlutenFreeMixerPhaseA || isTargetTegliaGlutenFreeHandPhaseA || isTargetTegliaGlutenFreeMixerPhaseA || isTargetNeapolitanCustomHandPhaseA || isTargetNeapolitanCustomMixerPhaseA || isTargetNeapolitanMixerPhaseA || isTargetNeapolitanManitobaHandPhaseA || isTargetNeapolitanManitobaMixerPhaseA || isTargetNeapolitanSpeltHandPhaseA || isTargetNeapolitanSpeltMixerPhaseA || isTargetNeapolitanWholeWheatHandPhaseA || isTargetNeapolitanWholeWheatMixerPhaseA || isTargetTegliaTipo00HandPhaseA || isTargetTegliaTipo00MixerPhaseA || isTargetTegliaManitobaHandPhaseA || isTargetTegliaManitobaMixerPhaseA || isTargetTegliaSpeltHandPhaseA || isTargetTegliaSpeltMixerPhaseA || isTargetTegliaWholeWheatHandPhaseA || isTargetTegliaWholeWheatMixerPhaseA || isTargetTegliaCustomHandPhaseA || isTargetTegliaCustomMixerPhaseA) && index === 0 ? 2 : undefined}
                     containerOilInfo={phase.containerOilInfo}
+                    containerOilInfoStepIndex={!isBeginner && !isRomanTeglia && !isWorkflowGlutenFree
+                      ? index === 1
+                        ? 0
+                        : /podjela|division|teilung|teilen|delitev/i.test(phase.title)
+                          ? 4
+                          : /hladna fermentacija|cold fermentation|kalte fermentation/i.test(phase.title)
+                            ? 0
+                          : undefined
+                      : undefined}
+                    fermentationInfoStepIndices={!isBeginner && method === 'direct' && mixingForExperience !== 'spiral' && !isRomanTeglia && !isWorkflowGlutenFree && index === 1 ? [1, 3, 5] : undefined}
                     fermentationInfo={beginnerDirectHomeSteps ? undefined : directHomeSchedule ? withoutDirectScheduleTimingText(phase.fermentationInfo) : phase.fermentationInfo}
+                    fermentationSignsInfoStepIndex={!isBeginner && method === 'direct' && mixingForExperience !== 'spiral' && !isRomanTeglia && !isWorkflowGlutenFree && index === 1 ? 6 : undefined}
                     fermentationSignsInfo={phase.fermentationSignsInfo}
+                    degassingInfoStepIndex={!isBeginner && !isRomanTeglia && !isWorkflowGlutenFree && /podjela|division|teilung|teilen|delitev/i.test(phase.title) ? 1 : undefined}
                     degassingInfo={phase.degassingInfo}
                     doughHandlingInfo={phase.doughHandlingInfo}
                     doughHandlingInfoStepIndex={((isTargetNeapolitanGlutenFreeHandPhaseA || isTargetNeapolitanGlutenFreeMixerPhaseA || isTargetTegliaGlutenFreeHandPhaseA || isTargetTegliaGlutenFreeMixerPhaseA) ? index === 0 ? 6 : undefined : (isTargetNeapolitanHandPhaseA || isTargetNeapolitanCustomHandPhaseA || isTargetNeapolitanCustomMixerPhaseA || isTargetNeapolitanMixerPhaseA || isTargetNeapolitanManitobaHandPhaseA || isTargetNeapolitanManitobaMixerPhaseA || isTargetNeapolitanSpeltHandPhaseA || isTargetNeapolitanSpeltMixerPhaseA || isTargetNeapolitanWholeWheatHandPhaseA || isTargetNeapolitanWholeWheatMixerPhaseA || isTargetTegliaTipo00HandPhaseA || isTargetTegliaTipo00MixerPhaseA || isTargetTegliaManitobaHandPhaseA || isTargetTegliaManitobaMixerPhaseA || isTargetTegliaSpeltHandPhaseA || isTargetTegliaSpeltMixerPhaseA || isTargetTegliaWholeWheatHandPhaseA || isTargetTegliaWholeWheatMixerPhaseA || isTargetTegliaCustomHandPhaseA || isTargetTegliaCustomMixerPhaseA) && index === 0 ? 7 : undefined)}
@@ -4228,23 +5665,23 @@ export default function CalculatorHome() {
                     doughTemperatureStyle={beginnerDirectHome ? (isRomanTeglia ? 'romanaTeglia' : pizzaStyle === 'romana' ? 'romanaTonda' : pizzaStyle === 'ny_style' ? 'newYork' : 'napolitana') : undefined}
                     phaseKey={`detailed-direct-${pizzaStyle}-${mixingForExperience}-${index}`}
                     timers={beginnerDirectHomeSteps ? phase.timers : directHomeSchedule ? [] : phase.timers}
-                    phaseGuide={flour === 'glutenFree' && !isRomanTeglia && index === (directRecipeFridgeHours > 0 ? 4 : 3)
+                    phaseGuide={isWorkflowGlutenFree && !isRomanTeglia && index === (directRecipeFridgeHours > 0 ? 4 : 3)
                           ? { kind: 'bakingGlutenFree', onPress: (phaseTitle) => { setMixingGuidePhaseTitle(phaseTitle); setVisualGuideSlide(0); setMixingGuideKind('bakingGlutenFree'); } }
-                      : flour !== 'glutenFree' && index === 0 && mixingForExperience === 'hand'
+                      : !isWorkflowGlutenFree && index === 0 && mixingForExperience === 'hand'
                         ? { kind: 'hand', onPress: (phaseTitle) => { setMixingGuidePhaseTitle(phaseTitle); setVisualGuideSlide(0); setMixingGuideKind('hand'); } }
-                      : flour !== 'glutenFree' && index === 0 && mixingForExperience === 'mixer'
+                      : !isWorkflowGlutenFree && index === 0 && mixingForExperience === 'mixer'
                         ? { kind: mixingForExperience, onPress: (phaseTitle) => { setMixingGuidePhaseTitle(phaseTitle); setMixingGuideKind(mixingForExperience); } }
-                      : flour !== 'glutenFree' && index === 1 && phase.steps.some((step) => /stretch\s*&?\s*fold|preklop|pregib|fold/i.test(step))
+                      : !isWorkflowGlutenFree && index === 1 && phase.steps.some((step) => /stretch\s*&?\s*fold|preklop|pregib|fold/i.test(step))
                         ? { kind: 'stretchFold', onPress: (phaseTitle) => { setMixingGuidePhaseTitle(phaseTitle); setVisualGuideSlide(0); setMixingGuideKind('stretchFold'); } }
-                        : flour !== 'glutenFree' && !isRomanTeglia && index === 2
+                        : !isWorkflowGlutenFree && !isRomanTeglia && index === 2
                           ? { kind: 'balling', onPress: (phaseTitle) => { setMixingGuidePhaseTitle(phaseTitle); setVisualGuideSlide(0); setMixingGuideKind('balling'); } }
-                          : pizzaStyle === 'neapolitan' && flour !== 'glutenFree' && !isRomanTeglia && index === (directRecipeFridgeHours > 0 ? 4 : 3)
+                          : pizzaStyle === 'neapolitan' && !isWorkflowGlutenFree && !isRomanTeglia && index === (directRecipeFridgeHours > 0 ? 4 : 3)
                             ? { kind: 'baking', onPress: (phaseTitle) => { setMixingGuidePhaseTitle(phaseTitle); setVisualGuideSlide(0); setMixingGuideKind('baking'); } }
-                          : pizzaStyle === 'romana' && !isRomanTeglia && flour !== 'glutenFree' && index === (directRecipeFridgeHours > 0 ? 4 : 3)
+                          : pizzaStyle === 'romana' && !isRomanTeglia && !isWorkflowGlutenFree && index === (directRecipeFridgeHours > 0 ? 4 : 3)
                             ? { kind: 'bakingRomanaTonda', onPress: (phaseTitle) => { setMixingGuidePhaseTitle(phaseTitle); setVisualGuideSlide(0); setMixingGuideKind('bakingRomanaTonda'); } }
-                          : pizzaStyle === 'ny_style' && flour !== 'glutenFree' && index === (directRecipeFridgeHours > 0 ? 4 : 3)
+                          : pizzaStyle === 'ny_style' && !isWorkflowGlutenFree && index === (directRecipeFridgeHours > 0 ? 4 : 3)
                             ? { kind: 'bakingNewYork', onPress: (phaseTitle) => { setMixingGuidePhaseTitle(phaseTitle); setVisualGuideSlide(0); setMixingGuideKind('bakingNewYork'); } }
-                          : isRomanTeglia && flour !== 'glutenFree' && index === (directRecipeFridgeHours > 0 ? 4 : 3)
+                          : isRomanTeglia && !isWorkflowGlutenFree && index === (directRecipeFridgeHours > 0 ? 4 : 3)
                             ? { kind: 'bakingRomanaTeglia', onPress: (phaseTitle) => { setMixingGuidePhaseTitle(phaseTitle); setVisualGuideSlide(0); setMixingGuideKind('bakingRomanaTeglia'); } }
                           : undefined}
                     completed={completedSteps}
@@ -4269,35 +5706,107 @@ export default function CalculatorHome() {
                   </>
                 ) : (
                   <>
-                    <PhaseBlock title={yeastAwareMixerSteps.A.title} steps={directHomeSchedule ? withoutDirectScheduleTiming(adaptFermentationSteps(yeastAwareMixerSteps.A.steps, directRecipeRoomHours, directRecipeFridgeHours, fridgeTemp, lang)) : adaptFermentationSteps(yeastAwareMixerSteps.A.steps, roomHours, fridgeHours, fridgeTemp, lang)} phaseKey={`direct-mixer-A`} timers={directHomeSchedule ? [] : getDirectPhaseTimers('direct-mixer-A', roomHours, fridgeHours)} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onResetTimer={resetTimer} onStopTimer={stopTimer} lang={lang} nowMs={now} />
+                    <PhaseBlock
+                      title={yeastAwareMixerSteps.A.title}
+                      steps={proHomeMixerDirectSteps ?? proDirectSpiralSteps ?? (directHomeSchedule ? withoutDirectScheduleTiming(adaptFermentationSteps(yeastAwareMixerSteps.A.steps, directRecipeRoomHours, directRecipeFridgeHours, fridgeTemp, lang)) : adaptFermentationSteps(yeastAwareMixerSteps.A.steps, roomHours, fridgeHours, fridgeTemp, lang))}
+                      stepInfo={proHomeMixerDirectSteps && proSpiralRecipe
+                        ? getProHomeMixerStepInfo(lang, proSpiralRecipe, proHomeMixerDirectSteps)
+                        : proDirectSpiralSteps && proSpiralRecipe
+                          ? getProSpiralMixingStepInfo(lang, proSpiralRecipe, proDirectSpiralSteps)
+                          : undefined}
+                      waterInfo={proHomeMixerDirectSteps || proDirectSpiralSteps ? proIceWaterInstructions?.waterInfo : undefined}
+                      waterInfoStepIndex={proHomeMixerDirectSteps
+                        ? getProIceWaterInfoStepIndex(proHomeMixerDirectSteps)
+                        : proDirectSpiralSteps
+                          ? getProIceWaterInfoStepIndex(proDirectSpiralSteps)
+                          : undefined}
+                      phaseKey={`direct-mixer-A`}
+                      timers={directHomeSchedule ? [] : getDirectPhaseTimers('direct-mixer-A', roomHours, fridgeHours)}
+                      completed={completedSteps}
+                      onToggle={toggleStep}
+                      activeTimers={activeTimers}
+                      onStartTimer={startTimer}
+                      onPauseTimer={pauseTimer}
+                      onResumeTimer={resumeTimer}
+                      onResetTimer={resetTimer}
+                      onStopTimer={stopTimer}
+                      lang={lang}
+                      nowMs={now}
+                    />
                     <PhaseBlock title={t.calc.mixerSteps.B.title} steps={directHomeSchedule ? withoutDirectScheduleTiming(adaptFermentationSteps(t.calc.mixerSteps.B.steps, directRecipeRoomHours, directRecipeFridgeHours, fridgeTemp, lang)) : adaptFermentationSteps(t.calc.mixerSteps.B.steps, roomHours, fridgeHours, fridgeTemp, lang)} phaseKey={`direct-mixer-B`} timers={directHomeSchedule ? [] : getDirectPhaseTimers('direct-mixer-B', roomHours, fridgeHours)} phaseGuide={{ kind: 'stretchFold', onPress: (phaseTitle) => { setMixingGuidePhaseTitle(phaseTitle); setVisualGuideSlide(0); setMixingGuideKind('stretchFold'); } }} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onResetTimer={resetTimer} onStopTimer={stopTimer} lang={lang} nowMs={now} />
                     <PhaseBlock title={t.calc.mixerSteps.C.title} steps={directHomeSchedule ? withoutDirectScheduleTiming(adaptDirectPhaseSteps('C', t.calc.mixerSteps.C.steps, directRecipeRoomHours, directRecipeFridgeHours, fridgeTemp, lang)) : adaptDirectPhaseSteps('C', t.calc.mixerSteps.C.steps, roomHours, fridgeHours, fridgeTemp, lang)} phaseKey={`direct-mixer-C`} timers={directHomeSchedule ? [] : getDirectPhaseTimers('direct-mixer-C', roomHours, fridgeHours)} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onResetTimer={resetTimer} onStopTimer={stopTimer} lang={lang} nowMs={now} />
                     <PhaseBlock title={t.calc.mixerSteps.D.title} steps={directHomeSchedule ? withoutDirectScheduleTiming(adaptDirectPhaseSteps('D', t.calc.mixerSteps.D.steps, directRecipeRoomHours, directRecipeFridgeHours, fridgeTemp, lang)) : adaptDirectPhaseSteps('D', t.calc.mixerSteps.D.steps, roomHours, fridgeHours, fridgeTemp, lang)} phaseKey={`direct-mixer-D`} timers={directHomeSchedule ? [] : getDirectPhaseTimers('direct-mixer-D', roomHours, fridgeHours)} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onResetTimer={resetTimer} onStopTimer={stopTimer} lang={lang} nowMs={now} />
                   </>
                 )
+              ) : method === 'sponge' && spongePreparationPhase ? (
+                <PhaseBlock
+                  title={spongePreparationPhase.title}
+                  steps={spongePreparationPhase.steps}
+                  phaseKey="sponge-preparation"
+                  timers={[spongePreparationPhase.timer]}
+                  completed={completedSteps}
+                  onToggle={toggleStep}
+                  activeTimers={activeTimers}
+                  onStartTimer={startTimer}
+                  onPauseTimer={pauseTimer}
+                  onResumeTimer={resumeTimer}
+                  onResetTimer={resetTimer}
+                  onStopTimer={stopTimer}
+                  lang={lang}
+                  nowMs={now}
+                />
               ) : method === 'biga' ? (
                 (() => {
-                  const path = getYeastAwarePrefermentSteps(lang, 'biga', mixingForExperience, preferredYeastType, isRomanTeglia, dough.main.oil > 0);
+                  const remainingFlourDescription = isCustom
+                    ? `${weight(blendFlourAmounts.first)} g ${flourName(lang, blendA)} + ${weight(blendFlourAmounts.second)} g ${flourName(lang, blendB)} (${weight(dough.main.flour)} g total)`
+                    : `${weight(dough.main.flour)} g`;
+                  const path = getYeastAwarePrefermentSteps(lang, 'biga', mixingForExperience, activeYeastType, weight(dough.main.yeast, true), isRomanTeglia, dough.main.oil > 0, flour, isProEffectivelyGlutenFree, remainingFlourDescription, fridgeTemp, proSpiralRecipe);
+                  const p3Steps = isRomanTeglia
+                    ? proTegliaPrefermentP3Steps(path.p3.steps)
+                    : bigaHomeSchedule
+                      ? withoutBigaScheduleTiming(path.p3.steps)
+                      : adaptFermentationSteps(path.p3.steps, roomHours, fridgeHours, fridgeTemp, lang);
+                  const kamadoP3Phases = oven === 'kamado'
+                    ? buildKamadoPrefermentPhases(path.p3, p3Steps, lang, kamadoProfileForExperience)
+                    : null;
                   return (
                     <>
                       {!bigaPreparation ? <PhaseBlock title={path.p1.title} steps={adaptFermentationSteps(path.p1.steps, roomHours, fridgeHours, fridgeTemp, lang)} phaseKey={`biga-${mixingForExperience}-P1`} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onResetTimer={resetTimer} onStopTimer={stopTimer} lang={lang} nowMs={now} /> : null}
-                      <PhaseBlock title={path.p2.title} steps={bigaHomeSchedule ? withoutBigaScheduleTiming(path.p2.steps) : adaptFermentationSteps(path.p2.steps, roomHours, fridgeHours, fridgeTemp, lang)} phaseKey={`biga-${mixingForExperience}-P2`} timers={bigaHomeSchedule ? [] : undefined} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onResetTimer={resetTimer} onStopTimer={stopTimer} lang={lang} nowMs={now} />
-                      <PhaseBlock title={path.p3.title} steps={isRomanTeglia ? path.p3.steps : bigaHomeSchedule ? withoutBigaScheduleTiming(path.p3.steps) : adaptFermentationSteps(path.p3.steps, roomHours, fridgeHours, fridgeTemp, lang)} phaseKey={`biga-${mixingForExperience}-P3`} timers={isRomanTeglia || bigaHomeSchedule ? [] : undefined} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onResetTimer={resetTimer} onStopTimer={stopTimer} lang={lang} nowMs={now} />
+                      <PhaseBlock title={path.p2.title} steps={withProIceWaterInstruction(bigaHomeSchedule ? withoutBigaScheduleTiming(path.p2.steps) : adaptFermentationSteps(path.p2.steps, roomHours, fridgeHours, fridgeTemp, lang))} stepInfo={mixingForExperience === 'spiral' && proSpiralRecipe ? getProSpiralMixingStepInfo(lang, proSpiralRecipe, path.p2.steps) : mixingForExperience === 'mixer' && proSpiralRecipe ? getProHomeMixerStepInfo(lang, proSpiralRecipe, path.p2.steps) : undefined} waterInfo={proIceWaterInstructions?.waterInfo} waterInfoStepIndex={proIceWaterInstructions ? getProIceWaterInfoStepIndex(path.p2.steps) : undefined} phaseKey={`biga-${mixingForExperience}-P2`} timers={bigaHomeSchedule ? [] : undefined} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onResetTimer={resetTimer} onStopTimer={stopTimer} lang={lang} nowMs={now} />
+                      {kamadoP3Phases ? kamadoP3Phases.map((phase, phaseIndex) => (
+                        <PhaseBlock key={`biga-kamado-${phaseIndex}`} title={phase.title} steps={phase.steps} stepInfo={phase.stepInfo} phaseKey={`biga-${mixingForExperience}-kamado-${phaseIndex}`} timers={phase.timers} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onResetTimer={resetTimer} onStopTimer={stopTimer} lang={lang} nowMs={now} />
+                      )) : (
+                        <PhaseBlock title={path.p3.title} steps={p3Steps} phaseKey={`biga-${mixingForExperience}-P3`} timers={isRomanTeglia || bigaHomeSchedule ? [] : undefined} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onResetTimer={resetTimer} onStopTimer={stopTimer} lang={lang} nowMs={now} />
+                      )}
                     </>
                   );
                 })()
-              ) : (
+              ) : method === 'poolish' ? (
                 (() => {
-                  const path = getYeastAwarePrefermentSteps(lang, 'poolish', mixingForExperience, preferredYeastType, isRomanTeglia, dough.main.oil > 0);
+                  const path = getYeastAwarePrefermentSteps(lang, 'poolish', mixingForExperience, activeYeastType, weight(dough.main.yeast, true), isRomanTeglia, dough.main.oil > 0, flour, isProEffectivelyGlutenFree, undefined, fridgeTemp, proSpiralRecipe);
+                  const p3Steps = isRomanTeglia
+                    ? proTegliaPrefermentP3Steps(path.p3.steps)
+                    : poolishHomeSchedule
+                      ? withoutBigaScheduleTiming(path.p3.steps)
+                      : adaptFermentationSteps(path.p3.steps, roomHours, fridgeHours, fridgeTemp, lang);
+                  const kamadoP3Phases = oven === 'kamado'
+                    ? buildKamadoPrefermentPhases(path.p3, p3Steps, lang, kamadoProfileForExperience)
+                    : null;
                   return (
                     <>
-                      <PhaseBlock title={path.p1.title} steps={poolishHomeSchedule ? withoutBigaScheduleTiming(path.p1.steps) : adaptFermentationSteps(path.p1.steps, roomHours, fridgeHours, fridgeTemp, lang)} phaseKey={`poolish-${mixingForExperience}-P1`} timers={poolishHomeSchedule ? [] : [...(roomHours > 0 ? [{ id: 'room-custom', seconds: roomHours * 3600, kind: 'rt' as const }] : []), ...(fridgeHours > 0 ? [{ id: 'fridge-custom', seconds: fridgeHours * 3600, kind: 'fridge' as const }] : [])]} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onResetTimer={resetTimer} onStopTimer={stopTimer} lang={lang} nowMs={now} />
-                      <PhaseBlock title={path.p2.title} steps={poolishMixSteps ?? adaptFermentationSteps(path.p2.steps, roomHours, fridgeHours, fridgeTemp, lang)} phaseKey={`poolish-${mixingForExperience}-P2`} timers={poolishHomeSchedule ? [] : undefined} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onResetTimer={resetTimer} onStopTimer={stopTimer} lang={lang} nowMs={now} />
-                      <PhaseBlock title={path.p3.title} steps={isRomanTeglia ? path.p3.steps : poolishHomeSchedule ? withoutBigaScheduleTiming(path.p3.steps) : adaptFermentationSteps(path.p3.steps, roomHours, fridgeHours, fridgeTemp, lang)} phaseKey={`poolish-${mixingForExperience}-P3`} timers={isRomanTeglia || poolishHomeSchedule ? [] : undefined} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onResetTimer={resetTimer} onStopTimer={stopTimer} lang={lang} nowMs={now} />
+                      {isBeginner || !poolishPreparation ? (
+                        <PhaseBlock title={path.p1.title} steps={poolishHomeSchedule ? withoutBigaScheduleTiming(path.p1.steps) : adaptFermentationSteps(path.p1.steps, roomHours, fridgeHours, fridgeTemp, lang)} phaseKey={`poolish-${mixingForExperience}-P1`} timers={poolishHomeSchedule ? [] : [...(roomHours > 0 ? [{ id: 'room-custom', seconds: roomHours * 3600, kind: 'rt' as const }] : []), ...(fridgeHours > 0 ? [{ id: 'fridge-custom', seconds: fridgeHours * 3600, kind: 'fridge' as const }] : [])]} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onResetTimer={resetTimer} onStopTimer={stopTimer} lang={lang} nowMs={now} />
+                      ) : null}
+                      <PhaseBlock title={path.p2.title} steps={withProIceWaterInstruction(poolishMixSteps ?? adaptFermentationSteps(path.p2.steps, roomHours, fridgeHours, fridgeTemp, lang))} stepInfo={mixingForExperience === 'spiral' && proSpiralRecipe ? getProSpiralMixingStepInfo(lang, proSpiralRecipe, path.p2.steps) : mixingForExperience === 'mixer' && proSpiralRecipe ? getProHomeMixerStepInfo(lang, proSpiralRecipe, path.p2.steps) : undefined} waterInfo={proIceWaterInstructions?.waterInfo} waterInfoStepIndex={proIceWaterInstructions ? getProIceWaterInfoStepIndex(path.p2.steps) : undefined} phaseKey={`poolish-${mixingForExperience}-P2`} timers={poolishHomeSchedule ? [] : undefined} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onResetTimer={resetTimer} onStopTimer={stopTimer} lang={lang} nowMs={now} />
+                      {kamadoP3Phases ? kamadoP3Phases.map((phase, phaseIndex) => (
+                        <PhaseBlock key={`poolish-kamado-${phaseIndex}`} title={phase.title} steps={phase.steps} stepInfo={phase.stepInfo} phaseKey={`poolish-${mixingForExperience}-kamado-${phaseIndex}`} timers={phase.timers} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onResetTimer={resetTimer} onStopTimer={stopTimer} lang={lang} nowMs={now} />
+                      )) : (
+                        <PhaseBlock title={path.p3.title} steps={p3Steps} phaseKey={`poolish-${mixingForExperience}-P3`} timers={isRomanTeglia || poolishHomeSchedule ? [] : undefined} completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onResetTimer={resetTimer} onStopTimer={stopTimer} lang={lang} nowMs={now} />
+                      )}
                     </>
                   );
                 })()
-              )}
+              ) : null}
               <Pressable testID="reset-steps" onPress={resetStepsForCurrent} style={styles.resetBtn}>
                 <Icon name="refresh" size={14} color={COLORS.muted} />
                 <Text style={styles.resetBtnText}>{t.resetStepsBtn}</Text>
@@ -4313,15 +5822,26 @@ export default function CalculatorHome() {
             <Icon name="cart" size={18} color={COLORS.brand} />
             <Text style={[styles.actionBtnText, { color: COLORS.brand }]}>{t.shopping.title}</Text>
           </Pressable>
-          <Pressable testID="share-community" style={[styles.actionBtn, { backgroundColor: COLORS.brand }]} onPress={onShare}>
-            <Icon name="share" size={18} color="#fff" />
-            <Text style={[styles.actionBtnText, { color: '#fff' }]}>{t.calc.shareToFeed}</Text>
+          {COMMUNITY_ENABLED ? (
+            <Pressable testID="share-community" style={[styles.actionBtn, { backgroundColor: COLORS.brand }]} onPress={onShare}>
+              <Icon name="share" size={18} color="#fff" />
+              <Text style={[styles.actionBtnText, { color: '#fff' }]}>{t.calc.shareToFeed}</Text>
+            </Pressable>
+          ) : null}
+          <Pressable testID="save-recipe" style={[styles.actionBtn, styles.saveRecipeBtn]} onPress={openSavedRecipes}>
+            <Icon name="bookmark" size={18} color={COLORS.brand} />
+            <Text style={[styles.actionBtnText, styles.saveRecipeBtnText]}>{t.calc.saveRecipe}</Text>
+          </Pressable>
+          <Pressable
+            testID="cost-calculator"
+            accessibilityRole="link"
+            style={[styles.actionBtn, styles.costCalculatorBtn]}
+            onPress={() => router.push('/cost-calculator')}
+          >
+            <Icon name="calculator-outline" size={18} color={COLORS.brand} />
+            <Text style={[styles.actionBtnText, styles.costCalculatorBtnText]}>{costCalculatorCopy[lang].title}</Text>
           </Pressable>
         </View>
-        <Pressable testID="save-recipe" style={styles.saveRecipeBtn} onPress={openSavedRecipes}>
-          <Icon name="bookmark" size={18} color={COLORS.brand} />
-          <Text style={styles.saveRecipeBtnText}>{t.calc.saveRecipe}</Text>
-        </Pressable>
 
         {/* Footer links */}
         <View style={styles.moreRow}>
@@ -4381,7 +5901,8 @@ export default function CalculatorHome() {
         {moreTool === 'savedRecipes' && (
           <SavedRecipesModal
             editingRecipe={editingRecipe}
-            localOnly={!user}
+            localOnly={OFFLINE_ONLY_MODE || !user}
+            recipeMode={isBeginner ? 'beginner' : 'pro'}
             onClose={() => setMoreTool(null)}
             onLoad={(saved) => {
               applyRecipe(saved.recipe);
@@ -4685,6 +6206,7 @@ export default function CalculatorHome() {
         </View>
       </Modal>
     </ImageBackground>
+    </ProWebInfoContext.Provider>
   );
 }
 
@@ -4699,6 +6221,7 @@ function ResultRow({ label, value, highlight }: { label: string; value: string; 
 }
 
 function getBeginnerOvenTimers(oven: OvenType, ovenTemp: number, isRomanTeglia = false): BaseTimer[] {
+  if (oven === 'kamado') return [];
   const preheatMinutes = isRomanTeglia ? 20 : oven === 'homeStone' ? 52.5 : 20;
   const timers: BaseTimer[] = [
     { id: 'preheat', seconds: Math.round(preheatMinutes * 60), kind: 'preheat' },
@@ -4707,10 +6230,479 @@ function getBeginnerOvenTimers(oven: OvenType, ovenTemp: number, isRomanTeglia =
   if (isRomanTeglia) return timers;
 
   const range = getBakingTimeRange(oven, ovenTemp);
+  if (!range) throw new RangeError(`Baking time is not defined for oven "${oven}".`);
   timers.push({ id: 'bake', seconds: Math.round(((range.min + range.max) / 2) * 60), kind: 'bake' });
 
-  if (oven === 'ooni') timers.push({ id: 'rotate', seconds: 25, kind: 'rotate' });
+  if (usesPizzaOvenBehavior(oven)) timers.push({ id: 'rotate', seconds: 25, kind: 'rotate' });
   return timers;
+}
+
+type ProPhaseEOptions = {
+  lang: Lang;
+  variant: RecipeVariant;
+  mixing?: 'hand' | 'mixer' | 'spiral';
+  glutenFree: boolean;
+  oven: OvenType;
+  ovenTemp: number;
+  fridgeHours: number;
+  finalRestMinutes: number;
+  diameter: number;
+  sauceAmount: number;
+  cheeseAmount: number;
+  trayCount: number;
+  bakingTimeRange: string;
+  trayDimensions: { width: number; length: number };
+};
+
+function replaceProPhaseE(phases: DetailedPhase[], options: ProPhaseEOptions): DetailedPhase[] {
+  if (phases.length === 0) return phases;
+  const { lang, variant, mixing = 'hand', glutenFree, oven, ovenTemp, fridgeHours, finalRestMinutes, diameter, sauceAmount, cheeseAmount, trayCount, bakingTimeRange, trayDimensions } = options;
+  const isKamado = oven === 'kamado';
+  const tray = variant === 'romanaTeglia';
+  const homePan = oven === 'homePan';
+  const preheatTimer: BaseTimer = {
+    id: 'preheat',
+    seconds: getBeginnerPreheatMinutes(oven) * 60,
+    kind: 'preheat',
+  };
+  const duration = (seconds: number) => formatDuration(seconds, lang);
+  const coldDuration = formatDuration(fridgeHours * 3600, lang);
+  const temperingDuration = finalRestMinutes > 0 ? duration(finalRestMinutes * 60) : '';
+  const preheatDuration = duration(preheatTimer?.seconds ?? 0);
+  const ovenTemperature = `${ovenTemp} °C`;
+  const bakeDuration = bakingTimeRange;
+  const rotationIntervalSeconds = 25;
+  const rotationInterval = usesPizzaOvenBehavior(oven) && !tray
+    ? ({
+      hr: `${rotationIntervalSeconds} sekundi`,
+      en: `${rotationIntervalSeconds} seconds`,
+      de: `${rotationIntervalSeconds} Sekunden`,
+      sl: `${rotationIntervalSeconds} sekund`,
+    }[lang])
+    : '';
+  const previousPhaseIsE = /^(?:Faza|Phase) E:/.test(phases[phases.length - 2]?.title ?? '');
+  const finalPhaseLetter = previousPhaseIsE ? 'F' : 'E';
+  const copy = {
+    hr: {
+      title: tray ? `Faza ${finalPhaseLetter}: Temperiranje, priprema tepsije i pečenje` : `Faza ${finalPhaseLetter}: Temperiranje, oblikovanje i pečenje`,
+      temper: fridgeHours > 0
+        ? `Nakon ${coldDuration} u hladnjaku izvadite kuglice i ostavite ih pokrivene ${temperingDuration || 'do omekšavanja'} na sobnoj temperaturi kako bi se opustile. Pazite da ne dođe do prekomjerne fermentacije.`
+        : `Nakon završetka fermentacije ostavite tijesto pokriveno ${temperingDuration || 'do omekšavanja'} na sobnoj temperaturi kako bi se opustilo. Pazite da ne dođe do prekomjerne fermentacije.`,
+      preheat: homePan
+        ? `Uključite kućnu pećnicu s ventilacijom i zagrijte je ${preheatDuration} na ${ovenTemperature}.`
+        : oven === 'homeStone' && !tray
+          ? `Uključite kućnu pećnicu i zagrijte kamen ili čelik za pizzu ${preheatDuration} na ${ovenTemperature} uz uključen grill. Kuglice tijekom zagrijavanja ostavite pokrivene.`
+        : `Uključite ${tray ? 'pećnicu' : 'pizza peć'} i zagrijavajte je ${preheatDuration} na ${ovenTemperature}. ${tray ? 'Tepsiju tijekom zagrijavanja ostavite pripremljenu.' : 'Kuglice tijekom zagrijavanja ostavite pokrivene.'}`,
+      surface: tray
+        ? 'Lagano nauljite tepsiju i pripremite je za utiskivanje tijesta.'
+        : homePan
+          ? glutenFree
+            ? 'Radnu površinu lagano pospite certificiranim bezglutenskim brašnom ili certificiranim bezglutenskim rižinim brašnom, a tepsiju lagano nauljite.'
+            : 'Pripremite čistu radnu površinu za oblikovanje i lagano nauljite tepsiju.'
+          : glutenFree
+            ? 'Radnu površinu i lopatu lagano pospite certificiranim bezglutenskim brašnom ili certificiranim bezglutenskim rižinim brašnom.'
+            : 'Radnu površinu i lopatu lagano pospite semolom.',
+      dough: tray
+        ? 'Nježno prebacite tijesto u pripremljenu tepsiju, bez nepotrebnog istiskivanja zraka.'
+        : glutenFree
+          ? 'Jednu bezglutensku kuglicu nježno izvadite iz fermentacijske kutije strugačem ili lagano nauljenim rukama i prebacite je na pripremljenu radnu površinu bez pritiskanja; ostale kuglice držite pokrivene.'
+          : homePan
+            ? 'Nježno izvadite jednu kuglicu iz fermentacijske kutije i prebacite je na pripremljenu radnu površinu bez nepotrebnog istiskivanja zraka. Ostale kuglice ostavite pokrivene.'
+            : 'Nježno izvadite jednu kuglicu iz fermentacijske kutije i prebacite je na pripremljenu radnu površinu bez nepotrebnog istiskivanja zraka. Po potrebi je nakon vađenja lagano pospite semolom. Ostale kuglice ostavite pokrivene.',
+      shape: tray
+        ? `Prstima nježno utisnite tijesto do rubova tepsije ${trayDimensions.width}×${trayDimensions.length} cm, bez rastezanja u zraku.`
+        : glutenFree
+          ? variant === 'romanaTonda'
+            ? `Bezglutensko tijesto nježno utisnite tanko i ravnomjerno do ${diameter} cm; nemojte ga rastezati.`
+            : variant === 'newYork'
+              ? `Bezglutensko tijesto nježno utisnite do ${diameter} cm, uz tanju sredinu; nemojte ga rastezati kao pšenično tijesto.`
+              : `Bezglutensko tijesto nježno utisnite od sredine prema rubu do ${diameter} cm i ostavite rub za odabrani stil; nemojte ga rastezati u zraku.`
+        : variant === 'romanaTonda'
+          ? `Romanu oblikujte tanko i ravno do ${diameter} cm pritiskanjem prstima ili valjkom, bez agresivnog rastezanja u zraku.`
+        : variant === 'newYork'
+          ? `Prstima nježno potiskujte tijesto od sredine prema rubu, ostavite tanju sredinu i razvucite tijesto do ${diameter} cm.`
+          : `Prstima nježno potiskujte tijesto od sredine prema rubu, ostavite rub predviđen za odabrani stil pizze i razvucite tijesto do ${diameter} cm.`,
+      toppings: `Ravnomjerno rasporedite ${sauceAmount} g umaka i ${cheeseAmount} g dobro ocijeđene mozzarelle. ${tray ? 'Nadjev rasporedite do rubova tepsije.' : 'Ostavite rub bez nadjeva gdje to stil zahtijeva.'}`,
+      launch: homePan
+        ? 'Pizzu pažljivo stavite na pripremljenu tepsiju, zatim tepsiju stavite u pećnicu.'
+        : tray
+          ? 'Provjerite da je tepsija stabilna, zatim je pažljivo stavite u zagrijanu pećnicu.'
+          : oven === 'homeStone'
+            ? 'Provjerite da se pizza slobodno pomiče na lopati, zatim je pažljivo prebacite na potpuno zagrijani kamen ili čelik.'
+            : 'Provjerite da se pizza slobodno pomiče na lopati, zatim je pažljivo ubacite u zagrijanu pizza peć.',
+      bake: homePan
+        ? `Pecite ${bakeDuration} na ${ovenTemperature}; provjerite boju gornje strane i dna, a po potrebi kratko završite s gornjim grillom.`
+        : tray
+        ? `Pecite ${bakeDuration} na ${ovenTemperature}; rotacija nije potrebna.`
+        : rotationInterval
+          ? `Pecite ${bakeDuration} na ${ovenTemperature} i rotirajte svakih ${rotationInterval}.`
+          : `Pecite ${bakeDuration} na ${ovenTemperature}.`,
+      info: [
+        ['Temperiranje', 'Temperiranje ublažava temperaturni šok i omogućuje da se tijesto oblikuje bez naglog vraćanja.'],
+        ['Prethodno zagrijavanje', `Odabrana pećnica treba zasebno vrijeme zagrijavanja od ${preheatDuration}; taj se timer ne pribraja temperiranju.`],
+        ['Radna površina', homePan || tray
+          ? 'Nauljena tepsija sprječava lijepljenje i podupire tijesto tijekom pečenja.'
+          : glutenFree
+            ? 'Za posipanje koristite samo certificirano bezglutensko brašno ili certificirano bezglutensko rižino brašno.'
+            : 'Tanka količina semole smanjuje trenje i pomaže da se oblikovana pizza pomiče bez lijepljenja.'],
+        ['Rukovanje tijestom', tray
+          ? 'Kod Teglie očuvajte plinove u tijestu i izbjegavajte izvlačenje u zraku.'
+          : glutenFree
+            ? 'Tijesto pažljivo podignite strugačem ili lagano nauljenim rukama; ostale kuglice držite pokrivene.'
+            : 'Ostale kuglice ostaju pokrivene kako se njihova površina ne bi osušila.'],
+        ['Oblikovanje', tray
+          ? 'Tijesto se utiskuje u pravokutnu tepsiju i ne oblikuje se kao okrugla pizza.'
+          : glutenFree
+            ? 'Bezglutensko tijesto oblikujte nježnim pritiskanjem; nemojte ga rastezati ili razvlačiti u zraku.'
+            : variant === 'newYork' ? 'Tanja sredina daje savitljivu krišku, dok ravnomjerna debljina podupire stabilno pečenje.' : 'Pritiskanje od sredine prema rubu čuva plinove u rubu i oblikuje osnovu za odabrani stil.'],
+        ['Nadjev', 'Ocijeđena mozzarella smanjuje višak vode i pomaže da se sredina ispeče bez razvodnjavanja.'],
+        ['Ubacivanje', homePan ? 'Pizzu stavite na pripremljenu tepsiju i koristite rukavice pri stavljanju tepsije u pećnicu.' : tray ? 'Tepsija uklanja potrebu za lopatom; pomičite je stabilno kako se nadjev ne bi pomaknuo.' : 'Slobodno klizanje na lopati smanjuje rizik da se tijesto nabora ili zalijepi prije ubacivanja.'],
+        ['Pečenje', homePan ? `Provjerite boju gornje strane i dna nakon ${bakeDuration}; gornji grill uključite kratko samo ako je sigurno i potrebno.` : tray ? `Teglia se peče bez rotacije; spremnost provjerite prema boji ruba i pečenosti dna nakon ${bakeDuration}.` : rotationInterval ? `Rotacija svakih ${rotationInterval} ujednačava pečenje u pizza peći.` : 'Vrijeme pečenja je početni raspon; spremnost provjerite prema boji ruba i pečenosti dna.'],
+      ],
+    },
+    en: {
+      title: tray ? `Phase ${finalPhaseLetter}: Tempering, tray preparation and baking` : `Phase ${finalPhaseLetter}: Tempering, shaping and baking`,
+      temper: fridgeHours > 0
+        ? `After ${coldDuration} in the refrigerator, take out the dough balls and leave them covered for ${temperingDuration || 'until relaxed'} at room temperature. Make sure they do not over-ferment.`
+        : `After fermentation, leave the dough covered for ${temperingDuration || 'until relaxed'} at room temperature. Make sure it does not over-ferment.`,
+      preheat: homePan
+        ? `Turn on the convection oven and preheat it for ${preheatDuration} to ${ovenTemperature}.`
+        : oven === 'homeStone' && !tray
+          ? `Turn on the home oven and preheat the pizza stone or steel for ${preheatDuration} to ${ovenTemperature} with the grill on. Keep the dough balls covered during preheating.`
+        : `Turn on the ${tray ? 'oven' : 'pizza oven'} and preheat it for ${preheatDuration} at ${ovenTemperature}. ${tray ? 'Keep the prepared tray ready during preheating.' : 'Keep the dough balls covered during preheating.'}`,
+      surface: tray
+        ? 'Lightly oil the tray and prepare it for pressing in the dough.'
+        : homePan
+          ? glutenFree
+            ? 'Lightly dust the work surface with certified gluten-free flour or certified gluten-free rice flour, and lightly oil the baking tray.'
+            : 'Prepare a clean work surface for shaping and lightly oil the baking tray.'
+          : glutenFree
+            ? 'Lightly dust the work surface and peel with certified gluten-free flour or certified gluten-free rice flour.'
+            : 'Lightly dust the work surface and peel with semolina.',
+      dough: tray
+        ? 'Gently transfer the dough to the prepared tray without unnecessary degassing.'
+        : glutenFree
+          ? 'Gently remove one gluten-free dough ball from the fermentation box with a scraper or lightly oiled hands and transfer it to the prepared work surface without pressing it; keep the other dough balls covered.'
+          : homePan
+            ? 'Gently remove one dough ball from the fermentation box and transfer it to the prepared work surface without unnecessary degassing. Keep the other dough balls covered.'
+            : 'Gently remove one dough ball from the fermentation box and transfer it to the prepared work surface without unnecessary degassing. Lightly dust it with semolina after removing it if needed. Keep the other dough balls covered.',
+      shape: tray
+        ? `Gently press the dough to the edges of the ${trayDimensions.width}×${trayDimensions.length} cm tray with your fingertips; do not stretch it in the air.`
+        : glutenFree
+          ? variant === 'romanaTonda'
+            ? `Gently press the gluten-free dough into a thin, even round to ${diameter} cm; do not stretch it.`
+            : variant === 'newYork'
+              ? `Gently press the gluten-free dough to ${diameter} cm with a thinner center; do not stretch it like wheat dough.`
+              : `Gently press the gluten-free dough from the center outward to ${diameter} cm, leaving the intended rim; do not stretch it in the air.`
+        : variant === 'romanaTonda'
+          ? `Shape Romana thin and flat to ${diameter} cm by pressing with your fingers or using a rolling pin; do not stretch it aggressively in the air.`
+        : variant === 'newYork'
+          ? `Gently press the dough from the center toward the edge, keep the center thinner, and stretch it to ${diameter} cm.`
+          : `Gently press the dough from the center toward the edge, leave the rim required by the selected style, and stretch it to ${diameter} cm.`,
+      toppings: `Distribute ${sauceAmount} g sauce and ${cheeseAmount} g well-drained mozzarella evenly. ${tray ? 'Spread the toppings to the tray edges.' : 'Leave the rim free where required by the style.'}`,
+      launch: homePan
+        ? 'Carefully place the pizza on the prepared baking tray, then put the tray in the oven.'
+        : tray
+          ? 'Make sure the tray is stable, then carefully place it in the preheated oven.'
+          : oven === 'homeStone'
+            ? 'Check that the pizza moves freely on the peel, then carefully transfer it to the fully heated stone or steel.'
+            : 'Check that the pizza moves freely on the peel, then carefully launch it into the preheated pizza oven.',
+      bake: homePan
+        ? `Bake for ${bakeDuration} at ${ovenTemperature}; check the top and bottom, and briefly finish with the upper grill if needed.`
+        : tray
+        ? `Bake for ${bakeDuration} at ${ovenTemperature}; no rotation is needed.`
+        : rotationInterval
+          ? `Bake for ${bakeDuration} at ${ovenTemperature} and rotate every ${rotationInterval}.`
+          : `Bake for ${bakeDuration} at ${ovenTemperature}.`,
+      info: [
+        ['Tempering', 'Tempering reduces thermal shock and lets the dough shape without snapping back abruptly.'],
+        ['Preheating', `The selected oven has a separate preheat duration of ${preheatDuration}; this timer is independent from tempering.`],
+        ['Work surface', homePan || tray
+          ? 'An oiled tray prevents sticking and supports the dough during baking.'
+          : glutenFree
+            ? 'Use only certified gluten-free flour or certified gluten-free rice flour for dusting.'
+            : 'A light semolina dusting reduces friction and helps the shaped pizza move without sticking.'],
+        ['Dough handling', tray
+          ? 'For Teglia, preserve the gas in the dough and avoid pulling it in the air.'
+          : glutenFree
+            ? 'Carefully lift the dough with a scraper or lightly oiled hands; keep the other dough balls covered.'
+            : 'Keep the other dough balls covered so their surface does not dry out.'],
+        ['Shaping', tray
+          ? 'The dough is pressed into a rectangular tray rather than shaped as a round pizza.'
+          : glutenFree
+            ? 'Gently press the gluten-free dough to the target size; do not stretch, pull or toss it in the air.'
+            : variant === 'newYork' ? 'A thinner center gives a foldable slice while even thickness supports consistent baking.' : 'Pressing from the center outward preserves gas in the rim and supports the selected style.'],
+        ['Toppings', 'Well-drained mozzarella limits excess water so the center can bake without becoming wet.'],
+        ['Launching', homePan ? 'Place the pizza on the prepared baking tray and use oven gloves when putting the tray into the oven.' : tray ? 'The tray removes the need for a peel; move it steadily so the toppings stay in place.' : 'Free movement on the peel reduces the risk of wrinkling or sticking before launch.'],
+        ['Baking', homePan ? `Check the top and bottom after ${bakeDuration}; use the upper grill briefly only if it is safe and needed.` : tray ? `Teglia does not rotate; check the rim color and base after ${bakeDuration}.` : rotationInterval ? `Rotating every ${rotationInterval} evens out baking in a pizza oven.` : 'The bake time is a starting range; check the rim color and base doneness.'],
+      ],
+    },
+    de: {
+      title: tray ? `Phase ${finalPhaseLetter}: Temperieren, Blech vorbereiten und backen` : `Phase ${finalPhaseLetter}: Temperieren, Formen und Backen`,
+      temper: fridgeHours > 0
+        ? `Nehmen Sie die Teigkugeln nach ${coldDuration} im Kühlschrank heraus und lassen Sie sie ${temperingDuration || 'bis sie entspannt sind'} abgedeckt bei Raumtemperatur stehen. Achten Sie auf eine Übergare.`
+        : `Lassen Sie den Teig nach der Fermentation ${temperingDuration || 'bis er entspannt ist'} abgedeckt bei Raumtemperatur stehen. Achten Sie auf eine Übergare.`,
+      preheat: homePan
+        ? `Schalten Sie den Umluftofen ein und heizen Sie ihn ${preheatDuration} Minuten lang auf ${ovenTemperature} vor.`
+        : oven === 'homeStone' && !tray
+          ? `Schalten Sie den Haushaltsbackofen ein und heizen Sie den Pizzastein oder -stahl ${preheatDuration} auf ${ovenTemperature} vor; lassen Sie den Grill eingeschaltet. Lassen Sie die Teigkugeln währenddessen abgedeckt.`
+        : `Schalten Sie den ${tray ? 'Ofen' : 'Pizzaofen'} ein und heizen Sie ihn ${preheatDuration} auf ${ovenTemperature} vor. ${tray ? 'Halten Sie das vorbereitete Blech währenddessen bereit.' : 'Lassen Sie die Teigkugeln währenddessen abgedeckt.'}`,
+      surface: tray
+        ? 'Ölen Sie das Blech leicht und bereiten Sie es zum Eindrücken des Teigs vor.'
+        : homePan
+          ? glutenFree
+            ? 'Bestäuben Sie die Arbeitsfläche leicht mit zertifiziert glutenfreiem Mehl oder zertifiziert glutenfreiem Reismehl und ölen Sie das Backblech leicht ein.'
+            : 'Bereiten Sie eine saubere Arbeitsfläche zum Formen vor und ölen Sie das Backblech leicht ein.'
+          : glutenFree
+            ? 'Bestäuben Sie die Arbeitsfläche und den Schieber leicht mit zertifiziert glutenfreiem Mehl oder zertifiziert glutenfreiem Reismehl.'
+            : 'Bestäuben Sie die Arbeitsfläche und den Schieber leicht mit Semola.',
+      dough: tray
+        ? 'Legen Sie den Teig vorsichtig in das vorbereitete Blech, ohne unnötig Gas herauszudrücken.'
+        : glutenFree
+          ? 'Nehmen Sie eine glutenfreie Teigkugel vorsichtig mit einem Teigschaber oder leicht geölten Händen aus der Gärbox und legen Sie sie ohne Druck auf die vorbereitete Arbeitsfläche; lassen Sie die übrigen Kugeln abgedeckt.'
+          : homePan
+            ? 'Nehmen Sie eine Teigkugel vorsichtig aus der Gärbox und legen Sie sie auf die vorbereitete Arbeitsfläche, ohne unnötig Gas herauszudrücken. Lassen Sie die übrigen Kugeln abgedeckt.'
+            : 'Nehmen Sie eine Teigkugel vorsichtig aus der Gärbox und legen Sie sie auf die vorbereitete Arbeitsfläche, ohne unnötig Gas herauszudrücken. Bestäuben Sie sie bei Bedarf nach dem Herausnehmen leicht mit Semola. Lassen Sie die übrigen Kugeln abgedeckt.',
+      shape: tray
+        ? `Drücken Sie den Teig mit den Fingerspitzen bis an den Rand des ${trayDimensions.width}×${trayDimensions.length} cm großen Blechs; nicht in der Luft ziehen.`
+        : glutenFree
+          ? variant === 'romanaTonda'
+            ? `Drücken Sie den glutenfreien Teig vorsichtig dünn und gleichmäßig auf ${diameter} cm; dehnen Sie ihn nicht.`
+            : variant === 'newYork'
+              ? `Drücken Sie den glutenfreien Teig vorsichtig auf ${diameter} cm und lassen Sie die Mitte dünner; dehnen Sie ihn nicht wie Weizenteig.`
+              : `Drücken Sie den glutenfreien Teig vorsichtig von der Mitte nach außen auf ${diameter} cm und lassen Sie den vorgesehenen Rand; ziehen Sie ihn nicht in der Luft.`
+        : variant === 'romanaTonda'
+          ? `Formen Sie die Romana dünn und flach auf ${diameter} cm, indem Sie sie mit den Fingern oder einem Nudelholz drücken; dehnen Sie sie nicht aggressiv in der Luft.`
+        : variant === 'newYork'
+          ? `Drücken Sie den Teig vorsichtig von der Mitte zum Rand, lassen Sie die Mitte dünner und formen Sie ihn auf ${diameter} cm.`
+          : `Drücken Sie den Teig vorsichtig von der Mitte zum Rand, lassen Sie den für den Stil vorgesehenen Rand stehen und formen Sie ihn auf ${diameter} cm.`,
+      toppings: `Verteilen Sie ${sauceAmount} g Sauce und ${cheeseAmount} g gut abgetropften Mozzarella gleichmäßig. ${tray ? 'Verteilen Sie den Belag bis zu den Blechkanten.' : 'Lassen Sie den Rand entsprechend dem Stil frei.'}`,
+      launch: homePan
+        ? 'Legen Sie die Pizza vorsichtig auf das vorbereitete Blech und stellen Sie das Blech in den Ofen.'
+        : tray
+          ? 'Prüfen Sie, ob das Blech stabil steht, und stellen Sie es vorsichtig in den vorgeheizten Ofen.'
+          : oven === 'homeStone'
+            ? 'Prüfen Sie, ob sich die Pizza frei auf dem Schieber bewegt, und legen Sie sie vorsichtig auf den vollständig aufgeheizten Stein oder Stahl.'
+            : 'Prüfen Sie, ob sich die Pizza frei auf dem Schieber bewegt, und schieben Sie sie vorsichtig in den vorgeheizten Pizzaofen.',
+      bake: homePan
+        ? `Backen Sie ${bakeDuration} bei ${ovenTemperature}; prüfen Sie Oberseite und Boden und bräunen Sie bei Bedarf kurz mit dem Obergrill nach.`
+        : tray
+        ? `Backen Sie ${bakeDuration} bei ${ovenTemperature}; drehen ist nicht erforderlich.`
+        : rotationInterval
+          ? `Backen Sie ${bakeDuration} bei ${ovenTemperature} und drehen Sie die Pizza alle ${rotationInterval}.`
+          : `Backen Sie ${bakeDuration} bei ${ovenTemperature}.`,
+      info: [
+        ['Temperieren', 'Temperieren verringert den Temperaturschock und verhindert ein abruptes Zurückschnappen des Teigs.'],
+        ['Vorheizen', `Der ausgewählte Ofen hat eine separate Vorheizzeit von ${preheatDuration}; dieser Timer ist unabhängig vom Temperieren.`],
+        ['Arbeitsfläche', homePan || tray
+          ? 'Ein geöltes Blech verhindert Anhaften und trägt den Teig beim Backen.'
+          : glutenFree
+            ? 'Verwenden Sie zum Bestäuben nur zertifiziert glutenfreies Mehl oder zertifiziert glutenfreies Reismehl.'
+            : 'Eine dünne Semolaschicht verringert die Reibung und verhindert Anhaften.'],
+        ['Teighandhabung', tray
+          ? 'Bei Teglia bleiben die Gärgase im Teig; ziehen Sie ihn nicht in der Luft.'
+          : glutenFree
+            ? 'Heben Sie den Teig vorsichtig mit einem Teigschaber oder leicht geölten Händen an; lassen Sie die übrigen Teigkugeln abgedeckt.'
+            : 'Die übrigen Teigkugeln bleiben abgedeckt, damit ihre Oberfläche nicht austrocknet.'],
+        ['Formen', tray
+          ? 'Der Teig wird in ein rechteckiges Blech gedrückt und nicht rund geformt.'
+          : glutenFree
+            ? 'Drücken Sie den glutenfreien Teig vorsichtig auf die Zielgröße; dehnen, ziehen oder werfen Sie ihn nicht in der Luft.'
+            : variant === 'newYork' ? 'Eine dünnere Mitte macht die Scheibe faltbar und unterstützt gleichmäßiges Backen.' : 'Das Drücken von der Mitte nach außen bewahrt Gas im Rand und unterstützt den gewählten Stil.'],
+        ['Belag', 'Gut abgetropfter Mozzarella verhindert überschüssige Feuchtigkeit in der Mitte.'],
+        ['Einschießen', homePan ? 'Legen Sie die Pizza auf das vorbereitete Blech und verwenden Sie Ofenhandschuhe, wenn Sie das Blech in den Ofen stellen.' : tray ? 'Beim Blech ist kein Schieber erforderlich; bewegen Sie es ruhig, damit der Belag liegen bleibt.' : 'Freies Gleiten auf dem Schieber verringert das Risiko von Falten oder Anhaften.'],
+        ['Backen', homePan ? `Prüfen Sie Oberseite und Boden nach ${bakeDuration}; verwenden Sie den Obergrill nur kurz, wenn dies sicher und nötig ist.` : tray ? `Teglia wird nicht gedreht; prüfen Sie Randfarbe und Boden nach ${bakeDuration}.` : rotationInterval ? `Das Drehen alle ${rotationInterval} sorgt im Pizzaofen für gleichmäßiges Backen.` : 'Die Backzeit ist ein Ausgangsbereich; prüfen Sie Randfarbe und Boden.'],
+      ],
+    },
+    sl: {
+      title: tray ? `Faza ${finalPhaseLetter}: Temperiranje, priprava pekača in peka` : `Faza ${finalPhaseLetter}: Temperiranje, oblikovanje in peka`,
+      temper: fridgeHours > 0
+        ? `Po ${coldDuration} v hladilniku kroglice vzemite ven in jih pokrite pustite ${temperingDuration || 'do sprostitve'} na sobni temperaturi. Pazite, da ne fermentirajo preveč.`
+        : `Po fermentaciji testo pokrito pustite ${temperingDuration || 'do sprostitve'} na sobni temperaturi. Pazite, da ne fermentira preveč.`,
+      preheat: homePan
+        ? `Vklopite domačo pečico z ventilacijo in jo ${preheatDuration} segrevajte pri ${ovenTemperature}.`
+        : oven === 'homeStone' && !tray
+          ? `Vklopite domačo pečico in segrejte kamen ali jeklo za pico ${preheatDuration} pri ${ovenTemperature} z vklopljenim žarom. Kroglice naj med segrevanjem ostanejo pokrite.`
+        : `Vklopite ${tray ? 'pečico' : 'pizza peč'} in jo ${preheatDuration} segrevajte pri ${ovenTemperature}. ${tray ? 'Pripravljen pekač naj bo med segrevanjem pripravljen.' : 'Kroglice naj med segrevanjem ostanejo pokrite.'}`,
+      surface: tray
+        ? 'Pekač rahlo naoljite in ga pripravite za vtiskovanje testa.'
+        : homePan
+          ? glutenFree
+            ? 'Delovno površino rahlo posujte s certificirano brezglutensko moko ali certificirano brezglutensko riževo moko, pekač pa rahlo naoljite.'
+            : 'Pripravite čisto delovno površino za oblikovanje in rahlo naoljite pekač.'
+          : glutenFree
+            ? 'Delovno površino in lopar rahlo posujte s certificirano brezglutensko moko ali certificirano brezglutensko riževo moko.'
+            : 'Delovno površino in lopar rahlo posujte z zdrobom.',
+      dough: tray
+        ? 'Testo nežno prenesite v pripravljen pekač, ne da bi po nepotrebnem iztisnili plin.'
+        : glutenFree
+          ? 'Eno brezglutensko kroglico nežno vzemite iz fermentacijske posode s strgalom ali rahlo naoljenimi rokami in jo brez pritiskanja prenesite na pripravljeno delovno površino; preostale kroglice naj ostanejo pokrite.'
+          : homePan
+            ? 'Eno kroglico nežno vzemite iz fermentacijske posode in jo prenesite na pripravljeno delovno površino, ne da bi po nepotrebnem iztisnili plin. Preostale kroglice naj ostanejo pokrite.'
+            : 'Eno kroglico nežno vzemite iz fermentacijske posode in jo prenesite na pripravljeno delovno površino, ne da bi po nepotrebnem iztisnili plin. Po potrebi jo po odstranitvi rahlo posujte z zdrobom. Preostale kroglice naj ostanejo pokrite.',
+      shape: tray
+        ? `Testo s konicami prstov nežno potisnite do robov pekača ${trayDimensions.width}×${trayDimensions.length} cm; ne raztezajte ga v zraku.`
+        : glutenFree
+          ? variant === 'romanaTonda'
+            ? `Brezglutensko testo nežno in enakomerno vtisnite v tanko obliko do ${diameter} cm; ne raztezajte ga.`
+            : variant === 'newYork'
+              ? `Brezglutensko testo nežno vtisnite do ${diameter} cm in pustite sredino tanjšo; ne raztezajte ga kot pšenično testo.`
+              : `Brezglutensko testo nežno vtisnite od sredine navzven do ${diameter} cm in pustite predviden rob; ne raztezajte ga v zraku.`
+        : variant === 'romanaTonda'
+          ? `Romano oblikujte tanko in ravno do ${diameter} cm s pritiskanjem s prsti ali valjarjem; ne raztezajte je agresivno v zraku.`
+        : variant === 'newYork'
+          ? `Testo nežno pritiskajte od sredine proti robu, sredino pustite tanjšo in ga raztegnite do ${diameter} cm.`
+          : `Testo nežno pritiskajte od sredine proti robu, pustite rob za izbrani slog in ga raztegnite do ${diameter} cm.`,
+      toppings: `Enakomerno razporedite ${sauceAmount} g omake in ${cheeseAmount} g dobro odcejene mocarele. ${tray ? 'Nadev razporedite do robov pekača.' : 'Rob pustite prost, kjer to zahteva slog.'}`,
+      launch: homePan
+        ? 'Pico previdno položite na pripravljen pekač, nato pekač postavite v pečico.'
+        : tray
+          ? 'Preverite, ali je pekač stabilen, nato ga previdno postavite v segreto pečico.'
+          : oven === 'homeStone'
+            ? 'Preverite, ali se pica prosto premika na loparju, nato jo previdno prenesite na popolnoma segret kamen ali jeklo.'
+            : 'Preverite, ali se pica prosto premika na loparju, nato jo previdno vstavite v segreto pizza peč.',
+      bake: homePan
+        ? `Pecite ${bakeDuration} pri ${ovenTemperature}; preverite barvo vrha in dna ter po potrebi na kratko zaključite z zgornjim žarom.`
+        : tray
+        ? `Pecite ${bakeDuration} pri ${ovenTemperature}; obračanje ni potrebno.`
+        : rotationInterval
+          ? `Pecite ${bakeDuration} pri ${ovenTemperature} in pico obračajte vsakih ${rotationInterval}.`
+          : `Pecite ${bakeDuration} pri ${ovenTemperature}.`,
+      info: [
+        ['Temperiranje', 'Temperiranje zmanjša temperaturni šok in omogoči oblikovanje brez nenadnega krčenja testa.'],
+        ['Segrevanje', `Izbrana pečica ima ločen čas segrevanja ${preheatDuration}; ta časovnik je neodvisen od temperiranja.`],
+        ['Delovna površina', homePan || tray
+          ? 'Naoljen pekač prepreči lepljenje in podpira testo med peko.'
+          : glutenFree
+            ? 'Za posipanje uporabite samo certificirano brezglutensko moko ali certificirano brezglutensko riževo moko.'
+            : 'Tanka plast zdroba zmanjša trenje in pomaga, da se oblikovana pica ne prime.'],
+        ['Ravnanje s testom', tray
+          ? 'Pri Tegli ohranite pline v testu in ga ne vlecite v zraku.'
+          : glutenFree
+            ? 'Testo previdno dvignite s strgalom ali rahlo naoljenimi rokami; preostale kroglice naj ostanejo pokrite.'
+            : 'Preostale kroglice naj ostanejo pokrite, da se njihova površina ne izsuši.'],
+        ['Oblikovanje', tray
+          ? 'Testo vtisnemo v pravokoten pekač in ga ne oblikujemo kot okroglo pico.'
+          : glutenFree
+            ? 'Brezglutensko testo oblikujte z nežnim vtiskanjem; ne raztegujte ga ali vlecite po zraku.'
+            : variant === 'newYork' ? 'Tanjša sredina omogoča upogljivo rezino in enakomerno peko.' : 'Pritiskanje od sredine navzven ohrani pline v robu in podpira izbrani slog.'],
+        ['Nadev', 'Dobro odcejena mocarela zmanjša odvečno vodo, da se sredina lahko speče brez razmočenosti.'],
+        ['Vstavljanje', homePan ? 'Pico položite na pripravljen pekač in pri vstavljanju pekača v pečico uporabite rokavice.' : tray ? 'Pri pekaču lopar ni potreben; premikajte ga mirno, da nadev ostane na mestu.' : 'Prosto premikanje na loparju zmanjša nevarnost gubanja ali lepljenja pred vstavljanjem.'],
+        ['Peka', homePan ? `Po ${bakeDuration} preverite barvo vrha in dna; žar na kratko uporabite le, če je varno in potrebno.` : tray ? `Teglie ni treba obračati; po ${bakeDuration} preverite barvo roba in pečenost dna.` : rotationInterval ? `Obračanje vsakih ${rotationInterval} izenači peko v pizza peči.` : 'Čas peke je začetni razpon; preverite barvo roba in pečenost dna.'],
+      ],
+    },
+  }[lang];
+  const tegliaProofPlan = getTegliaFinalProofPlan(Math.max(0, finalRestMinutes));
+  const tegliaProofDuration = duration(tegliaProofPlan.proofMinutes * 60);
+  const tegliaPressRelaxation = duration(tegliaProofPlan.pressRelaxationMinutes * 60);
+  const tegliaTimingStep = tegliaProofPlan.proofMinutes > 0
+    ? ({
+      hr: `Izvadite cijelu masu tijesta iz hladnjaka u planirano vrijeme. Od vađenja do pečenja imate ukupno ${temperingDuration}; u taj prozor stanu priprema tepsija (oko ${tegliaPressRelaxation}) i završno dizanje od ${tegliaProofDuration}. Nemojte dodavati novi odmor nakon tog prozora.`,
+      en: `Take the complete dough mass out of the refrigerator at the scheduled time. The total window from removal to baking is ${temperingDuration}; it includes tray preparation (about ${tegliaPressRelaxation}) and a ${tegliaProofDuration} final rise. Do not add another rest after this window.`,
+      de: `Nehmen Sie die gesamte Teigmasse zum geplanten Zeitpunkt aus dem Kühlschrank. Das gesamte Zeitfenster vom Herausnehmen bis zum Backen beträgt ${temperingDuration}; es umfasst die Blechvorbereitung (etwa ${tegliaPressRelaxation}) und eine Endgare von ${tegliaProofDuration}. Planen Sie danach keine zusätzliche Ruhezeit ein.`,
+      sl: `Celotno maso testa vzemi iz hladilnika ob načrtovanem času. Skupno časovno okno od odvzema do peke je ${temperingDuration}; vključuje pripravo pekačev (približno ${tegliaPressRelaxation}) in končno vzhajanje ${tegliaProofDuration}. Po tem oknu ne dodajaj dodatnega počitka.`,
+    }[lang])
+    : ({
+      hr: 'Izvadite cijelu masu tijesta iz hladnjaka u planirano vrijeme i držite je pokrivenu do pripreme tepsija. Ako raspored upozorava da nema dovoljno vremena za završno dizanje, pomaknite pečenje umjesto da ga preskočite.',
+      en: 'Take the complete dough mass out of the refrigerator at the scheduled time and keep it covered until tray preparation. If the schedule warns that there is not enough time for the final rise, move the bake time rather than skipping it.',
+      de: 'Nehmen Sie die gesamte Teigmasse zum geplanten Zeitpunkt aus dem Kühlschrank und lassen Sie sie bis zur Blechvorbereitung abgedeckt. Wenn der Zeitplan vor zu wenig Zeit für die Endgare warnt, verschieben Sie den Backzeitpunkt, statt sie auszulassen.',
+      sl: 'Celotno maso testa vzemi iz hladilnika ob načrtovanem času in jo do priprave pekačev pusti pokrito. Če načrt opozarja, da za končno vzhajanje ni dovolj časa, prestavi peko, namesto da vzhajanje izpustiš.',
+    }[lang]);
+  const tegliaSteps = {
+    hr: [
+      tegliaTimingStep,
+      `U planirano vrijeme zagrijavanja uključite odabranu pećnicu i zagrijte je ${preheatDuration} na ${ovenTemperature}.`,
+      `Lagano nauljite svih ${trayCount} tepsija dimenzija ${trayDimensions.width}×${trayDimensions.length} cm.`,
+      `Ukupno tijesto podijelite na ${trayCount} jednakih porcija i stavite po jednu u svaku tepsiju.`,
+      'Svaku porciju nježno utisnite prstima prema rubovima bez rastezanja u zraku.',
+      ...(tegliaProofPlan.pressRelaxationMinutes > 0 ? [`Ako se tijesto vraća prema sredini, pokrijte ga i ostavite ${tegliaPressRelaxation} da se opusti, zatim nastavite utiskivati.`] : []),
+      ...(tegliaProofPlan.proofMinutes > 0 ? [`Nakon utiskivanja pokrijte tepsije i ostavite tijesto da se završno diže još ${tegliaProofDuration}; ovaj je odmor već uključen u raspored.`] : ['Ako raspored nema dovoljno vremena za završno dizanje u tepsiji, pomaknite pečenje kako ga ne biste preskočili.']),
+      `Ravnomjerno rasporedite ${Math.round(sauceAmount)} g umaka i ${Math.round(cheeseAmount)} g dobro ocijeđene mozzarelle.`,
+      `Ubacite tepsije u pećnicu i pecite ${bakeDuration} na ${ovenTemperature}, dok se dno i rubovi dobro ne ispeku.`,
+      'Na kraju kratko uključite grill samo ako je potrebno za jače rumenjenje gornje strane.',
+    ],
+    en: [
+      tegliaTimingStep,
+      `At the scheduled preheat time, turn on the selected oven and preheat it for ${preheatDuration} to ${ovenTemperature}.`,
+      `Lightly oil all ${trayCount} trays measuring ${trayDimensions.width}×${trayDimensions.length} cm.`,
+      `Divide the total dough into ${trayCount} equal portions and place one portion in each tray.`,
+      'Gently press each portion toward the edges with your fingertips; do not stretch it in the air.',
+      ...(tegliaProofPlan.pressRelaxationMinutes > 0 ? [`If the dough springs back toward the center, cover it and let it relax for ${tegliaPressRelaxation}, then continue pressing.`] : []),
+      ...(tegliaProofPlan.proofMinutes > 0 ? [`After pressing, cover the trays and let the dough complete its final rise for ${tegliaProofDuration}; this rest is already included in the schedule.`] : ['If the schedule does not leave enough time for a final rise in the trays, move the bake time rather than skipping it.']),
+      `Spread ${Math.round(sauceAmount)} g sauce and ${Math.round(cheeseAmount)} g well-drained mozzarella evenly.`,
+      `Put the trays into the oven and bake for ${bakeDuration} at ${ovenTemperature}, until the bottoms and edges are well baked.`,
+      'Briefly use the grill at the end only if needed for additional browning on top.',
+    ],
+    de: [
+      tegliaTimingStep,
+      `Heizen Sie den ausgewählten Ofen zum geplanten Zeitpunkt ${preheatDuration} auf ${ovenTemperature} vor.`,
+      `Ölen Sie alle ${trayCount} Bleche mit den Maßen ${trayDimensions.width}×${trayDimensions.length} cm leicht ein.`,
+      `Teilen Sie den gesamten Teig in ${trayCount} gleich große Portionen und geben Sie je eine Portion in ein Blech.`,
+      'Drücken Sie jede Portion vorsichtig mit den Fingerspitzen zu den Rändern; dehnen Sie sie nicht in der Luft.',
+      ...(tegliaProofPlan.pressRelaxationMinutes > 0 ? [`Zieht sich der Teig zur Mitte zurück, decken Sie ihn ab und lassen Sie ihn ${tegliaPressRelaxation} entspannen; drücken Sie ihn danach weiter ein.`] : []),
+      ...(tegliaProofPlan.proofMinutes > 0 ? [`Decken Sie die Bleche nach dem Eindrücken ab und lassen Sie den Teig ${tegliaProofDuration} endgaren; diese Ruhezeit ist bereits im Zeitplan enthalten.`] : ['Enthält der Zeitplan nicht genügend Zeit für die Endgare im Blech, verschieben Sie den Backzeitpunkt, statt sie auszulassen.']),
+      `Verteilen Sie ${Math.round(sauceAmount)} g Sauce und ${Math.round(cheeseAmount)} g gut abgetropfte Mozzarella gleichmäßig.`,
+      `Schieben Sie die Bleche in den Ofen und backen Sie ${bakeDuration} bei ${ovenTemperature}, bis Böden und Ränder gut gebacken sind.`,
+      'Schalten Sie den Grill am Ende nur bei Bedarf kurz zum stärkeren Bräunen der Oberseite ein.',
+    ],
+    sl: [
+      tegliaTimingStep,
+      `Ob načrtovanem času segrevanja vklopite izbrano pečico in jo ${preheatDuration} segrevajte na ${ovenTemperature}.`,
+      `Rahlo naoljite vseh ${trayCount} pekačev velikosti ${trayDimensions.width}×${trayDimensions.length} cm.`,
+      `Celotno testo razdelite na ${trayCount} enakih porcij in po eno porcijo položite v vsak pekač.`,
+      'Vsako porcijo s konicami prstov nežno potisnite proti robovom; ne raztezajte je v zraku.',
+      ...(tegliaProofPlan.pressRelaxationMinutes > 0 ? [`Če se testo vrača proti sredini, ga pokrijte in pustite ${tegliaPressRelaxation} počivati, nato nadaljujte z vtiskanjem.`] : []),
+      ...(tegliaProofPlan.proofMinutes > 0 ? [`Po vtiskovanju pekače pokrijte in pustite testo končno vzhajati še ${tegliaProofDuration}; ta počitek je že vključen v načrt.`] : ['Če načrt ne pušča dovolj časa za končno vzhajanje v pekačih, prestavite peko, namesto da ga izpustite.']),
+      `Enakomerno razporedite ${Math.round(sauceAmount)} g omake in ${Math.round(cheeseAmount)} g dobro odcejene mocarele.`,
+      `Pekače postavite v pečico in pecite ${bakeDuration} pri ${ovenTemperature}, dokler dna in robovi niso dobro pečeni.`,
+      'Na koncu za kratko vključite žar le, če je potrebno za močnejšo zapečenost zgornje strani.',
+    ],
+  }[lang];
+  const stepInfo = copy.info.map(([title, body]) => ({ title, body }));
+  const timers: BaseTimer[] = [
+    { id: 'tempering', seconds: finalRestMinutes * 60, kind: 'preBake' as const },
+    preheatTimer,
+  ];
+  const phaseIndex = phases.length - 1;
+  const kamadoLaunch = ({
+    hr: 'Pažljivo prenesite pizzu na zagrijani kamen u Kamadu i zatvorite poklopac.',
+    en: 'Carefully transfer the pizza to the heated stone in the Kamado and close the lid.',
+    de: 'Legen Sie die Pizza vorsichtig auf den erhitzten Stein im Kamado und schließen Sie den Deckel.',
+    sl: 'Pico previdno prenesite na segret kamen v Kamadu in zaprite pokrov.',
+  })[lang];
+  const kamadoBake = bakingTimeRange
+    ? ({
+      hr: `Pecite približno ${bakeDuration} na ${ovenTemperature}; tijekom pečenja provjeravajte boju pizze.`,
+      en: `Bake for approximately ${bakeDuration} at ${ovenTemperature}; check the pizza's color as it bakes.`,
+      de: `Backen Sie die Pizza etwa ${bakeDuration} bei ${ovenTemperature}; prüfen Sie während des Backens die Bräunung.`,
+      sl: `Pecite približno ${bakeDuration} pri ${ovenTemperature}; med peko preverjajte zapečenost pice.`,
+    })[lang]
+    : ({
+      hr: 'Preporučeno vrijeme pečenja nije dostupno za odabranu temperaturu i stil.',
+      en: 'No bake-time recommendation is available for the selected temperature and style.',
+      de: 'Für die gewählte Temperatur und den Stil ist keine Backzeitempfehlung verfügbar.',
+      sl: 'Za izbrano temperaturo in slog priporočeni čas peke ni na voljo.',
+    })[lang];
+  return phases.map((phase, index) => index === phaseIndex
+    ? {
+      ...phase,
+      title: copy.title,
+      steps: isKamado
+        ? [copy.temper, copy.surface, copy.dough, copy.shape, copy.toppings, kamadoLaunch, kamadoBake]
+        : tray
+          ? tegliaSteps
+          : mixing === 'mixer'
+            ? [copy.temper, copy.preheat, copy.surface, copy.dough, copy.shape, copy.toppings, copy.launch, copy.bake]
+            : [copy.temper, copy.preheat, copy.surface, copy.dough, copy.shape, copy.toppings, copy.launch, copy.bake],
+      stepInfo: isKamado ? undefined : stepInfo,
+      timers: isKamado ? timers.filter((timer) => !['preheat', 'bake', 'rotate'].includes(timer.kind)) : timers,
+      temperingInfo: undefined,
+      ovenTimingInfo: undefined,
+      ovenProgramInfo: undefined,
+      bakingInfo: undefined,
+      bakingCheckInfo: undefined,
+    }
+    : phase);
 }
 
 function getDetailedDirectSteps(
@@ -4742,7 +6734,10 @@ function getDetailedDirectSteps(
   targetFinalDoughTemp?: number,
   finalRestMinutes?: number,
   preferredYeastType: PreferredYeastType = 'fresh',
+  fridgeTemp = 4,
 ): DetailedPhase[] {
+  const isKamado = oven === 'kamado';
+  oven = getOvenBehaviorType(oven);
   const hand = mixing === 'hand';
   const instructionFlour = flourType === 'custom' ? 'caputo00' : flourType;
   const phaseAFlourBehavior = beginnerPhaseAFlourBehavior
@@ -4792,9 +6787,10 @@ function getDetailedDirectSteps(
   const remainingWater = Math.max(0, ingredients.water - initialWater);
   const tegliaInitialWater = Math.round(ingredients.water * 0.8);
   const tegliaRemainingWater = Math.max(0, ingredients.water - tegliaInitialWater);
-  const directInitialWater = isRomanTeglia ? tegliaInitialWater : initialWater;
-  const directInitialWaterPct = isRomanTeglia ? 80 : 90;
-  const directRemainingWater = isRomanTeglia ? tegliaRemainingWater : remainingWater;
+  const proRomanTondaSplit = !beginnerMode && isRomanTonda;
+  const directInitialWater = isRomanTeglia || proRomanTondaSplit ? tegliaInitialWater : initialWater;
+  const directInitialWaterPct = isRomanTeglia || proRomanTondaSplit ? 80 : 90;
+  const directRemainingWater = isRomanTeglia || proRomanTondaSplit ? tegliaRemainingWater : remainingWater;
   const directRemainingWaterPct = 100 - directInitialWaterPct;
   const bigaWaterStart = biga ? Math.round(biga.remainingWater * 0.9) : 0;
   const bigaWaterFinal = biga ? Math.max(0, biga.remainingWater - bigaWaterStart) : 0;
@@ -4806,22 +6802,19 @@ function getDetailedDirectSteps(
     ? Math.min(Math.round(ingredients.water * 0.25), Math.max(0, Math.round((ingredients.water * (roomTemp - 19)) / 99)))
     : 0;
   const idealWater = ingredients.water - idealIce;
-  const ovenSteps = oven === 'ooni'
+  const ovenSteps = isKamado
+    ? [
+      'Slijedite zasebnu fazu predgrijavanja Kamada.',
+      'Pažljivo prenesite pizzu na zagrijani kamen u Kamadu i zatvorite poklopac.',
+      getKamadoBakeBlockedText('hr'),
+    ]
+    : usesPizzaOvenBehavior(oven)
     ? [`Zagrijte pizza peć najmanje 20 minuta na ${ovenTemp} °C.`, 'Ubacite pizzu u zagrijanu pizza peć.', 'Tijekom pečenja rotirajte pizzu svakih 20–30 sekundi.', `Pecite pizzu ukupno ${bakingTimeRange}; izvadite je kada je pečena.`]
     : oven === 'homePan'
       ? [`Zagrijte kućnu pećnicu na ${ovenTemp} °C s ventilacijom.`, `Pecite pizzu ukupno ${bakingTimeRange} na donjoj rešetki; kratko završno zapečenje grillom, ako je potrebno, uračunajte u taj raspon.`, 'Provjerite dno i vrh prije vađenja.']
       : [`Zagrijte kamen ili čelik 45–60 minuta na ${ovenTemp} °C uz uključen grill.`, `Isključite grill i prebacite pećnicu na Pizza program, ako je dostupan. Ako Pizza program nije dostupan, odaberite gornji i donji grijač bez ventilatora te postavite maksimalnu temperaturu. Pecite pizzu ukupno ${bakingTimeRange}; završno zapečenje grillom uračunajte u taj raspon.`, 'Provjerite boju unutar navedenog raspona; ne dodajte zasebno vrijeme pečenja.'];
-  const bulkRestMinutes = Math.max(15, Math.round(30 * (22 / Math.max(10, roomTemp))));
-  const mixRestMinutes = isNewYorkMixerBeginner ? 6 : isNeapolitanBeginner || isTegliaCustomBeginnerHand || isTegliaCustomBeginnerMixer || isTegliaTipo00BeginnerHand || isTegliaTipo00BeginnerMixer || isTegliaManitobaBeginnerHand || isTegliaManitobaBeginnerMixer || isTegliaSpeltBeginnerHand || isTegliaSpeltBeginnerMixer || isTegliaWholeWheatBeginnerHand || isTegliaWholeWheatBeginnerMixer || isNeapolitanTipo00BeginnerHand || isNeapolitanTipo00BeginnerMixer || isNeapolitanWholeWheatBeginnerHand || isNeapolitanWholeWheatBeginnerMixer
-    || isNeapolitanBeginner
-    ? 5
-    : isGlutenFree && beginnerMode
-      ? 5
-      : beginnerMode
-        ? 5.5
-        : hand
-          ? 15
-          : 5;
+  const bulkRestMinutes = phaseBBulkRestMinutes(roomTemp);
+  const mixRestMinutes = isNewYorkMixerBeginner ? 6 : beginnerMode && isNewYork && !hand && isGlutenFree ? 5 : !beginnerMode && !biga && !poolish && isGlutenFree ? 5 : !beginnerMode && isRomanTeglia ? 5 : isNeapolitanBeginner || isTegliaCustomBeginnerHand || isTegliaCustomBeginnerMixer || isTegliaTipo00BeginnerHand || isTegliaTipo00BeginnerMixer || isTegliaManitobaBeginnerHand || isTegliaManitobaBeginnerMixer || isTegliaSpeltBeginnerHand || isTegliaSpeltBeginnerMixer || isTegliaWholeWheatBeginnerHand || isTegliaWholeWheatBeginnerMixer || isNeapolitanTipo00BeginnerHand || isNeapolitanTipo00BeginnerMixer || isNeapolitanWholeWheatBeginnerHand || isNeapolitanWholeWheatBeginnerMixer ? 5 : beginnerMode ? 5.5 : hand ? 15 : 5;
   const mixRestLabel = isGlutenFree && beginnerMode ? '5 minuta' : isNeapolitanBeginner ? '5 minuta' : isNewYorkMixerBeginner ? '6 minuta' : beginnerMode ? '5–6 minuta' : `${mixRestMinutes} minuta`;
   const napolitanaGlutenFreeRemainingMinutes = isNapolitana && isGlutenFree
     ? Math.max(0, Math.round(roomHours * 60))
@@ -4902,7 +6895,9 @@ function getDetailedDirectSteps(
         ? `ⓘ Temperatura vode\n\nPreporučena temperatura vode: ${waterTemperature ?? 24} °C\n\nTemperatura je automatski izračunata prema uvjetima vašeg recepta.`
         : isNeapolitanBeginner
         ? `Preporučena temperatura vode: ${waterTemperature ?? 24} °C. Ciljna završna temperatura tijesta: ${targetFinalDoughTemp ?? 24} °C. Precizno vaganje održava omjer recepta, a završna temperatura pomaže da fermentacija slijedi plan. Upotrijebite ukupno ${ingredients.water} g vode; led se računa u ukupnu količinu vode.`
-        : `Idealna temperatura vode je 18–20 °C. Led je opcionalan: po potrebi zamijenite dio ukupne vode s približno ${idealIce} g leda i ${idealWater} g vode. Ako ne koristite led, upotrijebite svih ${ingredients.water} g hladne vode. Led se uvijek računa u ukupnu količinu vode.`,
+        : !beginnerMode && isGlutenFree
+          ? `Preporučena temperatura vode: ${waterTemperature ?? 24} °C. Upotrijebite ukupnu izmjerenu količinu vode pri toj temperaturi.`
+          : `Idealna temperatura vode je 18–20 °C. Led je opcionalan: po potrebi zamijenite dio ukupne vode s približno ${idealIce} g leda i ${idealWater} g vode. Ako ne koristite led, upotrijebite svih ${ingredients.water} g hladne vode. Led se uvijek računa u ukupnu količinu vode.`,
       doughHandlingInfo: isTegliaManitobaBeginnerHand
         ? approvedManitobaTegliaHandPhaseAInfo
         : isTegliaManitobaBeginnerMixer
@@ -5234,13 +7229,8 @@ function getDetailedDirectSteps(
         'Operite i temeljito osušite ruke.',
         'Pripremite mikser i posudu za zamjes.',
         `Izmjerite ${ingredients.flour} g bezglutenskog brašna, ${psylliumAmount} g psyllium ljuskica, ${ingredients.salt} g soli, ${ingredients.yeast} g kvasca, ${ingredients.water} g vode i ${ingredients.oil} g maslinovog ulja.`,
-        `${isTegliaGlutenFreeBeginnerMixer
-          ? `U približno 80% vode, odnosno ${tegliaInitialWater} g, otopite kvasac.`
-          : `U približno 90% vode, odnosno ${initialWater} g, otopite kvasac.`}`,
+        `U svu vodu, odnosno ${ingredients.water} g, otopite kvasac.`,
         'Dodajte bezglutensko brašno i psyllium ljuskice te počnite miješati na sporoj brzini dok ne nestanu suhi dijelovi.',
-        `${isTegliaGlutenFreeBeginnerMixer
-          ? `Postupno dodajte preostalih 20% vode, odnosno ${tegliaRemainingWater} g.`
-          : `Postupno dodajte preostalih 10% vode, odnosno ${remainingWater} g.`}`,
         `Kada je smjesa povezana, dodajte ${ingredients.salt} g soli.`,
         'Nastavite miješati na sporoj brzini samo dok se svi sastojci ne povežu u homogenu, ljepljivu masu.',
         `Dodajte ${ingredients.oil} g maslinovog ulja i kratko nastavite miješati na sporoj brzini dok se potpuno ne sjedini sa smjesom.`,
@@ -5249,13 +7239,8 @@ function getDetailedDirectSteps(
         'Operite i temeljito osušite ruke.',
         'Pripremite veliku posudu za zamjes.',
         `Izmjerite ${ingredients.flour} g bezglutenskog brašna, ${psylliumAmount} g psyllium ljuskica, ${ingredients.salt} g soli, ${ingredients.yeast} g kvasca, ${ingredients.water} g vode i ${ingredients.oil} g maslinovog ulja.`,
-        `${isTegliaGlutenFreeBeginnerHand
-          ? `U približno 80% vode, odnosno ${tegliaInitialWater} g, otopite kvasac.`
-          : `U približno 90% vode, odnosno ${initialWater} g, otopite kvasac.`}`,
+        `U svu vodu, odnosno ${ingredients.water} g, otopite kvasac.`,
         'Dodajte bezglutensko brašno i psyllium ljuskice te miješajte rukom ili špatulom dok ne nestanu suhi dijelovi.',
-        `${isTegliaGlutenFreeBeginnerHand
-          ? `Postupno dodajte preostalih 20% vode, odnosno ${tegliaRemainingWater} g.`
-          : `Postupno dodajte preostalih 10% vode, odnosno ${remainingWater} g.`}`,
         `Kada je smjesa povezana, dodajte ${ingredients.salt} g soli.`,
         'Miješajte samo dok se svi sastojci ne povežu u homogenu, ljepljivu masu.',
         `Dodajte ${ingredients.oil} g maslinovog ulja i miješajte dok se potpuno ne sjedini sa smjesom.`,
@@ -5317,7 +7302,7 @@ function getDetailedDirectSteps(
       ],
       timers: isNeapolitanBeginner
         ? [timer('post-mix-rest', mixRestMinutes * 60, 'rest')]
-        : [timer(hand && !isGlutenFree ? 'post-mix-rest15m' : 'post-mix-rest', mixRestMinutes * 60, 'rest')],
+        : [timer(!beginnerMode && isNapolitana && flourType === 'caputo00' && hand ? 'post-mix-rest' : hand && !isGlutenFree ? 'post-mix-rest15m' : 'post-mix-rest', mixRestMinutes * 60, 'rest')],
     },
     {
       title: isRomanTeglia && isGlutenFree ? 'Faza B: Kratki odmor' : isRomanTeglia ? 'Faza B: Fermentacija i preklapanje' : isGlutenFree ? 'Faza B: Kratki odmor' : hasPreferment ? 'Faza C: Prva fermentacija (Bulking)' : 'Faza B: Prva fermentacija (Bulking)',
@@ -5353,17 +7338,25 @@ function getDetailedDirectSteps(
         'Napravite prvi Stretch & Fold.',
         `Ostavite tijesto ponovno ${bulkRestMinutes} minuta.`,
         'Napravite drugi Stretch & Fold.',
-        `Ostavite tijesto još ${bulkRestMinutes} minuta na sobnoj temperaturi.`,
+        `Pokrijte posudu i ostavite tijesto da nastavi fermentirati još ${bulkRestMinutes} minuta.`,
       ] : isGlutenFree ? [
         'Lagano nauljite fermentacijsku posudu i prebacite smjesu u nju.',
         `Pokrijte posudu i ostavite smjesu 15 minuta na sobnoj temperaturi da se kratko opusti prije dijeljenja.`,
+      ] : !beginnerMode && !hasPreferment ? [
+        'Lagano nauljite fermentacijsku posudu i prebacite tijesto u nju.',
+        'Pokrijte posudu i ostavite tijesto da odmori na sobnoj temperaturi.',
+        'Napravite prvi Stretch & Fold.',
+        'Ponovno pokrijte posudu i ostavite tijesto da odmori.',
+        'Napravite drugi Stretch & Fold.',
+        `Pokrijte posudu i ostavite tijesto da nastavi fermentirati još ${bulkRestMinutes} minuta.`,
+        'Provjerite prve znakove fermentacije prije nastavka.',
       ] : [
         'Lagano nauljite fermentacijsku posudu i prebacite tijesto u nju.',
         `Pokrijte posudu i ostavite tijesto ${bulkRestMinutes} minuta na sobnoj temperaturi.`,
         'Napravite prvi Stretch & Fold.',
         `Ostavite tijesto ponovno ${bulkRestMinutes} minuta.`,
         'Napravite drugi Stretch & Fold.',
-        `Ostavite završni bulk još ${bulkRestMinutes} minuta na sobnoj temperaturi.`,
+        `Pokrijte posudu i ostavite tijesto da nastavi fermentirati još ${bulkRestMinutes} minuta.`,
         'Provjerite jesu li vidljivi prvi znakovi fermentacije.',
       ],
       timers: isRomanTeglia && isGlutenFree
@@ -5386,8 +7379,8 @@ function getDetailedDirectSteps(
       title: isRomanTeglia ? 'Faza C: Masa za tepsiju' : isGlutenFree ? 'Faza C: Podjela i oblikovanje loptica (Bulice)' : hasPreferment ? 'Faza D: Podjela i oblikovanje loptica (Bulice)' : 'Faza C: Podjela i oblikovanje loptica (Bulice)',
       degassingInfo: 'Degaziranje znači izbacivanje plinova iz tijesta nastalih tijekom fermentacije.',
       steps: isRomanTeglia ? [
-        `Tijekom fermentacije zadržite ukupno ${totalDough} g tijesta kao jednu masu; prije pripreme podijelite je na ${pizzas} porcija po ${ballWeight} g, po jednu za svaki pleh.`,
-        'Ne oblikujte kugle; tijesto ostaje jedna masa do završne podjele i pripreme plehova.',
+        `Tijekom fermentacije zadržite ukupno ${totalDough} g tijesta kao jednu masu; prije pripreme podijelite je na ${pizzas} porcija po ${ballWeight} g, po jednu za svaku tepsiju.`,
+        'Ne oblikujte kugle; tijesto ostaje jedna masa do završne podjele i pripreme tepsija.',
       ] : isGlutenFree ? [
         'Radnu površinu obilno pospite bezglutenskim ili rižinim brašnom. Brašno za radnu površinu ne ulazi u izračun recepta.',
         'Nježno izvadite ljepljivu smjesu iz posude uz minimalno degaziranje.',
@@ -5418,11 +7411,11 @@ function getDetailedDirectSteps(
         : 'Kugle držite u kutiji koja štiti od isušivanja, ali je nemojte hermetički zatvoriti. Poklopac treba samo prianjati ili imati mogućnost izlaska plinova; kutija ne smije biti pod pritiskom.',
       steps: isRomanTeglia ? [
         'Pokrijte fermentacijsku posudu i prebacite cijelu masu u hladnjak.',
-        `Masa fermentira u hladnjaku ${coldFermentationDuration} pri približno 4–6 °C. Vrijeme hladne fermentacije računa se samo jednom.`,
+        `Masa fermentira u hladnjaku ${coldFermentationDuration} pri temperaturi od ${formatTemperature(fridgeTemp, 'celsius')}. Vrijeme hladne fermentacije računa se samo jednom.`,
         'Nakon isteka odabranog vremena prijeđite na utiskivanje u tepsiju.',
       ] : [
         'Stavite kugle u zatvorenu fermentacijsku kutiju i prebacite ih u hladnjak.',
-        `Kugle fermentiraju u hladnjaku ${fridgeHours} sati pri približno 4–6 °C. Vrijeme hladne fermentacije računa se samo jednom.`,
+        `Kugle fermentiraju u hladnjaku ${fridgeHours} sati pri temperaturi od ${formatTemperature(fridgeTemp, 'celsius')}. Vrijeme hladne fermentacije računa se samo jednom.`,
         resolvedFinalRestMinutes > 0 || beginnerMode
           ? 'Nakon isteka odabranog vremena prijeđite na temperiranje.'
           : 'Nakon isteka odabranog vremena prijeđite na oblikovanje.',
@@ -5457,7 +7450,7 @@ function getDetailedDirectSteps(
       proofingInfo: isRomanTeglia
         ? 'Nakon završnog dizanja tijesto treba izgledati vidljivo napuhnuto i mjehurasto. Lagani pritisak prstom treba se polako vraćati; ne čekaj udvostručenje volumena.'
         : doughReadinessInfo,
-      ovenTimingInfo: isRomanTeglia || (!beginnerMode && !hasColdFermentation) ? undefined : oven === 'ooni'
+      ovenTimingInfo: isRomanTeglia || (!beginnerMode && !hasColdFermentation) ? undefined : usesPizzaOvenBehavior(oven)
         ? `Pizza peći treba približno ${ovenPreheatMin}–${ovenPreheatMax} minuta da se zagrije. Da se vrijeme uskladi s temperiranjem kugli, uključite pizza peć ${Math.max(0, ovenPreheatMin - temperingMax)}–${Math.max(0, ovenPreheatMax - temperingMin)} minuta prije nego što izvadite kugle iz hladnjaka.`
         : `Pećnici treba približno ${ovenPreheatMin}–${ovenPreheatMax} minuta da se zagrije. Da se vrijeme uskladi s temperiranjem kugli, uključite pećnicu ${Math.max(0, ovenPreheatMin - temperingMax)}–${Math.max(0, ovenPreheatMax - temperingMin)} minuta prije nego što izvadite kugle iz hladnjaka.`,
       ovenProgramInfo: oven === 'homePan' ? 'Ako imate Pizza program, koristite njega; ako nemate Pizza program, koristite gornji i donji grijač bez ventilatora.' : undefined,
@@ -5465,18 +7458,18 @@ function getDetailedDirectSteps(
       bakingCheckInfo: oven === 'homePan' ? 'Podignite rub pizze i provjerite je li dno dovoljno pečeno i zlatno-smeđe.' : undefined,
       steps: isRomanTeglia ? [
         ...(tegliaTemperingStep ? [tegliaTemperingStep] : []),
-        `Lagano nauljite svaki od ${pizzas} plehova dimenzija ${trayDimensions.width}×${trayDimensions.length} cm.`,
-        `Podijelite ukupno ${totalDough} g tijesta na ${pizzas} porcija od ${ballWeight} g; stavite jednu porciju u svaki pleh.`,
+        `Lagano nauljite svaki od ${pizzas} tepsija dimenzija ${trayDimensions.width}×${trayDimensions.length} cm i pripremite ih za utiskivanje tijesta.`,
+        `Podijelite ukupno ${totalDough} g tijesta na ${pizzas} porcija od ${ballWeight} g; stavite jednu porciju u svaku tepsiju.`,
         'Svaku porciju nježno utisnite prstima do rubova bez rastezanja u zraku.',
         ...(tegliaProofPlan.pressRelaxationMinutes > 0
           ? [`Ako se tijesto vraća prema sredini, ostavite ga ${tegliaPressRelaxation} da se opusti pa nastavite utiskivati. Taj je odmor dio postojećeg završnog prozora.`]
           : ['Ako se tijesto vraća prema sredini, kratko ga opustite tijekom utiskivanja; nemojte dodavati zaseban odmor.']),
         ...(tegliaProofPlan.proofMinutes > 0
-          ? [`Pokrijte plehove i ostavite tijesto da se diže još ${tegliaRiseDuration}, unutar već izračunatog završnog odmora. Pouzdani recepti navode 60–120 minuta nakon utiskivanja; ravnajte se i prema vidljivim znakovima spremnosti.`]
-          : ['Raspored ne ostavlja sobno vrijeme za završno dizanje u plehu; pomaknite pečenje umjesto da preskočite dizanje.']),
+          ? [`Pokrijte tepsije i ostavite tijesto da se diže još ${tegliaRiseDuration}, unutar već izračunatog završnog odmora. Pouzdani recepti navode 60–120 minuta nakon utiskivanja; ravnajte se i prema vidljivim znakovima spremnosti.`]
+          : ['Raspored ne ostavlja sobno vrijeme za završno dizanje u tepsiji; pomaknite pečenje umjesto da preskočite dizanje.']),
         `Dok tijesto završno raste, zagrijte odabranu pećnicu na ${ovenTemp} °C prema njezinoj uputi za zagrijavanje.`,
         'Nakon dizanja dodajte umak i nadjev.',
-        `Ubacite plehove u pećnicu i pecite bez grilla ${bakingTimeRange} na ${ovenTemp} °C, dok se dno i rub dobro ne ispeku.`,
+        `Ubacite tepsije u pećnicu i pecite bez grilla ${bakingTimeRange} na ${ovenTemp} °C, dok se dno i rub dobro ne ispeku.`,
         'Na kraju uključite grill ako želite jače zapečenu gornju stranu.',
       ] : oven === 'homePan' ? [
         `Uključite pećnicu 20 minuta prije pečenja i dobro je zagrijte na ${ovenTemp} °C.`,
@@ -5505,15 +7498,19 @@ function getDetailedDirectSteps(
         isGlutenFree ? 'Otresite višak bezglutenskog ili rižinog brašna i prebacite podlogu na lopaticu.' : 'Otresite višak semole i prebacite tijesto na lopaticu.',
         'Dodajte nadjev prema promjeru pizze, a rub ostavite bez nadjeva.',
         `Za pizzu od ${diameter} cm koristite približno ${sauceAmount} g umaka i ${cheeseAmount} g mozzarelle.`,
-        oven === 'ooni' ? ovenSteps[1] : 'Ubacite pizzu u zagrijanu pećnicu.',
-        oven === 'ooni' ? ovenSteps[2] : ovenSteps[1],
-        oven === 'ooni' ? ovenSteps[3] : ovenSteps[2],
+        ...(isKamado
+          ? [ovenSteps[1], ovenSteps[2]]
+          : [
+            usesPizzaOvenBehavior(oven) ? ovenSteps[1] : 'Ubacite pizzu u zagrijanu pećnicu.',
+            usesPizzaOvenBehavior(oven) ? ovenSteps[2] : ovenSteps[1],
+            usesPizzaOvenBehavior(oven) ? ovenSteps[3] : ovenSteps[2],
+          ]),
       ],
       timers: [
         ...(isRomanTeglia && tegliaProofPlan.totalMinutes > 0
           ? [timer('teglia-final-proof', tegliaProofPlan.totalMinutes * 60, 'rt')]
           : beginnerMode || resolvedFinalRestMinutes > 0 ? [timer('tempering', temperingMidpoint, 'preBake')] : []),
-        ...(beginnerMode ? getBeginnerOvenTimers(oven, ovenTemp, isRomanTeglia) : []),
+        ...(beginnerMode && !isKamado ? getBeginnerOvenTimers(oven, ovenTemp, isRomanTeglia) : []),
       ],
     },
   ];
@@ -5554,6 +7551,7 @@ function getDetailedDirectStepsLocalized(
   fridgeHours: number,
   roomHours: number,
   roomTemp: number,
+  fridgeTemp: number,
   cheesePerPizza: number,
   saucePerPizza: number,
   oven: OvenType,
@@ -5570,8 +7568,11 @@ function getDetailedDirectStepsLocalized(
   finalRestMinutes?: number,
   preferredYeastType: PreferredYeastType = 'fresh',
 ): DetailedPhase[] {
+  const isKamado = oven === 'kamado';
+  oven = getOvenBehaviorType(oven);
   const hand = mixing === 'hand';
   const isGlutenFree = flourType === 'glutenFree';
+  const coldTemperature = formatTemperature(fridgeTemp, 'celsius');
   const phaseAFlourBehavior = beginnerPhaseAFlourBehavior
     ?? (flourType === 'spelt' ? 'spelt' : flourType === 'wholeWheat' ? 'wholeWheat' : 'standard');
   const isSpelt = phaseAFlourBehavior === 'spelt';
@@ -5618,7 +7619,7 @@ function getDetailedDirectStepsLocalized(
     ? Math.min(Math.round(ingredients.water * 0.25), Math.max(0, Math.round((ingredients.water * (roomTemp - 19)) / 99)))
     : 0;
   const idealWater = ingredients.water - idealIce;
-  const bulkRestMinutes = Math.max(15, Math.round(30 * (22 / Math.max(10, roomTemp))));
+  const bulkRestMinutes = phaseBBulkRestMinutes(roomTemp);
   const isNeapolitanBeginner = beginnerMode && (variant === 'napolitana' || variant === 'romanaTonda');
   const mixRestMinutes = isGlutenFree ? 5 : isNewYorkMixerBeginner ? 6 : isNeapolitanBeginner || isTegliaCustomBeginnerHand || isTegliaCustomBeginnerMixer || isTegliaTipo00BeginnerHand || isTegliaTipo00BeginnerMixer || isTegliaManitobaBeginnerHand || isTegliaManitobaBeginnerMixer || isTegliaSpeltBeginnerHand || isTegliaSpeltBeginnerMixer || isTegliaWholeWheatBeginnerHand || isTegliaWholeWheatBeginnerMixer ? 5 : beginnerMode ? 5.5 : 5;
   const pick = (de: string, en: string, sl: string) => lang === 'de' ? de : lang === 'en' ? en : sl;
@@ -5791,7 +7792,13 @@ function getDetailedDirectStepsLocalized(
           ? 'Kroglice vzemite iz hladilnika in jih pred oblikovanjem pustite 15–30 minut temperirati. Pazite, da kroglice ne fermentirajo preveč.'
           : `Kroglice pustite ${finalRoomDuration} na sobni temperaturi pred oblikovanjem.`,
       );
-  const ovenSteps = oven === 'ooni'
+  const ovenSteps = isKamado
+    ? [
+      'Follow the separate Kamado preheating phase above.',
+      'Carefully transfer the pizza to the heated stone in the Kamado and close the lid.',
+      getKamadoBakeBlockedText(lang),
+    ]
+    : usesPizzaOvenBehavior(oven)
     ? [
       pick(`Heizen Sie den Pizzaofen mindestens 20 Minuten auf ${ovenTemp} °C vor.`, `Preheat the pizza oven for at least 20 minutes at ${ovenTemp} °C.`, `Pizza pečico segrevajte vsaj 20 minut pri ${ovenTemp} °C.`),
       pick('Schieben Sie die Pizza hinein und drehen Sie sie alle 20–30 Sekunden.', 'Launch the pizza and rotate it every 20–30 seconds.', 'Vstavite pico in jo obračajte vsakih 20–30 sekund.'),
@@ -5856,6 +7863,12 @@ function getDetailedDirectStepsLocalized(
             `Empfohlene Wassertemperatur: ${waterTemperature ?? 24} °C. Zieltemperatur des fertigen Teigs: ${targetFinalDoughTemp ?? 24} °C. Genaues Wiegen hält das Rezeptverhältnis ein; die Endtemperatur beeinflusst die Fermentationsgeschwindigkeit. Verwenden Sie insgesamt ${ingredients.water} g Wasser.`,
             `Recommended water temperature: ${waterTemperature ?? 24} °C. Target final dough temperature: ${targetFinalDoughTemp ?? 24} °C. Precise weighing preserves the recipe ratio, and final dough temperature affects fermentation speed. Use ${ingredients.water} g total water.`,
             `Priporočena temperatura vode: ${waterTemperature ?? 24} °C. Ciljna končna temperatura testa: ${targetFinalDoughTemp ?? 24} °C. Natančno tehtanje ohrani razmerje recepta, končna temperatura pa vpliva na hitrost fermentacije. Uporabite skupno ${ingredients.water} g vode.`,
+          )
+        : !beginnerMode && isGlutenFree
+        ? pick(
+            `Empfohlene Wassertemperatur: ${waterTemperature ?? 24} °C. Verwenden Sie die gesamte abgemessene Wassermenge bei dieser Temperatur.`,
+            `Recommended water temperature: ${waterTemperature ?? 24} °C. Use the full measured amount of water at this temperature.`,
+            `Priporočena temperatura vode: ${waterTemperature ?? 24} °C. Uporabite celotno odmerjeno količino vode pri tej temperaturi.`,
           )
         : pick(
             `Die ideale Wassertemperatur beträgt 18–20 °C. Das empfohlene Verhältnis für dieses Rezept beträgt ungefähr ${Math.round((idealWater / ingredients.water) * 100)}% Wasser (${idealWater} g) und ${Math.round((idealIce / ingredients.water) * 100)}% Eis (${idealIce} g). Das Eis wird zur Gesamtwassermenge gerechnet.`,
@@ -6171,7 +8184,7 @@ function getDetailedDirectStepsLocalized(
         pick('Führen Sie das erste Stretch & Fold durch.', 'Perform the first Stretch & Fold.', 'Izvedite prvi Stretch & Fold.'),
         pick(`Lassen Sie den Teig erneut ${bulkRestMinutes} Minuten ruhen.`, `Let the dough rest for another ${bulkRestMinutes} minutes.`, `Testo ponovno pustite počivati ${bulkRestMinutes} minut.`),
         pick('Führen Sie das zweite Stretch & Fold durch.', 'Perform the second Stretch & Fold.', 'Izvedite drugi Stretch & Fold.'),
-        pick(`Lassen Sie die abschließende Stockgare weitere ${bulkRestMinutes} Minuten bei Raumtemperatur laufen.`, `Let the dough complete its final bulk fermentation for another ${bulkRestMinutes} minutes at room temperature.`, `Končno prvo fermentacijo pustite potekati še ${bulkRestMinutes} minut pri sobni temperaturi.`),
+        pick(`Decken Sie den Behälter ab und lassen Sie den Teig weitere ${bulkRestMinutes} Minuten fermentieren.`, `Cover the container and let the dough continue fermenting for another ${bulkRestMinutes} minutes.`, `Pokrijte posodo in pustite, da testo še ${bulkRestMinutes} minut nadaljuje fermentacijo.`),
         pick('Prüfen Sie, ob erste Anzeichen der Fermentation sichtbar sind.', 'Check whether the first signs of fermentation are visible.', 'Preverite, ali so vidni prvi znaki fermentacije.'),
       ],
       timers: isGlutenFree
@@ -6208,13 +8221,13 @@ function getDetailedDirectStepsLocalized(
         : pick('Bewahren Sie die Teigkugeln in einer Box auf, die sie vor dem Austrocknen schützt, aber nicht luftdicht verschlossen ist. Der Deckel sollte nur aufliegen oder eine Möglichkeit zum Druckausgleich bieten. Die Box darf nicht unter Druck stehen.', 'Keep the dough balls in a box that protects them from drying out but is not sealed airtight. The lid should simply rest on the box or allow pressure to escape. The box must not become pressurized.', 'Kroglice testa hranite v posodi, ki jih ščiti pred izsušitvijo, vendar ni nepredušno zaprta. Pokrov naj bo samo položen na posodo ali naj omogoča izhod plinov. Posoda ne sme biti pod pritiskom.'),
       steps: isRomanTeglia ? [
         pick('Legen Sie die Teigmasse in einen abgedeckten Behälter und stellen Sie sie in den Kühlschrank.', 'Place the dough mass in a covered container and transfer it to the refrigerator.', 'Maso testa položite v pokrito posodo in jo prestavite v hladilnik.'),
-        pick(`Lassen Sie die Teigmasse ${coldFermentationDuration} bei ungefähr 4–6 °C im Kühlschrank fermentieren. Die Zeit der kalten Fermentation wird nur einmal berechnet.`, `Ferment the dough mass in the refrigerator for ${coldFermentationDuration} at approximately 4–6 °C. Cold fermentation time is counted only once.`, `Masa testa naj fermentira v hladilniku ${coldFermentationDuration} pri približno 4–6 °C. Čas hladne fermentacije se šteje samo enkrat.`),
+        pick(`Lassen Sie die Teigmasse ${coldFermentationDuration} bei ${coldTemperature} im Kühlschrank fermentieren. Die Zeit der kalten Fermentation wird nur einmal berechnet.`, `Ferment the dough mass in the refrigerator for ${coldFermentationDuration} at ${coldTemperature}. Cold fermentation time is counted only once.`, `Masa testa naj fermentira v hladilniku ${coldFermentationDuration} pri temperaturi ${coldTemperature}. Čas hladne fermentacije se šteje samo enkrat.`),
         resolvedFinalRestMinutes > 0 || beginnerMode
           ? pick('Nach Ablauf der gewählten Zeit fahren Sie mit dem Temperieren und dem Einlegen in das Blech fort.', 'After the selected time has elapsed, continue with tempering and pressing the dough into the tray.', 'Po poteku izbranega časa nadaljujte s temperiranjem in vtiskanjem testa v pekač.')
           : pick('Nach Ablauf der gewählten Zeit nehmen Sie den Teig aus dem Kühlschrank und drücken ihn in das Blech.', 'After the selected time has elapsed, take the dough out of the refrigerator and press it into the tray.', 'Po poteku izbranega časa vzemite testo iz hladilnika in ga vtisnite v pekač.'),
       ] : [
         pick('Legen Sie die Teigkugeln in eine verschlossene Teigbox und stellen Sie sie in den Kühlschrank.', 'Place the dough balls in a closed fermentation box and transfer them to the refrigerator.', 'Kroglice testa položite v zaprto fermentacijsko posodo in jih prestavite v hladilnik.'),
-        pick(`Lassen Sie die Teigkugeln ${fridgeHours} Stunden bei ungefähr 4–6 °C im Kühlschrank fermentieren. Die Zeit der kalten Fermentation wird nur einmal berechnet.`, `Ferment the dough balls in the refrigerator for ${fridgeHours} hours at approximately 4–6 °C. Cold fermentation time is counted only once.`, `Kroglice naj fermentirajo v hladilniku ${fridgeHours} ur pri približno 4–6 °C. Čas hladne fermentacije se šteje samo enkrat.`),
+        pick(`Lassen Sie die Teigkugeln ${fridgeHours} Stunden bei ${coldTemperature} im Kühlschrank fermentieren. Die Zeit der kalten Fermentation wird nur einmal berechnet.`, `Ferment the dough balls in the refrigerator for ${fridgeHours} hours at ${coldTemperature}. Cold fermentation time is counted only once.`, `Kroglice naj fermentirajo v hladilniku ${fridgeHours} ur pri temperaturi ${coldTemperature}. Čas hladne fermentacije se šteje samo enkrat.`),
         resolvedFinalRestMinutes > 0 || beginnerMode
           ? pick('Nach Ablauf der gewählten Zeit fahren Sie mit dem Temperieren fort.', 'After the selected time has elapsed, proceed to tempering.', 'Po poteku izbranega časa nadaljujte s temperiranjem.')
           : pick('Nach Ablauf der gewählten Zeit nehmen Sie die Teigkugeln aus dem Kühlschrank und fahren Sie mit dem Formen fort.', 'After the selected time has elapsed, take the dough balls out of the refrigerator and continue shaping.', 'Po poteku izbranega časa vzemite kroglice iz hladilnika in nadaljujte z oblikovanjem.'),
@@ -6249,14 +8262,14 @@ function getDetailedDirectStepsLocalized(
       proofingInfo: isRomanTeglia
         ? pick('Der Teig sollte sichtbar aufgegangen und blasig sein. Eine leichte Fingerdelle sollte sich langsam zurückbilden; er muss sich nicht verdoppeln.', 'The dough should look visibly puffed and bubbly. A gentle fingertip indentation should spring back slowly; it does not need to double in size.', 'Testo naj bo vidno vzhajano in mehurčkasto. Nežna vdolbinica prsta naj se počasi vrača; testo se ne rabi podvojiti.')
         : pick('Drücken Sie die Teigkugel leicht mit dem Finger. Wenn die Vertiefung langsam zurückfedert, ist sie bereit zum Formen; wenn sie sofort zurückfedert, braucht sie noch etwas Zeit.', 'Gently press the dough ball with your finger. If the indentation slowly springs back, it is ready for shaping; if it springs back immediately, it needs more time.', 'Kroglico rahlo pritisnite s prstom. Če se vdolbina počasi vrne, je pripravljena za oblikovanje; če se takoj vrne, potrebuje še nekaj časa.'),
-      ovenTimingInfo: isRomanTeglia || (!beginnerMode && !hasColdFermentation) ? undefined : oven === 'ooni'
+      ovenTimingInfo: isRomanTeglia || (!beginnerMode && !hasColdFermentation) ? undefined : usesPizzaOvenBehavior(oven)
         ? pick(`Der Pizzaofen benötigt ungefähr ${ovenPreheatMin}–${ovenPreheatMax} Minuten zum Aufheizen. Damit die Aufheizzeit mit dem Temperieren der Teigkugeln abgestimmt ist, schalten Sie den Pizzaofen ${Math.max(0, ovenPreheatMin - temperingMax)}–${Math.max(0, ovenPreheatMax - temperingMin)} Minuten vor dem Herausnehmen der Teigkugeln aus dem Kühlschrank ein.`, `The pizza oven needs approximately ${ovenPreheatMin}–${ovenPreheatMax} minutes to heat up. To coordinate the heating time with the tempering of the dough balls, turn on the pizza oven ${Math.max(0, ovenPreheatMin - temperingMax)}–${Math.max(0, ovenPreheatMax - temperingMin)} minutes before taking the dough balls out of the refrigerator.`, `Pizza pečica potrebuje približno ${ovenPreheatMin}–${ovenPreheatMax} minut, da se segreje. Za uskladitev časa segrevanja s temperiranjem kroglic vklopite pizza pečico ${Math.max(0, ovenPreheatMin - temperingMax)}–${Math.max(0, ovenPreheatMax - temperingMin)} minut, preden kroglice vzamete iz hladilnika.`)
         : pick(`Der Ofen benötigt ungefähr ${ovenPreheatMin}–${ovenPreheatMax} Minuten zum Aufheizen. Damit die Aufheizzeit mit dem Temperieren der Teigkugeln abgestimmt ist, schalten Sie den Ofen ${Math.max(0, ovenPreheatMin - temperingMax)}–${Math.max(0, ovenPreheatMax - temperingMin)} Minuten vor dem Herausnehmen der Teigkugeln aus dem Kühlschrank ein.`, `The oven needs approximately ${ovenPreheatMin}–${ovenPreheatMax} minutes to heat up. To coordinate the oven heating time with the tempering of the dough balls, turn on the oven ${Math.max(0, ovenPreheatMin - temperingMax)}–${Math.max(0, ovenPreheatMax - temperingMin)} minutes before taking the dough balls out of the refrigerator.`, `Pečica potrebuje približno ${ovenPreheatMin}–${ovenPreheatMax} minut, da se segreje. Za uskladitev časa segrevanja pečice s temperiranjem kroglic pečico vklopite ${Math.max(0, ovenPreheatMin - temperingMax)}–${Math.max(0, ovenPreheatMax - temperingMin)} minut, preden kroglice vzamete iz hladilnika.`),
       bakingInfo: oven === 'homeStone' ? pick('Platzieren Sie den Pizzastein oder Pizzastahl als Ausgangsposition etwa zwei Einschubebenen unterhalb des oberen Heizelements. Wenn Oberseite oder Boden der Pizza zu schnell dunkel werden, passen Sie die Position an Ihren Ofen an.', 'As a starting position, place the pizza stone or steel about two rack positions below the upper heating element. If the top or bottom of the pizza darkens too quickly, adjust the position for your oven.', 'Kot izhodiščni položaj postavite kamen ali jeklo za pico približno dve ravni pod zgornji grelnik. Če se vrh ali dno pice prehitro zatemni, položaj prilagodite svoji pečici.') : undefined,
       bakingCheckInfo: oven === 'homePan' ? pick('Heben Sie den Pizzarand an und prüfen Sie, ob der Boden ausreichend gebacken und goldbraun ist.', 'Lift the pizza rim and check whether the bottom is sufficiently baked and golden brown.', 'Dvignite rob pice in preverite, ali je dno dovolj pečeno in zlato-rjavo.') : undefined,
       steps: isRomanTeglia ? [
         ...(tegliaTemperingStep ? [tegliaTemperingStep] : []),
-        pick(`Ölen Sie alle ${pizzas} Bleche von ${trayDimensions.width}×${trayDimensions.length} cm leicht ein.`, `Lightly oil all ${pizzas} trays, each ${trayDimensions.width}×${trayDimensions.length} cm.`, `Rahlo naoljite vseh ${pizzas} pekačev dimenzij ${trayDimensions.width}×${trayDimensions.length} cm.`),
+        pick(`Ölen Sie alle ${pizzas} Bleche von ${trayDimensions.width}×${trayDimensions.length} cm leicht ein und bereiten Sie sie zum Eindrücken des Teigs vor.`, `Lightly oil all ${pizzas} trays, each ${trayDimensions.width}×${trayDimensions.length} cm, and prepare them for pressing in the dough.`, `Rahlo naoljite vseh ${pizzas} pekačev dimenzij ${trayDimensions.width}×${trayDimensions.length} cm in jih pripravite za vtiskovanje testa.`),
         pick(`Teilen Sie die insgesamt ${totalDough} g Teig in ${pizzas} Portionen zu je ${ballWeight} g auf und legen Sie je eine Portion in ein Blech.`, `Divide the total ${totalDough} g of dough into ${pizzas} portions of ${ballWeight} g each, placing one portion in each tray.`, `Skupnih ${totalDough} g testa razdelite na ${pizzas} porcij po ${ballWeight} g in eno porcijo položite v vsak pekač.`),
         pick('Drücken Sie jede Portion vorsichtig mit den Fingerspitzen bis zu den Rändern, ohne sie in der Luft zu ziehen.', 'Gently press each portion to the edges with your fingertips; do not stretch it in the air.', 'Vsako porcijo nežno potisnite s konicami prstov do robov; ne raztezajte je v zraku.'),
         ...(tegliaProofPlan.pressRelaxationMinutes > 0
@@ -6289,7 +8302,7 @@ function getDetailedDirectStepsLocalized(
       ] : [
         ovenSteps[0],
         ...(ballTemperingStep ? [ballTemperingStep] : []),
-        pick('Bestäuben Sie die Arbeitsfläche leicht mit einer minimalen Menge Semola.', 'Lightly dust the work surface with a minimal amount of semolina.', 'Delovno površino rahlo posujte z minimalno količino zdroba.'),
+        pick('Bestäuben Sie die Teigkugel unmittelbar vor dem Formen von allen Seiten leicht mit Semola. Geben Sie etwas mehr Semola auf die Arbeitsfläche, legen Sie die Kugel darauf und beginnen Sie, die Pizza zu formen.', 'Immediately before shaping, lightly coat the dough ball with semolina on all sides. Put a little more semolina on the work surface, then place the ball on it and begin shaping the pizza.', 'Tik pred oblikovanjem kroglico testa z vseh strani rahlo posujte z zdrobom. Na delovno površino dajte nekoliko več zdroba, nato nanjo položite kroglico in začnite oblikovati pico.'),
         pick('Nehmen Sie die Teigkugel mit einer schnellen und vorsichtigen Bewegung aus dem Behälter und legen Sie sie mit der Oberseite nach unten auf die Semola.', 'Quickly and gently remove the dough ball from the container and place it upside down on the semolina.', 'Kroglico hitro in nežno vzemite iz posode ter jo položite obrnjeno na zdrob.'),
         isRomanTonda
           ? pick('Formen Sie die Romana Tonda dünn und flach durch Drücken mit den Fingern; verwenden Sie kein aggressives Dehnen in der Luft.', 'Shape the Romana Tonda thin and flat by pressing with your fingers; do not stretch it aggressively in the air.', 'Romano Tondo oblikujte tanko in ravno s pritiskanjem prstov; ne raztezajte je agresivno v zraku.')
@@ -6301,15 +8314,19 @@ function getDetailedDirectStepsLocalized(
         pick('Schütteln Sie überschüssige Semola ab und legen Sie den Teig auf den Pizzaschieber.', 'Shake off excess semolina and transfer the dough onto the pizza peel.', 'Otresite odvečni zdrob in testo prenesite na lopar za pico.'),
         pick('Belegen Sie die Pizza entsprechend ihrem Durchmesser und lassen Sie den Rand frei.', 'Add the toppings according to the pizza diameter, leaving the rim free of toppings.', 'Dodajte nadev glede na premer pice, rob pa pustite brez nadeva.'),
         pick(`Für eine Pizza mit ${diameter} cm verwenden Sie ungefähr ${sauceAmount} g Sauce und ${cheeseAmount} g Mozzarella.`, `For a ${diameter} cm pizza, use approximately ${sauceAmount} g sauce and ${cheeseAmount} g mozzarella.`, `Za pico premera ${diameter} cm uporabite približno ${sauceAmount} g omake in ${cheeseAmount} g mocarele.`),
-        pick('Schieben Sie die Pizza in den vorgeheizten Ofen.', 'Launch the pizza into the preheated oven.', 'Pico vstavite v predhodno segreto pečico.'),
-        ovenSteps[1],
-        ovenSteps[2],
+        ...(isKamado
+          ? [ovenSteps[1], ovenSteps[2]]
+          : [
+            pick('Schieben Sie die Pizza in den vorgeheizten Ofen.', 'Launch the pizza into the preheated oven.', 'Pico vstavite v predhodno segreto pečico.'),
+            ovenSteps[1],
+            ovenSteps[2],
+          ]),
       ],
       timers: [
         ...(isRomanTeglia && tegliaProofPlan.totalMinutes > 0
           ? [timer('teglia-final-proof', tegliaProofPlan.totalMinutes * 60, 'rt')]
           : beginnerMode || resolvedFinalRestMinutes > 0 ? [timer('tempering', temperingMidpoint, 'preBake')] : []),
-        ...(beginnerMode ? getBeginnerOvenTimers(oven, ovenTemp, isRomanTeglia) : []),
+        ...(beginnerMode && !isKamado ? getBeginnerOvenTimers(oven, ovenTemp, isRomanTeglia) : []),
       ],
     },
   ];
@@ -6355,7 +8372,7 @@ function adaptFermentationSteps(steps: readonly string[], roomHours: number, fri
       let adapted = replaceDurationBefore(step, ROOM_PATTERN, roomHours, label);
       if (fridgeHours > 0) {
         adapted = replaceDurationAfter(adapted, FRIDGE_PATTERN, fridgeHours, label);
-        adapted = adapted.replace(/\d+(?:\s*[-–]\s*\d+)?\s*°C/g, `${fridgeTemp}°C`);
+        adapted = adapted.replace(/\d+(?:\s*[-–]\s*\d+)?\s*°\s*C/g, `${fridgeTemp}°C`);
       }
       return adapted;
     });
@@ -6470,7 +8487,14 @@ function withoutDirectScheduleTiming(steps: readonly string[]): string[] {
   return steps.map(withoutDirectScheduleTimingText).filter((step): step is string => !!step);
 }
 
-function buildBeginnerUnscheduledDirectSteps(phases: DetailedPhase[], fridgeTemp: number, lang: Lang): DetailedPhase[] {
+function buildBeginnerUnscheduledDirectSteps(
+  phases: DetailedPhase[],
+  fridgeTemp: number,
+  lang: Lang,
+  oven: OvenType,
+  pizzaStyle: PizzaStyle,
+  kamadoProfile: KamadoOvenProfile | null = null,
+): DetailedPhase[] {
   const copy = {
     hr: {
       pending: 'Točno vrijeme fermentacije još nije određeno: odaberite datum i vrijeme pečenja da dobijete svoj raspored.',
@@ -6495,11 +8519,32 @@ function buildBeginnerUnscheduledDirectSteps(phases: DetailedPhase[], fridgeTemp
   }[lang];
   const coldPhase = /cold fermentation|kalte fermentation|hladna fermentacija/i;
   const fridgeStep = /refrigerat|fridge|kühlschrank|hladnjak|hladilnik/i;
-  return phases.map((phase, index) => {
+  const adapted = phases.map((phase, index) => {
     if (coldPhase.test(phase.title)) {
       return { title: phase.title, containerOilInfo: phase.containerOilInfo, steps: [copy.pending, copy.fridge], timers: [] };
     }
     if (index === phases.length - 1) {
+      if (oven === 'kamado') {
+      const keptSteps = phase.steps
+        .map((step, stepIndex) => ({ step: fridgeStep.test(step) ? copy.takeOut : step, stepIndex }))
+        .filter(({ step }) => !/(?:bake|back|peč|ofen|oven|peć|pečic|pizza oven|pizzaofen|stone|stein|kamen|preheat|vorheiz|zagrij|segrev)/i.test(step));
+      const kamadoSteps = [
+        ({
+          hr: 'Pažljivo prenesite pizzu na zagrijani kamen u Kamadu i zatvorite poklopac.',
+          en: 'Carefully transfer the pizza to the heated stone in the Kamado and close the lid.',
+          de: 'Legen Sie die Pizza vorsichtig auf den erhitzten Stein im Kamado und schließen Sie den Deckel.',
+          sl: 'Pico previdno prenesite na segret kamen v Kamadu in zaprite pokrov.',
+        })[lang],
+        getKamadoBakeBlockedText(lang),
+      ];
+      return {
+        ...phase,
+        steps: [...keptSteps.map(({ step }) => step), ...kamadoSteps],
+        stepInfo: undefined,
+        temperingInfo: undefined,
+        ovenTimingInfo: undefined,
+      };
+      }
       return {
         ...phase,
         steps: phase.steps.map((step) => fridgeStep.test(step) ? copy.takeOut : step),
@@ -6509,6 +8554,7 @@ function buildBeginnerUnscheduledDirectSteps(phases: DetailedPhase[], fridgeTemp
     }
     return phase;
   });
+  return oven === 'kamado' ? insertKamadoPreheatPhase(adapted, lang, kamadoProfile) : adapted;
 }
 
 function buildBeginnerPhaseBSteps(
@@ -6734,6 +8780,15 @@ function buildBeginnerColdPhaseD(schedule: HomePizzaPlanSchedule, lang: Lang, te
   const fridgeOutAt = getBeginnerFridgeOutAt(schedule);
   const time = formatBeginnerScheduledTime(fridgeOutAt, schedule.bakeAt, lang);
   const duration = formatDuration(schedule.fridgeHours * 3600, lang);
+  const temperature = typeof schedule.fridgeTemp === 'number'
+    ? formatTemperature(schedule.fridgeTemp, 'celsius')
+    : null;
+  const coldStorageCondition = ({
+    hr: temperature ? `u hladnjaku na postavljenih ${temperature}` : 'u hladnjaku',
+    en: temperature ? `at the selected refrigerator temperature of ${temperature}` : 'in the refrigerator',
+    de: temperature ? `bei der eingestellten Kühlschranktemperatur von ${temperature}` : 'im Kühlschrank',
+    sl: temperature ? `pri nastavljeni temperaturi hladilnika ${temperature}` : 'v hladilniku',
+  }[lang]);
   const copy = {
     hr: {
       step: teglia
@@ -6741,8 +8796,8 @@ function buildBeginnerColdPhaseD(schedule: HomePizzaPlanSchedule, lang: Lang, te
         : `Ostavite zatvorenu fermentacijsku kutiju s kuglicama u hladnjaku ${duration}, do ${time}.`,
       title: 'Hladna fermentacija',
       body: teglia
-        ? 'Tijekom hladne fermentacije jedna masa tijesta polako razvija okus i strukturu. Zatvorenu posudu držite u hladnjaku kako se površina ne bi osušila. Preporučena temperatura hladnjaka je približno 3–5 °C. Nemojte nepotrebno otvarati posudu.'
-        : 'Tijekom hladne fermentacije tijesto polako razvija okus i strukturu. Kutiju držite zatvorenom kako se površina kuglica ne bi osušila. Preporučena temperatura hladnjaka je približno 3–5 °C. Nemojte nepotrebno otvarati kutiju.',
+        ? `Tijekom hladne fermentacije jedna masa tijesta polako razvija okus i strukturu. Zatvorenu posudu držite ${coldStorageCondition} kako se površina ne bi osušila. Nemojte nepotrebno otvarati posudu.`
+        : `Tijekom hladne fermentacije tijesto polako razvija okus i strukturu. Kutiju držite zatvorenom ${coldStorageCondition} kako se površina kuglica ne bi osušila. Nemojte nepotrebno otvarati kutiju.`,
     },
     en: {
       step: teglia
@@ -6750,8 +8805,8 @@ function buildBeginnerColdPhaseD(schedule: HomePizzaPlanSchedule, lang: Lang, te
         : `Leave the closed fermentation box with the dough balls in the refrigerator for ${duration}, until ${time}.`,
       title: 'Cold fermentation',
       body: teglia
-        ? 'During cold fermentation, the single dough mass slowly develops flavor and structure. Keep the closed container refrigerated so its surface does not dry out. A refrigerator temperature of about 3–5 °C is recommended. Avoid opening the container unnecessarily.'
-        : 'During cold fermentation, the dough slowly develops flavor and structure. Keep the box closed so the dough-ball surfaces do not dry out. A refrigerator temperature of about 3–5 °C is recommended. Avoid opening the box unnecessarily.',
+        ? `During cold fermentation, the single dough mass slowly develops flavor and structure. Keep the closed container ${coldStorageCondition} so its surface does not dry out. Avoid opening the container unnecessarily.`
+        : `During cold fermentation, the dough slowly develops flavor and structure. Keep the box closed ${coldStorageCondition} so the dough-ball surfaces do not dry out. Avoid opening the box unnecessarily.`,
     },
     de: {
       step: teglia
@@ -6759,8 +8814,8 @@ function buildBeginnerColdPhaseD(schedule: HomePizzaPlanSchedule, lang: Lang, te
         : `Lassen Sie die geschlossene Gärbox mit den Teigkugeln ${duration} im Kühlschrank, bis ${time}.`,
       title: 'Kalte Fermentation',
       body: teglia
-        ? 'Während der kalten Fermentation entwickelt die einzelne Teigmasse langsam Aroma und Struktur. Bewahren Sie den geschlossenen Behälter im Kühlschrank auf, damit die Oberfläche nicht austrocknet. Empfohlen werden etwa 3–5 °C. Öffnen Sie den Behälter nicht unnötig.'
-        : 'Während der kalten Fermentation entwickelt der Teig langsam Aroma und Struktur. Halten Sie die Box geschlossen, damit die Oberfläche der Teigkugeln nicht austrocknet. Empfohlen werden etwa 3–5 °C. Öffnen Sie die Box nicht unnötig.',
+        ? `Während der kalten Fermentation entwickelt die einzelne Teigmasse langsam Aroma und Struktur. Bewahren Sie den geschlossenen Behälter ${coldStorageCondition} auf, damit die Oberfläche nicht austrocknet. Öffnen Sie den Behälter nicht unnötig.`
+        : `Während der kalten Fermentation entwickelt der Teig langsam Aroma und Struktur. Halten Sie die Box ${coldStorageCondition} geschlossen, damit die Oberfläche der Teigkugeln nicht austrocknet. Öffnen Sie die Box nicht unnötig.`,
     },
     sl: {
       step: teglia
@@ -6768,8 +8823,8 @@ function buildBeginnerColdPhaseD(schedule: HomePizzaPlanSchedule, lang: Lang, te
         : `Zaprto fermentacijsko posodo s kroglicami pustite v hladilniku ${duration}, do ${time}.`,
       title: 'Hladna fermentacija',
       body: teglia
-        ? 'Med hladno fermentacijo ena masa testa počasi razvija okus in strukturo. Zaprto posodo hranite v hladilniku, da se površina ne izsuši. Priporočena temperatura hladilnika je približno 3–5 °C. Posode ne odpirajte po nepotrebnem.'
-        : 'Med hladno fermentacijo testo počasi razvija okus in strukturo. Posodo hranite zaprto, da se površina kroglic ne izsuši. Priporočena temperatura hladilnika je približno 3–5 °C. Posode ne odpirajte po nepotrebnem.',
+        ? `Med hladno fermentacijo ena masa testa počasi razvija okus in strukturo. Zaprto posodo hranite ${coldStorageCondition}, da se površina ne izsuši. Posode ne odpirajte po nepotrebnem.`
+        : `Med hladno fermentacijo testo počasi razvija okus in strukturo. Posodo hranite zaprto ${coldStorageCondition}, da se površina kroglic ne izsuši. Posode ne odpirajte po nepotrebnem.`,
     },
   }[lang];
   return {
@@ -6832,28 +8887,28 @@ function buildBeginnerTegliaPreheat(
   lang: Lang,
   temperatureUnit: 'celsius' | 'fahrenheit',
 ): string {
-  const oven = schedule.ovenType ?? 'homePan';
+  const oven = getOvenBehaviorType(schedule.ovenType ?? 'homePan');
   const time = formatBeginnerClockTime(preheatAt, lang);
   const temperature = formatTemperature(ovenTemp, temperatureUnit);
   return ({
-    hr: oven === 'homeStone'
+    hr: getOvenBehaviorType(oven) === 'homeStone'
       ? `U ${time} uključite pećnicu i zagrijavajte kamen ili čelik za pizzu ${preheatMinutes} minuta na ${temperature} s uključenim grillom.`
-      : oven === 'ooni'
+      : usesPizzaOvenBehavior(oven)
         ? `U ${time} uključite pizza peć i zagrijavajte je ${preheatMinutes} minuta na ${temperature} prema uputama proizvođača.`
         : `U ${time} uključite kućnu pećnicu s ventilacijom i zagrijte je ${preheatMinutes} minuta na ${temperature}.`,
-    en: oven === 'homeStone'
+    en: getOvenBehaviorType(oven) === 'homeStone'
       ? `At ${time}, turn on the oven and preheat the pizza stone or steel for ${preheatMinutes} minutes to ${temperature} with the grill on.`
-      : oven === 'ooni'
+      : usesPizzaOvenBehavior(oven)
         ? `At ${time}, turn on the pizza oven and preheat it for ${preheatMinutes} minutes to ${temperature} according to the manufacturer’s instructions.`
         : `At ${time}, turn on the convection oven and preheat it for ${preheatMinutes} minutes to ${temperature}.`,
-    de: oven === 'homeStone'
+    de: getOvenBehaviorType(oven) === 'homeStone'
       ? `Schalten Sie um ${time} den Ofen ein und heizen Sie Pizzastein oder -stahl ${preheatMinutes} Minuten lang auf ${temperature} mit eingeschaltetem Grill vor.`
-      : oven === 'ooni'
+      : usesPizzaOvenBehavior(oven)
         ? `Schalten Sie um ${time} den Pizzaofen ein und heizen Sie ihn ${preheatMinutes} Minuten lang gemäß Herstellerangaben auf ${temperature} vor.`
         : `Schalten Sie um ${time} den Umluftofen ein und heizen Sie ihn ${preheatMinutes} Minuten lang auf ${temperature} vor.`,
-    sl: oven === 'homeStone'
+    sl: getOvenBehaviorType(oven) === 'homeStone'
       ? `Ob ${time} vklopite pečico in kamen ali jeklo za pico segrevajte ${preheatMinutes} minut na ${temperature} z vklopljenim žarom.`
-      : oven === 'ooni'
+      : usesPizzaOvenBehavior(oven)
         ? `Ob ${time} vklopite pizza pečico in jo segrevajte ${preheatMinutes} minut na ${temperature} po navodilih proizvajalca.`
         : `Ob ${time} vklopite domačo pečico z ventilacijo in jo segrevajte ${preheatMinutes} minut na ${temperature}.`,
   }[lang]);
@@ -6866,6 +8921,8 @@ function buildBeginnerFinalPhaseInfo(
   oven: OvenType,
   teglia = false,
 ): Array<{ title: string; body: string }> {
+  const isKamado = oven === 'kamado';
+  oven = getOvenBehaviorType(oven);
   const round = !teglia;
   const ny = style === 'ny_style';
   const romana = style === 'romana';
@@ -6977,6 +9034,33 @@ function buildBeginnerFinalPhaseInfo(
       de: ['Optionales Grill-Finish', 'Verwenden Sie den Grill nur am Ende und nur, wenn dies für Ihren Ofen sicher ist. Beobachten Sie die Oberseite und schalten Sie ihn aus, sobald die gewünschte Bräunung erreicht ist.'],
       sl: ['Zaključno zapečenje z žarom', 'Žar vključite šele na koncu in samo, če je to varno za vašo pečico. Opazujte zgornjo stran in ga izključite, ko doseže želeno barvo.'],
     }[lang];
+  }
+  if (isKamado) {
+    const kamadoGuidance = ({
+      hr: [
+        ['Predgrijavanje Kamada', 'Postupno zagrijavajte Kamado prema uputama proizvođača i ne prelazite njegovu maksimalnu dopuštenu temperaturu. Ona je granica, a ne cilj pečenja. Ciljna temperatura i trajanje pečenja za Kamado nisu odobreni.'],
+        ['Prijenos na kamen', 'Pažljivo prenesite pizzu na zagrijani kamen u Kamadu i zatvorite poklopac. Ne dodirujte vruće površine.'],
+        ['Pečenje u Kamadu', 'PizzaBook nema odobrenu temperaturu ni vrijeme pečenja za Kamado. Pratite pizzu i provjeravajte pečenost, ali ne tretirajte unesenu maksimalnu temperaturu kao cilj pečenja.'],
+      ],
+      en: [
+        ['Kamado preheating', 'Gradually heat the Kamado according to the manufacturer’s instructions and do not exceed its maximum permitted appliance temperature. That is a limit, not a baking target. A Kamado baking target temperature and duration have not been approved.'],
+        ['Transfer to the stone', 'Carefully transfer the pizza to the heated stone in the Kamado and close the lid. Do not touch hot surfaces.'],
+        ['Baking in the Kamado', 'PizzaBook has no approved Kamado baking temperature or duration. Monitor the pizza and check doneness, but do not treat the saved maximum temperature as the baking target.'],
+      ],
+      de: [
+        ['Kamado vorheizen', 'Heizen Sie den Kamado gemäß Herstelleranleitung langsam auf und überschreiten Sie seine maximal zulässige Gerätetemperatur nicht. Sie ist eine Grenze und kein Backziel. Eine Kamado-Zieltemperatur und Backdauer sind nicht freigegeben.'],
+        ['Auf den Stein legen', 'Legen Sie die Pizza vorsichtig auf den erhitzten Stein im Kamado und schließen Sie den Deckel. Berühren Sie keine heißen Flächen.'],
+        ['Im Kamado backen', 'PizzaBook hat keine freigegebene Kamado-Backtemperatur oder -dauer. Beobachten Sie die Pizza und prüfen Sie den Gargrad, verwenden Sie die gespeicherte Maximaltemperatur jedoch nicht als Backziel.'],
+      ],
+      sl: [
+        ['Predgrevanje Kamada', 'Kamado postopoma segrevajte po navodilih proizvajalca in ne prekoračite njegove največje dovoljene temperature. To je meja, ne cilj peke. Ciljna temperatura in trajanje peke za Kamado nista odobrena.'],
+        ['Prenos na kamen', 'Pico previdno prenesite na segret kamen v Kamadu in zaprite pokrov. Ne dotikajte se vročih površin.'],
+        ['Peka v Kamadu', 'PizzaBook nima odobrene temperature ali trajanja peke za Kamado. Pico spremljajte in preverjajte pečenost, vendar shranjene najvišje temperature ne uporabljajte kot cilj peke.'],
+      ],
+    })[lang];
+    ordered[1] = kamadoGuidance[0];
+    ordered[6] = kamadoGuidance[1];
+    ordered[7] = kamadoGuidance[2];
   }
   return ordered
     .map(([title, body]) => ({ title, body }));
@@ -7124,7 +9208,7 @@ function buildBeginnerTegliaHomeSteps(
   const tray = `${trayDimensions.width}×${trayDimensions.length} cm`;
   const pressSteps = {
     hr: {
-      oil: `Lagano nauljite svih ${trayCount} tepsija dimenzija ${tray}.`,
+      oil: `Lagano nauljite svih ${trayCount} tepsija dimenzija ${tray} i pripremite ih za utiskivanje tijesta.`,
       portion: `Ukupno ${totalDoughLabel} tijesta podijelite na ${trayCount} porcija po ${doughPerTrayLabel}; stavite jednu porciju u svaku tepsiju.`,
       press: 'Svaku porciju nježno utisnite prstima do rubova bez rastezanja u zraku.',
       relax: `Ako se tijesto vraća prema sredini, ostavite ga pokriveno ${pressRelaxation} da se opusti pa nastavite utiskivati. Ovaj odmor ulazi u postojeći završni prozor.`,
@@ -7136,7 +9220,7 @@ function buildBeginnerTegliaHomeSteps(
       grill: 'Na kraju uključite grill ako želite jače zapečenu gornju stranu.',
     },
     en: {
-      oil: `Lightly oil all ${trayCount} trays, each ${tray}.`,
+      oil: `Lightly oil all ${trayCount} trays, each ${tray}, and prepare them for pressing in the dough.`,
       portion: `Divide the total ${totalDoughLabel} of dough into ${trayCount} portions of ${doughPerTrayLabel} each; place one portion in each tray.`,
       press: 'Gently press each portion to the edges with your fingertips; do not stretch it in the air.',
       relax: `If the dough springs back toward the center, cover it and let it relax for ${pressRelaxation}, then continue pressing. This rest is included in the existing final window.`,
@@ -7148,7 +9232,7 @@ function buildBeginnerTegliaHomeSteps(
       grill: 'Finally, switch on the grill if you want a more browned top.',
     },
     de: {
-      oil: `Ölen Sie alle ${trayCount} Bleche mit den Maßen ${tray} leicht ein.`,
+      oil: `Ölen Sie alle ${trayCount} Bleche mit den Maßen ${tray} leicht ein und bereiten Sie sie zum Eindrücken des Teigs vor.`,
       portion: `Teilen Sie die insgesamt ${totalDoughLabel} Teig in ${trayCount} Portionen zu je ${doughPerTrayLabel} und geben Sie je eine Portion in ein Blech.`,
       press: 'Drücken Sie jede Portion mit den Fingerspitzen vorsichtig bis zu den Rändern, ohne sie in der Luft zu dehnen.',
       relax: `Zieht sich der Teig zur Mitte zurück, decken Sie ihn ab und lassen Sie ihn ${pressRelaxation} entspannen; drücken Sie ihn danach weiter aus. Diese Ruhezeit ist im bestehenden Zeitfenster enthalten.`,
@@ -7160,7 +9244,7 @@ function buildBeginnerTegliaHomeSteps(
       grill: 'Schalten Sie am Ende den Grill ein, wenn Sie eine stärker gebräunte Oberseite möchten.',
     },
     sl: {
-      oil: `Rahlo naoljite vseh ${trayCount} pekačev dimenzij ${tray}.`,
+      oil: `Rahlo naoljite vseh ${trayCount} pekačev dimenzij ${tray} in jih pripravite za vtiskovanje testa.`,
       portion: `Skupnih ${totalDoughLabel} testa razdelite na ${trayCount} porcij po ${doughPerTrayLabel} in eno porcijo položite v vsak pekač.`,
       press: 'Vsako porcijo s konicami prstov nežno potisnite do robov; ne raztegujte je v zraku.',
       relax: `Če se testo vrača proti sredini, ga pokrijte in pustite ${pressRelaxation} počivati, nato nadaljujte z vtiskanjem. Ta počitek je vključen v obstoječe časovno okno.`,
@@ -7202,7 +9286,7 @@ function buildBeginnerTegliaHomeSteps(
         fermentationInfo: undefined,
         fermentationSignsInfo: undefined,
         proofingInfo: undefined,
-        timers: [],
+        timers: [{ id: 'beginner-fridge', seconds: schedule.fridgeHours * 3600, kind: 'fridge' as const }],
       };
     }
     if (index === 1) {
@@ -7635,7 +9719,10 @@ function buildBeginnerDirectHomeSteps(
   totalDoughLabel: string,
   ballWeightLabel: string,
   pizzas: number,
+  kamadoProfile: KamadoOvenProfile | null = null,
 ): DetailedPhase[] {
+  const isKamado = oven === 'kamado';
+  oven = getOvenBehaviorType(oven);
   const fridgeEntryTime = schedule.fridgeAt ? formatBeginnerClockTime(schedule.fridgeAt, lang) : '';
   const fridgeTemperature = schedule.fridgeTemp ?? fridgeTemp;
   const phaseBTitle = {
@@ -7740,7 +9827,7 @@ function buildBeginnerDirectHomeSteps(
   const replaceYeastLabel = (text: string) => labelSelectedYeast(text, lang, yeastType);
   const shapingSteps = ({
     hr: {
-      surface: oven === 'homePan' ? 'Lagano nauljite tepsiju.' : 'Neposredno prije oblikovanja lagano pospite radnu površinu semolom.',
+      surface: oven === 'homePan' ? 'Lagano nauljite tepsiju.' : 'Neposredno prije oblikovanja lagano pospite kuglicu tijesta semolom sa svih strana. Na radnu površinu stavite nešto više semole, zatim položite kuglicu na nju i započnite oblikovanje pizze.',
       ball: 'Nježno izvadite jednu kuglicu iz fermentacijske kutije, bez nepotrebnog istiskivanja zraka. Ostale kuglice ostavite pokrivene.',
       shape: pizzaStyle === 'romana'
         ? `Romanu oblikujte tanko i ravno do ${diameter} cm pritiskanjem prstima ili valjkom, bez agresivnog rastezanja u zraku.`
@@ -7748,15 +9835,17 @@ function buildBeginnerDirectHomeSteps(
           ? `New York oblikujte ujednačene debljine s tanjom sredinom do ${diameter} cm; nemojte stvarati visok, napuhan rub. Kriška treba biti savitljiva.`
           : `Prstima nježno potiskujte tijesto od sredine prema rubu, ostavite rub približno 1–2 cm i razvucite do ${diameter} cm; ne koristite valjak.`,
       toppings: `Ravnomjerno rasporedite ${saucePerPizza} g umaka i ${cheesePerPizza} g dobro ocijeđene mozzarelle; ostavite rub bez nadjeva.`,
-      launch: oven === 'homePan' ? 'Pizzu pažljivo stavite na pripremljeni lim i lim stavite u pećnicu.' : oven === 'ooni' ? 'Provjerite da se pizza slobodno pomiče na lopati, zatim je pažljivo ubacite u zagrijanu pizza peć.' : 'Provjerite da se pizza slobodno pomiče na lopati, zatim je pažljivo prebacite na potpuno zagrijani kamen ili čelik.',
-      bake: oven === 'homeStone'
+      launch: isKamado ? 'Pažljivo prenesite pizzu na zagrijani kamen u Kamadu i zatvorite poklopac.' : oven === 'homePan' ? 'Pizzu pažljivo stavite na pripremljenu tepsiju, zatim tepsiju stavite u pećnicu.' : usesPizzaOvenBehavior(oven) ? 'Provjerite da se pizza slobodno pomiče na lopati, zatim je pažljivo ubacite u zagrijanu pizza peć.' : 'Provjerite da se pizza slobodno pomiče na lopati, zatim je pažljivo prebacite na potpuno zagrijani kamen ili čelik.',
+      bake: getOvenBehaviorType(oven) === 'homeStone'
         ? `Isključite grill, koristite Pizza program ili gornji i donji grijač bez ventilatora. Pecite ${bakingTimeRange} na ${ovenTemp} °C i završite grillom za boju.`
-        : oven === 'ooni'
+        : isKamado
+          ? `Pecite na ${ovenTemp} °C približno ${bakingTimeRange}. Tijekom pečenja provjeravajte boju rubova i donje strane; po potrebi pažljivo okrenite pizzu radi ravnomjernog pečenja.`
+        : usesPizzaOvenBehavior(oven)
           ? `Pecite ${bakingTimeRange} na ${ovenTemp} °C i rotirajte svakih 20–30 sekundi.`
-          : `Pecite ${bakingTimeRange} na ${ovenTemp} °C; provjerite dno i po potrebi kratko završite gornjim grillom.`,
+          : `Pecite ${bakingTimeRange} na ${ovenTemp} °C; provjerite boju gornje strane i dna, a po potrebi kratko završite s gornjim grillom.`,
     },
     en: {
-      surface: oven === 'homePan' ? 'Lightly oil the baking tray.' : 'Immediately before shaping, lightly dust the work surface with semolina.',
+      surface: oven === 'homePan' ? 'Lightly oil the baking tray.' : 'Immediately before shaping, lightly coat the dough ball with semolina on all sides. Put a little more semolina on the work surface, then place the ball on it and begin shaping the pizza.',
       ball: 'Gently remove one dough ball from the fermentation box without unnecessarily pressing out its gas. Keep the remaining dough balls covered.',
       shape: pizzaStyle === 'romana'
         ? `Shape Romana thin and flat to ${diameter} cm by pressing or rolling; do not stretch it aggressively in the air.`
@@ -7764,15 +9853,17 @@ function buildBeginnerDirectHomeSteps(
           ? `Shape New York pizza to an even thickness with a thinner center to ${diameter} cm; do not create a tall, puffy rim. The slice should fold easily.`
           : `Gently press the dough from the center toward the edge, leave a rim about 1–2 cm wide, and stretch to ${diameter} cm; do not use a rolling pin.`,
       toppings: `Spread ${saucePerPizza} g sauce and ${cheesePerPizza} g well-drained mozzarella evenly, leaving the rim clear.`,
-      launch: oven === 'homePan' ? 'Place the pizza carefully on the prepared tray and put the tray in the oven.' : oven === 'ooni' ? 'Check that the pizza moves freely on the peel, then launch it carefully into the preheated pizza oven.' : 'Check that the pizza moves freely on the peel, then transfer it carefully to the fully heated stone or steel.',
-      bake: oven === 'homeStone'
+      launch: isKamado ? 'Carefully transfer the pizza to the heated stone in the Kamado and close the lid.' : oven === 'homePan' ? 'Place the pizza carefully on the prepared baking tray, then put the tray in the oven.' : usesPizzaOvenBehavior(oven) ? 'Check that the pizza moves freely on the peel, then launch it carefully into the preheated pizza oven.' : 'Check that the pizza moves freely on the peel, then transfer it carefully to the fully heated stone or steel.',
+      bake: getOvenBehaviorType(oven) === 'homeStone'
         ? `Turn off the grill and use the Pizza program or top and bottom heat without a fan. Bake ${bakingTimeRange} at ${ovenTemp} °C; finish under the grill for color.`
-        : oven === 'ooni'
+        : isKamado
+          ? `Bake at ${ovenTemp} °C for approximately ${bakingTimeRange}. Check the rim and bottom color during baking; carefully rotate the pizza if needed for even baking.`
+        : usesPizzaOvenBehavior(oven)
           ? `Bake ${bakingTimeRange} at ${ovenTemp} °C, rotating every 20–30 seconds.`
-          : `Bake ${bakingTimeRange} at ${ovenTemp} °C; check the base and finish briefly under the upper grill if needed.`,
+          : `Bake ${bakingTimeRange} at ${ovenTemp} °C; check the colour of the top and bottom, and briefly finish under the upper grill if needed.`,
     },
     de: {
-      surface: oven === 'homePan' ? 'Fetten Sie das Backblech leicht ein.' : 'Bestäuben Sie die Arbeitsfläche unmittelbar vor dem Formen leicht mit Semola.',
+      surface: oven === 'homePan' ? 'Fetten Sie das Backblech leicht ein.' : 'Bestäuben Sie die Teigkugel unmittelbar vor dem Formen von allen Seiten leicht mit Semola. Geben Sie etwas mehr Semola auf die Arbeitsfläche, legen Sie die Kugel darauf und beginnen Sie, die Pizza zu formen.',
       ball: 'Nehmen Sie eine Teigkugel vorsichtig aus der Gärbox, ohne unnötig Gas herauszudrücken. Lassen Sie die übrigen Teigkugeln abgedeckt.',
       shape: pizzaStyle === 'romana'
         ? `Formen Sie die Romana dünn und flach auf ${diameter} cm, indem Sie sie drücken oder rollen; nicht aggressiv in der Luft dehnen.`
@@ -7780,15 +9871,17 @@ function buildBeginnerDirectHomeSteps(
           ? `Formen Sie New York gleichmäßig dick mit dünnerer Mitte auf ${diameter} cm; keinen hohen, aufgeblähten Rand formen. Das Stück soll faltbar sein.`
           : `Drücken Sie den Teig vorsichtig von der Mitte zum Rand, lassen Sie etwa 1–2 cm Rand und ziehen Sie ihn auf ${diameter} cm; kein Nudelholz.`,
       toppings: `Verteilen Sie ${saucePerPizza} g Sauce und ${cheesePerPizza} g gut abgetropften Mozzarella gleichmäßig; lassen Sie den Rand frei.`,
-      launch: oven === 'homePan' ? 'Legen Sie die Pizza vorsichtig auf das vorbereitete Blech und schieben Sie das Blech in den Ofen.' : oven === 'ooni' ? 'Prüfen Sie, ob sich die Pizza frei auf dem Schieber bewegt, und schieben Sie sie vorsichtig in den vorgeheizten Pizzaofen.' : 'Prüfen Sie, ob sich die Pizza frei auf dem Schieber bewegt, und legen Sie sie vorsichtig auf den vollständig aufgeheizten Stein oder Stahl.',
-      bake: oven === 'homeStone'
+      launch: isKamado ? 'Legen Sie die Pizza vorsichtig auf den erhitzten Stein im Kamado und schließen Sie den Deckel.' : oven === 'homePan' ? 'Legen Sie die Pizza vorsichtig auf das vorbereitete Backblech und stellen Sie das Blech in den Ofen.' : usesPizzaOvenBehavior(oven) ? 'Prüfen Sie, ob sich die Pizza frei auf dem Schieber bewegt, und schieben Sie sie vorsichtig in den vorgeheizten Pizzaofen.' : 'Prüfen Sie, ob sich die Pizza frei auf dem Schieber bewegt, und legen Sie sie vorsichtig auf den vollständig aufgeheizten Stein oder Stahl.',
+      bake: getOvenBehaviorType(oven) === 'homeStone'
         ? `Schalten Sie den Grill aus und verwenden Sie das Pizza-Programm oder Ober-/Unterhitze ohne Umluft. Backen Sie ${bakingTimeRange} bei ${ovenTemp} °C und bräunen Sie am Ende mit dem Grill.`
-        : oven === 'ooni'
+        : isKamado
+          ? `Backen Sie bei ${ovenTemp} °C ungefähr ${bakingTimeRange}. Prüfen Sie während des Backens die Farbe von Rand und Unterseite; drehen Sie die Pizza bei Bedarf vorsichtig für gleichmäßiges Backen.`
+        : usesPizzaOvenBehavior(oven)
           ? `Backen Sie ${bakingTimeRange} bei ${ovenTemp} °C und drehen Sie die Pizza alle 20–30 Sekunden.`
-          : `Backen Sie ${bakingTimeRange} bei ${ovenTemp} °C; prüfen Sie den Boden und bräunen Sie bei Bedarf kurz unter dem oberen Grill.`,
+          : `Backen Sie ${bakingTimeRange} bei ${ovenTemp} °C; prüfen Sie die Farbe der Oberseite und des Bodens und bräunen Sie bei Bedarf kurz unter dem oberen Grill.`,
     },
     sl: {
-      surface: oven === 'homePan' ? 'Pekač rahlo naoljite.' : 'Tik pred oblikovanjem delovno površino rahlo posujte z zdrobom.',
+      surface: oven === 'homePan' ? 'Pekač rahlo naoljite.' : 'Tik pred oblikovanjem kroglico testa z vseh strani rahlo posujte z zdrobom. Na delovno površino dajte nekoliko več zdroba, nato nanjo položite kroglico in začnite oblikovati pico.',
       ball: 'Nežno vzemite eno kroglico iz fermentacijske posode, ne da bi po nepotrebnem iztisnili plin. Preostale kroglice naj ostanejo pokrite.',
       shape: pizzaStyle === 'romana'
         ? `Romano oblikujte tanko in ravno do ${diameter} cm s pritiskanjem ali valjarjem; ne raztegujte je agresivno v zraku.`
@@ -7796,12 +9889,14 @@ function buildBeginnerDirectHomeSteps(
           ? `New York oblikujte enakomerno debelo s tanjšo sredino do ${diameter} cm; ne oblikujte visokega, napihnjenega roba. Rezina naj se zlahka prepogne.`
           : `Testo nežno pritiskajte od sredine proti robu, pustite približno 1–2 cm roba in ga raztegnite do ${diameter} cm; ne uporabljajte valjarja.`,
       toppings: `Enakomerno razporedite ${saucePerPizza} g omake in ${cheesePerPizza} g dobro odcejene mocarele; rob pustite prost.`,
-      launch: oven === 'homePan' ? 'Pico previdno položite na pripravljen pekač in ga postavite v pečico.' : oven === 'ooni' ? 'Preverite, ali se pica prosto premika na loparju, nato jo previdno vstavite v segreto pizza pečico.' : 'Preverite, ali se pica prosto premika na loparju, nato jo previdno prenesite na popolnoma segret kamen ali jeklo.',
-      bake: oven === 'homeStone'
+      launch: isKamado ? 'Pico previdno prenesite na segret kamen v Kamadu in zaprite pokrov.' : oven === 'homePan' ? 'Pico previdno položite na pripravljen pekač in ga postavite v pečico.' : usesPizzaOvenBehavior(oven) ? 'Preverite, ali se pica prosto premika na loparju, nato jo previdno vstavite v segreto pizza pečico.' : 'Preverite, ali se pica prosto premika na loparju, nato jo previdno prenesite na popolnoma segret kamen ali jeklo.',
+      bake: getOvenBehaviorType(oven) === 'homeStone'
         ? `Izklopite žar in uporabite program Pizza ali zgornje/spodnje gretje brez ventilatorja. Pecite ${bakingTimeRange} pri ${ovenTemp} °C; na koncu zapečite z žarom.`
-        : oven === 'ooni'
+        : isKamado
+          ? `Pecite pri ${ovenTemp} °C približno ${bakingTimeRange}. Med peko preverjajte barvo roba in spodnje strani; po potrebi pico previdno obrnite za enakomernejšo peko.`
+        : usesPizzaOvenBehavior(oven)
           ? `Pecite ${bakingTimeRange} pri ${ovenTemp} °C in pico obračajte vsakih 20–30 sekund.`
-          : `Pecite ${bakingTimeRange} pri ${ovenTemp} °C; preverite dno in po potrebi na kratko zaključite pod zgornjim žarom.`,
+          : `Pecite ${bakingTimeRange} pri ${ovenTemp} °C; preverite barvo vrha in dna ter po potrebi na kratko zaključite pod zgornjim žarom.`,
     },
   }[lang]);
   const glutenFreeShape = {
@@ -7894,7 +9989,7 @@ function buildBeginnerDirectHomeSteps(
         fermentationInfo: undefined,
         fermentationSignsInfo: undefined,
         proofingInfo: undefined,
-        timers: [],
+        timers: [{ id: 'beginner-fridge', seconds: schedule.fridgeHours * 3600, kind: 'fridge' as const }],
       };
     }
     const finalPhaseIndex = schedule.fridgeHours > 0 ? 4 : 3;
@@ -7912,13 +10007,14 @@ function buildBeginnerDirectHomeSteps(
           : includeRoomOnlyCarryStep && roomFinalStart
             ? [roomFinalStart.step]
             : []),
-        labels.preheat(preheatMinutes, formatBeginnerClockTime(preheatAt, lang)),
+        ...(!isKamado ? [labels.preheat(preheatMinutes, formatBeginnerClockTime(preheatAt, lang))] : []),
         finalWorkSurfaceStep,
         finalDoughBallStep,
         finalShapeStep,
         shapingSteps.toppings,
-        shapingSteps.launch,
-        shapingSteps.bake,
+        ...(isKamado
+          ? [shapingSteps.launch, getKamadoBakeBlockedText(lang)]
+          : [shapingSteps.launch, shapingSteps.bake]),
       ];
       const phaseTitle = schedule.fridgeHours > 0
         ? phase.title
@@ -7931,7 +10027,7 @@ function buildBeginnerDirectHomeSteps(
       return {
         ...phase,
         title: phaseTitle,
-        stepInfo: effectiveStepInfo,
+        stepInfo: isKamado ? undefined : effectiveStepInfo,
         temperingInfo: undefined,
         bakingInfo: undefined,
         bakingCheckInfo: undefined,
@@ -7951,7 +10047,8 @@ function buildBeginnerDirectHomeSteps(
     }
     return { ...phase, steps };
   });
-  return addSequentialBeginnerPhaseLetters(adapted, lang);
+  const phasesWithKamado = isKamado ? insertKamadoPreheatPhase(adapted, lang, kamadoProfile) : adapted;
+  return addSequentialBeginnerPhaseLetters(phasesWithKamado, lang);
 }
 
 function addSequentialBeginnerPhaseLetters(phases: DetailedPhase[], lang: Lang): DetailedPhase[] {
@@ -7960,6 +10057,148 @@ function addSequentialBeginnerPhaseLetters(phases: DetailedPhase[], lang: Lang):
     ...phase,
     title: `${prefix} ${String.fromCharCode(65 + index)}: ${phase.title.replace(/^(?:Faza|Phase|Fase)\s+[A-Z]:?\s*/i, '')}`,
   }));
+}
+
+function insertKamadoPreheatPhase(
+  phases: DetailedPhase[],
+  lang: Lang,
+  profile: KamadoOvenProfile | null,
+): DetailedPhase[] {
+  if (phases.length === 0) return phases;
+  const copy = ({
+    hr: {
+      title: 'Predgrijavanje Kamada',
+      steps: [
+        'Napunite Kamado kvalitetnim drvenim ugljenom i zapalite ga. Otvorite donji i gornji ventil kako biste omogućili protok zraka.',
+        'Postavite deflektor topline za indirektno pečenje, zatim rešetku i kamen za pizzu prema uputama proizvođača. Izbjegavajte izravno izlaganje kamena plamenu.',
+        profile
+          ? `Postupno zagrijavajte Kamado i ne prelazite unesenu maksimalnu dopuštenu temperaturu od ${profile.maximumTemperatureC} °C. Ta vrijednost je granica uređaja, a ne cilj pečenja; ciljna temperatura za Kamado još nije odobrena.`
+          : 'Postupno zagrijavajte Kamado prema uputama proizvođača i ne prelazite njegovu maksimalnu dopuštenu temperaturu. Ciljna temperatura pečenja za Kamado još nije odobrena.',
+      ],
+      info: [
+        ['Priprema Kamada', 'Koristite prirodni drveni ugljen u komadima, prikladan za keramičke roštilje. Izbjegavajte brikete s kemijskim dodacima i tekućine za potpalu.\n\nZapalite ugljen odgovarajućim potpaljivačem. Otvorite oba ventilacijska otvora kako biste omogućili dovod kisika.\n\nKako temperatura raste, postupno smanjujte otvore da biste se približili željenoj temperaturi.'],
+        ['Postavljanje kamena', 'Deflektor topline štiti kamen od izravne topline žara i pomaže ravnomjernijem pečenju.\n\nPostavite kamen iznad deflektora, uz razmak za cirkulaciju toplog zraka. Točan raspored ovisi o modelu Kamada.\n\nKoristite kamen namijenjen visokim temperaturama. Ne stavljajte hladan kamen u već jako zagrijan Kamado ako proizvođač to ne dopušta, zbog mogućeg toplinskog šoka.'],
+        ['Zagrijavanje Kamada', 'Temperatura prikazana na termometru poklopca nije nužno jednaka temperaturi kamena.\n\nZa provjeru površine kamena preporučuje se infracrveni termometar.\n\nNakon što Kamado postigne ciljnu temperaturu, omogućite kamenu dodatno zagrijavanje od najmanje 20 minuta. Stvarno potrebno vrijeme ovisi o debljini kamena i modelu Kamada.\n\nNe prekoračujte dopuštenu temperaturu proizvođača. Pri visokim temperaturama najprije malo odškrinite poklopac, pričekajte nekoliko sekundi, a zatim ga otvorite.'],
+      ],
+      timerLabel: 'Zagrijavanje kamena',
+    },
+    en: {
+      title: 'Kamado preheating',
+      steps: [
+        'Fill the Kamado with quality lump charcoal and light it. Open the lower and upper vents to allow airflow.',
+        'Install the heat deflector for indirect cooking, then the grate and pizza stone according to the manufacturer’s instructions. Avoid exposing the stone directly to the flame.',
+        profile
+          ? `Gradually heat the Kamado without exceeding its saved maximum permitted temperature of ${profile.maximumTemperatureC} °C. This is the appliance limit, not a baking target; a Kamado baking target has not been approved.`
+          : 'Gradually heat the Kamado according to the manufacturer’s instructions and do not exceed its maximum permitted temperature. A Kamado baking target has not been approved.',
+      ],
+      info: [
+        ['Preparing the Kamado', 'Use natural lump charcoal suitable for ceramic grills. Avoid briquettes with chemical additives and lighter fluid.\n\nLight the charcoal with a suitable fire starter. Open both vents to provide oxygen.\n\nAs the temperature rises, gradually close the vents to approach the target temperature.'],
+        ['Setting up the stone', 'The heat deflector protects the stone from direct heat from the coals and helps it bake more evenly.\n\nPlace the stone above the deflector with space for hot air to circulate. The exact arrangement depends on the Kamado model.\n\nUse a stone rated for high temperatures. Do not put a cold stone into an already very hot Kamado unless the manufacturer allows it, due to thermal-shock risk.'],
+        ['Heating the Kamado', 'The temperature shown on the lid thermometer is not necessarily the temperature of the stone.\n\nAn infrared thermometer is recommended for checking the stone surface.\n\nAfter the Kamado reaches the target temperature, allow the stone at least 20 more minutes to heat. The actual time depends on the stone thickness and Kamado model.\n\nDo not exceed the manufacturer’s temperature limit. At high temperatures, first crack the lid slightly, wait a few seconds, and then open it.'],
+      ],
+      timerLabel: 'Heating the stone',
+    },
+    de: {
+      title: 'Kamado vorheizen',
+      steps: [
+        'Füllen Sie den Kamado mit hochwertiger Stückholzkohle und zünden Sie sie an. Öffnen Sie die unteren und oberen Lüftungsschieber für den Luftstrom.',
+        'Setzen Sie den Hitzedeflektor für indirektes Garen und anschließend Rost und Pizzastein gemäß Herstelleranleitung ein. Setzen Sie den Stein nicht direkt der Flamme aus.',
+        profile
+          ? `Heizen Sie den Kamado langsam auf, ohne die gespeicherte maximal zulässige Temperatur von ${profile.maximumTemperatureC} °C zu überschreiten. Dieser Wert ist die Gerätegrenze und kein Backziel; eine Kamado-Zieltemperatur ist nicht freigegeben.`
+          : 'Heizen Sie den Kamado gemäß Herstelleranleitung langsam auf und überschreiten Sie seine maximal zulässige Temperatur nicht. Eine Kamado-Zieltemperatur ist nicht freigegeben.',
+      ],
+      info: [
+        ['Kamado vorbereiten', 'Verwenden Sie natürliche Stückholzkohle, die für Keramikgrills geeignet ist. Vermeiden Sie Briketts mit chemischen Zusätzen und flüssige Grillanzünder.\n\nZünden Sie die Kohle mit einem geeigneten Anzünder an. Öffnen Sie beide Lüftungsöffnungen für die Sauerstoffzufuhr.\n\nSchließen Sie die Öffnungen schrittweise, wenn die Temperatur steigt, um sich der Zieltemperatur anzunähern.'],
+        ['Stein einsetzen', 'Der Hitzedeflektor schützt den Stein vor direkter Glut und unterstützt gleichmäßigeres Backen.\n\nSetzen Sie den Stein mit Abstand für die Warmluftzirkulation über den Deflektor. Der genaue Aufbau hängt vom Kamado-Modell ab.\n\nVerwenden Sie einen für hohe Temperaturen geeigneten Stein. Legen Sie keinen kalten Stein in einen bereits stark erhitzten Kamado, sofern der Hersteller dies nicht erlaubt; es besteht die Gefahr eines Temperaturschocks.'],
+        ['Kamado aufheizen', 'Die Temperatur am Deckelthermometer entspricht nicht unbedingt der Temperatur des Steins.\n\nZur Messung der Steinoberfläche wird ein Infrarotthermometer empfohlen.\n\nLassen Sie den Stein nach Erreichen der Zieltemperatur mindestens weitere 20 Minuten aufheizen. Die tatsächliche Dauer hängt von Steindicke und Kamado-Modell ab.\n\nÜberschreiten Sie nicht die zulässige Temperatur des Herstellers. Öffnen Sie den Deckel bei hohen Temperaturen zuerst einen Spalt, warten Sie einige Sekunden und öffnen Sie ihn dann vollständig.'],
+      ],
+      timerLabel: 'Stein aufheizen',
+    },
+    sl: {
+      title: 'Predgrevanje Kamada',
+      steps: [
+        'Kamado napolnite s kakovostnim naravnim ogljem v kosih in ga prižgite. Odprite spodnji in zgornji zračnik za pretok zraka.',
+        'Namestite toplotni deflektor za posredno peko, nato rešetko in kamen za pico po navodilih proizvajalca. Kamna ne izpostavljajte neposredno plamenu.',
+        profile
+          ? `Kamado segrevajte postopoma in ne prekoračite shranjene največje dovoljene temperature ${profile.maximumTemperatureC} °C. To je meja naprave, ne cilj peke; ciljna temperatura za Kamado še ni odobrena.`
+          : 'Kamado segrevajte postopoma po navodilih proizvajalca in ne prekoračite njegove največje dovoljene temperature. Ciljna temperatura peke za Kamado še ni odobrena.',
+      ],
+      info: [
+        ['Priprava Kamada', 'Uporabite naravno oglje v kosih, primerno za keramične žare. Izogibajte se briketom s kemičnimi dodatki in tekočinam za prižiganje.\n\nOglje prižgite z ustreznim pripomočkom. Odprite oba zračnika, da omogočite dovod kisika.\n\nKo temperatura narašča, zračnika postopoma zapirajte, da se približate ciljni temperaturi.'],
+        ['Namestitev kamna', 'Toplotni deflektor ščiti kamen pred neposredno toploto žerjavice in pomaga pri enakomernejši peki.\n\nKamen namestite nad deflektor z dovolj prostora za kroženje toplega zraka. Natančna postavitev je odvisna od modela Kamada.\n\nUporabite kamen, namenjen visokim temperaturam. Hladnega kamna ne položite v že močno segret Kamado, če proizvajalec tega ne dovoljuje, saj lahko pride do toplotnega šoka.'],
+        ['Segrevanje Kamada', 'Temperatura na termometru pokrova ni nujno enaka temperaturi kamna.\n\nZa preverjanje površine kamna priporočamo infrardeči termometer.\n\nKo Kamado doseže ciljno temperaturo, pustite, da se kamen segreva še najmanj 20 minut. Potreben čas je odvisen od debeline kamna in modela Kamada.\n\nNe prekoračite dovoljene temperature proizvajalca. Pri visokih temperaturah pokrov najprej rahlo odprite, počakajte nekaj sekund in ga nato odprite do konca.'],
+      ],
+      timerLabel: 'Segrevanje kamna',
+    },
+  })[lang];
+  const phase: DetailedPhase = {
+    title: copy.title,
+    steps: copy.steps,
+    stepInfo: copy.info.map(([title, body]) => ({ title, body })),
+    timers: [],
+  };
+  const phasesWithSinglePreheat = insertKamadoPhaseOnce(phases, phase, (candidate) => {
+    const baseTitle = candidate.title.replace(/^(?:Faza|Phase|Fase)\s+[A-Z]:?\s*/i, '').trim();
+    return baseTitle.toLocaleLowerCase() === copy.title.toLocaleLowerCase();
+  });
+  const finalPhaseIndex = phasesWithSinglePreheat.length - 1;
+  return addSequentialBeginnerPhaseLetters(phasesWithSinglePreheat.map((candidate, index) => index === finalPhaseIndex
+    ? {
+      ...candidate,
+      timers: candidate.timers?.filter((timer) => !['preheat', 'bake', 'rotate'].includes(timer.kind)),
+    }
+    : candidate), lang);
+}
+
+function buildKamadoPrefermentPhases(
+  phase: DetailedPhase,
+  steps: readonly string[],
+  lang: Lang,
+  profile: KamadoOvenProfile | null,
+): DetailedPhase[] {
+  const prefix = { hr: 'Faza', en: 'Phase', de: 'Phase', sl: 'Faza' }[lang];
+  const earlySteps = steps.slice(0, -1);
+  const earlyPhase = {
+    ...phase,
+    title: `${prefix} C: ${phase.title.replace(/^(?:Faza|Phase|Fase)\s+[A-Z]:?\s*/i, '')}`,
+    steps: earlySteps,
+    stepInfo: phase.stepInfo?.slice(0, earlySteps.length),
+    timers: [],
+  };
+  const finalStep = steps[steps.length - 1];
+  const finalShapingStep = finalStep?.replace(({
+    hr: ' i pecite pri najvišoj temperaturi.',
+    en: ', and bake at the highest temperature.',
+    de: ' und backen Sie sie bei höchster Temperatur.',
+    sl: ' in pecite pri najvišji temperaturi.',
+  })[lang], '.');
+  const finalPhase: DetailedPhase = {
+    ...phase,
+    title: `${prefix} ${String.fromCharCode(65 + (earlySteps.length > 0 ? 4 : 3))}: ${({
+      hr: 'Temperiranje, oblikovanje i pečenje',
+      en: 'Tempering, shaping and baking',
+      de: 'Temperieren, Formen und Backen',
+      sl: 'Temperiranje, oblikovanje in peka',
+    })[lang]}`,
+    steps: [...(finalShapingStep ? [finalShapingStep] : []), getKamadoBakeBlockedText(lang)],
+    stepInfo: undefined,
+    timers: [],
+  };
+  const preheatPhase = insertKamadoPreheatPhase(
+    earlySteps.length > 0 ? [earlyPhase, finalPhase] : [{ ...earlyPhase, steps: [] }, finalPhase],
+    lang,
+    profile,
+  )[1];
+  const preheatLetter = String.fromCharCode(65 + (earlySteps.length > 0 ? 3 : 2));
+  const titledPreheatPhase = {
+    ...preheatPhase,
+    title: `${prefix} ${preheatLetter}: ${preheatPhase.title.replace(/^(?:Faza|Phase|Fase)\s+[A-Z]:?\s*/i, '')}`,
+  };
+  return [
+    ...(earlySteps.length > 0 ? [earlyPhase] : []),
+    titledPreheatPhase,
+    finalPhase,
+  ];
 }
 
 function getDirectPhaseTimers(phaseKey: string, roomHours: number, fridgeHours: number): BaseTimer[] {
@@ -8791,17 +11030,21 @@ function getGlutenFreeBakingGuideCopy(lang: Lang, slide: number) {
 }
 
 function PhaseBlock({
-  title, steps, stepInfo, phaseKey, timers: customTimers, bigaInfo, waterInfo, waterInfoStepIndex, containerOilInfo, fermentationInfo, fermentationSignsInfo, degassingInfo, doughHandlingInfo, doughHandlingInfoStepIndex, temperingInfo, proofingInfo, ovenTimingInfo, ovenProgramInfo, bakingCheckInfo, bakingInfo, infoTitleOverrides, doughTemperatureStyle, phaseGuide, completed, onToggle,
+  title, steps, stepInfo, phaseKey, timers: customTimers, bigaInfo, waterInfo, waterInfoStepIndex, containerOilInfo, containerOilInfoStepIndex, fermentationInfo, fermentationInfoStepIndices, fermentationSignsInfo, fermentationSignsInfoStepIndex, degassingInfo, degassingInfoStepIndex, doughHandlingInfo, doughHandlingInfoStepIndex, temperingInfo, proofingInfo, ovenTimingInfo, ovenProgramInfo, bakingCheckInfo, bakingInfo, infoTitleOverrides, doughTemperatureStyle, phaseGuide, completed, onToggle,
   activeTimers, onStartTimer, onPauseTimer, onResumeTimer, onResetTimer, onStopTimer, lang, nowMs,
 }: {
   title: string;
   steps: readonly string[];
-  stepInfo?: Array<{ title: string; body: string } | undefined>;
+  stepInfo?: SpiralMixingStepInfoList;
   phaseKey: string;
   timers?: BaseTimer[];
   bigaInfo?: string;
   waterInfo?: string;
   waterInfoStepIndex?: number;
+  containerOilInfoStepIndex?: number;
+  fermentationInfoStepIndices?: number[];
+  fermentationSignsInfoStepIndex?: number;
+  degassingInfoStepIndex?: number;
   doughHandlingInfoStepIndex?: number;
   containerOilInfo?: string;
   fermentationInfo?: string;
@@ -8829,6 +11072,12 @@ function PhaseBlock({
   nowMs: number;
 }) {
   const [expandedCompactTimerKey, setExpandedCompactTimerKey] = useState<string | null>(null);
+  const [webInfo, setWebInfo] = useState<{ title: string; body: string } | null>(null);
+  const proWebInfo = useContext(ProWebInfoContext);
+  const showInfo = (title: string, body: string) => {
+    if (proWebInfo) setWebInfo({ title, body });
+    else Alert.alert(title, body);
+  };
   const temperatureUnit = useSyncExternalStore(subscribeTemperatureUnit, getCachedTemperatureUnit, getCachedTemperatureUnit) ?? 'celsius';
   const measurementSystem = useSyncExternalStore(subscribeMeasurementSystem, getCachedMeasurementSystem, getCachedMeasurementSystem) ?? 'metric';
   const formatText = (text?: string) => text ? formatUnitText(text, temperatureUnit, measurementSystem) : text;
@@ -9039,11 +11288,11 @@ function PhaseBlock({
         const done = !!completed[key];
         const hasProofingInfo = !!proofingInfo && /izvadite kugle|izvadite tijesto|take the dough balls out|take the dough out|Nehmen Sie die Teigkugeln|Nehmen Sie den Teig|Kroglice vzemite|vzemite testo/i.test(s);
         const hasBigaInfo = !!bigaInfo && /Pripremite .*brašna|Prepare .*flour|Bereiten Sie .*Mehl|Pripravite .*moke/i.test(s);
-        const hasWaterInfo = !!waterInfo && (waterInfoStepIndex !== undefined ? i === waterInfoStepIndex : /ukupno .*vode|total water|Sieben und wiegen Sie.*Wasser|skupno .*vode/i.test(s));
-        const hasContainerOilInfo = !!containerOilInfo && (/nauljite fermentacijsku posudu|Pokrijte fermentacijsku posudu|Stavite kugle u zatvorenu fermentacijsku kutiju|Masa testa položite|oil the fermentation container|place the dough mass in a covered|Place the dough balls in a closed|Ölen Sie den Fermentationsbehälter|Legen Sie die Teigmasse in einen abgedeckten|Legen Sie die Teigkugeln in eine verschlossene|Fermentacijsko posodo rahlo|Maso testa položite/i.test(s));
-        const hasFermentationInfo = !!fermentationInfo && /završni bulk|final bulk fermentation|abschließende Stockgare|Končno prvo fermentacijo|Lagano nauljite fermentacijsku posudu|Lightly oil the fermentation container|Ölen Sie den Fermentationsbehälter|Fermentacijsko posodo rahlo|Integralno tijesto|Whole wheat dough|Vollkornteig|Integralno testo|Prebacite tijesto u lagano nauljenu fermentacijsku posudu/i.test(s);
-        const hasFermentationSignsInfo = !!fermentationSignsInfo && /Provjerite jesu li vidljivi|Check whether the first signs|Prüfen Sie, ob erste Anzeichen|Preverite, ali so vidni prvi znaki|^[^;]*(?:Miješanje i bulk traju|Mixing and bulk run|Mischen und Stockgare dauern|Mešanje in prva fermentacija trajata)[^;]*$|Pokrijte posudu i ostavite smjesu 15 minuta|Cover the container and let the mixture rest for 15 minutes|Decken Sie den Behälter ab und lassen Sie die Masse 15 Minuten|Posodo pokrijte in maso pred delitvijo 15 minut/i.test(s);
-        const hasDegassingInfo = !!degassingInfo && /minimalno degaziranje|minimizing degassing|möglichst starkes Entgasen|čim manj iztisnite plin/i.test(s);
+        const hasWaterInfo = !!waterInfo && (waterInfoStepIndex !== undefined ? i === waterInfoStepIndex : /ukupno .*vode|total water|Sieben und wiegen Sie.*Wasser|Wiegen Sie .*Wasser|skupno .*vode/i.test(s));
+        const hasContainerOilInfo = !!containerOilInfo && (containerOilInfoStepIndex === i || (containerOilInfoStepIndex === undefined && /nauljite fermentacijsku posudu|Pokrijte fermentacijsku posudu|Stavite kugle u zatvorenu fermentacijsku kutiju|Masa testa položite|oil the fermentation container|place the dough mass in a covered|Place the dough balls in a closed|Ölen Sie den Fermentationsbehälter|Legen Sie die Teigmasse in einen abgedeckten|Legen Sie die Teigkugeln in eine verschlossene|Fermentacijsko posodo rahlo|Maso testa položite/i.test(s)));
+        const hasFermentationInfo = !!fermentationInfo && (fermentationInfoStepIndices?.includes(i) || (fermentationInfoStepIndices === undefined && /završni bulk|final bulk fermentation|abschließende Stockgare|Končno prvo fermentacijo|Lagano nauljite fermentacijsku posudu|Lightly oil the fermentation container|Ölen Sie den Fermentationsbehälter|Fermentacijsko posodo rahlo|Integralno tijesto|Whole wheat dough|Vollkornteig|Integralno testo|Prebacite tijesto u lagano nauljenu fermentacijsku posudu/i.test(s)));
+        const hasFermentationSignsInfo = !!fermentationSignsInfo && (fermentationSignsInfoStepIndex === i || (fermentationSignsInfoStepIndex === undefined && /Provjerite jesu li vidljivi|Check whether the first signs|Prüfen Sie, ob erste Anzeichen|Preverite, ali so vidni prvi znaki|^[^;]*(?:Miješanje i bulk traju|Mixing and bulk run|Mischen und Stockgare dauern|Mešanje in prva fermentacija trajata)[^;]*$|Pokrijte posudu i ostavite smjesu 15 minuta|Cover the container and let the mixture rest for 15 minutes|Decken Sie den Behälter ab und lassen Sie die Masse 15 Minuten|Posodo pokrijte in maso pred delitvijo 15 minut/i.test(s)));
+        const hasDegassingInfo = !!degassingInfo && (degassingInfoStepIndex === i || (degassingInfoStepIndex === undefined && /minimalno degaziranje|minimizing degassing|möglichst starkes Entgasen|čim manj iztisnite plin/i.test(s)));
         const hasBakingInfo = !!bakingInfo && /Zagrijte kamen ili čelik|Zagrijte obrnuti lim|Preheat the pizza stone|Heizen Sie den Pizzastein|Kamen ali jeklo za pico segrevajte/i.test(s);
         const hasDoughHandlingInfo = !!doughHandlingInfo && (doughHandlingInfoStepIndex !== undefined ? i === doughHandlingInfoStepIndex : /Nastavite mijesiti|Nastavite miješati|Continue kneading|Continue mixing|Kneten Sie weiter|Mischen Sie weiter|Nadaljujte z gnetenjem|Nadaljujte z mešanjem|Bezglutenska smjesa se ne mijesi|Gluten-free dough is not kneaded|Glutenfreier Teig wird nicht geknetet|Brezglutensko testo se ne gnete/i.test(s));
         const hasTemperingInfo = !!temperingInfo && /prijeđite na temperiranje|Ostavite kugle .*sobnoj temperaturi|proceed to tempering|Let the dough balls .*room temperature|fahren Sie mit dem Temperieren|Lassen Sie die Teigkugeln .*Raumtemperatur|nadaljujte s temperiranjem|Kroglice .*sobni temperaturi/i.test(s);
@@ -9053,6 +11302,9 @@ function PhaseBlock({
         const hasOvenProgramInfo = !!ovenProgramInfo && /Pizza program|Pizza-Programm|program Pizza/i.test(s);
         const hasBakingCheckInfo = !!bakingCheckInfo && /Pecite bez grilla|Bake without the grill|Backen Sie ohne Grill|Pecite brez žara/i.test(s);
         const customStepInfo = stepInfo?.[i];
+        const customStepInfos = customStepInfo === undefined
+          ? []
+          : Array.isArray(customStepInfo) ? customStepInfo : [customStepInfo];
         return (
           <View key={i} style={styles.stepItem}>
             <Pressable
@@ -9076,7 +11328,7 @@ function PhaseBlock({
             {hasProofingInfo ? (
               <Pressable
                 accessibilityLabel={infoTitles.proofing}
-                onPress={() => Alert.alert(infoTitles.proofing, formatText(proofingInfo ?? proofingTestInfo))}
+                onPress={() => showInfo(infoTitles.proofing, formatText(proofingInfo ?? proofingTestInfo) ?? '')}
                 hitSlop={8}
                 style={styles.infoBtn}
               >
@@ -9086,7 +11338,7 @@ function PhaseBlock({
             {hasBigaInfo ? (
               <Pressable
                 accessibilityLabel={infoTitles.biga}
-                onPress={() => Alert.alert(infoTitles.biga, formatText(bigaInfo))}
+                onPress={() => showInfo(infoTitles.biga, formatText(bigaInfo) ?? '')}
                 hitSlop={8}
                 style={styles.infoBtn}
               >
@@ -9094,19 +11346,32 @@ function PhaseBlock({
               </Pressable>
             ) : null}
             {customStepInfo ? (
-              <Pressable
-                accessibilityLabel={customStepInfo.title}
-                onPress={() => Alert.alert(customStepInfo.title, formatText(customStepInfo.body))}
-                hitSlop={8}
-                style={styles.infoBtn}
-              >
-                <Icon name="information-circle-outline" size={19} color={COLORS.brand} />
-              </Pressable>
+              Array.isArray(customStepInfo) ? customStepInfos.map((customInfo, infoIndex) => (
+                <Pressable
+                  key={`${customInfo.title}-${infoIndex}`}
+                  accessibilityLabel={customInfo.title}
+                  onPress={() => showInfo(customInfo.title, formatText(customInfo.body) ?? '')}
+                  hitSlop={8}
+                  style={styles.infoBtn}
+                >
+                  <Icon name="information-circle-outline" size={19} color={COLORS.brand} />
+                </Pressable>
+              )) : (
+                <Pressable
+                  key={customStepInfo.title}
+                  accessibilityLabel={customStepInfo.title}
+                  onPress={() => showInfo(customStepInfo.title, formatText(customStepInfo.body) ?? '')}
+                  hitSlop={8}
+                  style={styles.infoBtn}
+                >
+                  <Icon name="information-circle-outline" size={19} color={COLORS.brand} />
+                </Pressable>
+              )
             ) : null}
             {hasWaterInfo ? (
               <Pressable
                 accessibilityLabel={infoTitles.water}
-                onPress={() => Alert.alert(infoTitles.water, formatText(waterInfo))}
+                onPress={() => showInfo(infoTitles.water, formatText(waterInfo) ?? '')}
                 hitSlop={8}
                 style={styles.infoBtn}
               >
@@ -9116,7 +11381,7 @@ function PhaseBlock({
             {hasContainerOilInfo ? (
               <Pressable
                 accessibilityLabel={infoTitles.container}
-                onPress={() => Alert.alert(infoTitles.container, formatText(containerOilInfo))}
+                onPress={() => showInfo(infoTitles.container, formatText(containerOilInfo) ?? '')}
                 hitSlop={8}
                 style={styles.infoBtn}
               >
@@ -9126,7 +11391,7 @@ function PhaseBlock({
             {hasFermentationInfo ? (
               <Pressable
                 accessibilityLabel={infoTitles.room}
-                onPress={() => Alert.alert(infoTitles.room, formatText(fermentationInfo))}
+                onPress={() => showInfo(infoTitles.room, formatText(fermentationInfo) ?? '')}
                 hitSlop={8}
                 style={styles.infoBtn}
               >
@@ -9136,7 +11401,7 @@ function PhaseBlock({
             {hasFermentationSignsInfo ? (
               <Pressable
                 accessibilityLabel={infoTitles.signs}
-                onPress={() => Alert.alert(infoTitles.signs, formatText(fermentationSignsInfo))}
+                onPress={() => showInfo(infoTitles.signs, formatText(fermentationSignsInfo) ?? '')}
                 hitSlop={8}
                 style={styles.infoBtn}
               >
@@ -9146,7 +11411,7 @@ function PhaseBlock({
             {hasDegassingInfo ? (
               <Pressable
                 accessibilityLabel={infoTitles.degassing}
-                onPress={() => Alert.alert(infoTitles.degassing, formatText(degassingInfo))}
+                onPress={() => showInfo(infoTitles.degassing, formatText(degassingInfo) ?? '')}
                 hitSlop={8}
                 style={styles.infoBtn}
               >
@@ -9156,7 +11421,7 @@ function PhaseBlock({
             {hasBakingInfo ? (
               <Pressable
                 accessibilityLabel={infoTitles.baking}
-                onPress={() => Alert.alert(infoTitles.baking, formatText(bakingInfo))}
+                onPress={() => showInfo(infoTitles.baking, formatText(bakingInfo) ?? '')}
                 hitSlop={8}
                 style={styles.infoBtn}
               >
@@ -9166,7 +11431,7 @@ function PhaseBlock({
             {hasDoughHandlingInfo ? (
               <Pressable
                 accessibilityLabel={infoTitles.handling}
-                onPress={() => Alert.alert(infoTitles.handling, formatText(doughHandlingInfo))}
+                onPress={() => showInfo(infoTitles.handling, formatText(doughHandlingInfo) ?? '')}
                 hitSlop={8}
                 style={styles.infoBtn}
               >
@@ -9176,7 +11441,7 @@ function PhaseBlock({
             {hasTemperingInfo ? (
               <Pressable
                 accessibilityLabel={infoTitles.tempering}
-                onPress={() => Alert.alert(infoTitles.tempering, formatText(temperingInfo))}
+                onPress={() => showInfo(infoTitles.tempering, formatText(temperingInfo) ?? '')}
                 hitSlop={8}
                 style={styles.infoBtn}
               >
@@ -9186,7 +11451,7 @@ function PhaseBlock({
             {hasDoughTemperatureInfo ? (
               <Pressable
                 accessibilityLabel={doughTemperatureTitle}
-                onPress={() => Alert.alert(doughTemperatureTitle, formatText(doughTemperatureInfo))}
+                onPress={() => showInfo(doughTemperatureTitle, formatText(doughTemperatureInfo) ?? '')}
                 hitSlop={8}
                 style={styles.infoBtn}
               >
@@ -9196,7 +11461,7 @@ function PhaseBlock({
             {hasToppingInfo ? (
               <Pressable
                 accessibilityLabel={toppingTitle}
-                onPress={() => Alert.alert(toppingTitle, formatText(toppingInfo))}
+                onPress={() => showInfo(toppingTitle, formatText(toppingInfo) ?? '')}
                 hitSlop={8}
                 style={styles.infoBtn}
               >
@@ -9206,7 +11471,7 @@ function PhaseBlock({
             {hasOvenTimingInfo ? (
               <Pressable
                 accessibilityLabel={infoTitles.ovenTiming}
-                onPress={() => Alert.alert(infoTitles.ovenTiming, formatText(ovenTimingInfo))}
+                onPress={() => showInfo(infoTitles.ovenTiming, formatText(ovenTimingInfo) ?? '')}
                 hitSlop={8}
                 style={styles.infoBtn}
               >
@@ -9216,7 +11481,7 @@ function PhaseBlock({
             {hasOvenProgramInfo ? (
               <Pressable
                 accessibilityLabel={infoTitles.ovenProgram}
-                onPress={() => Alert.alert(infoTitles.ovenProgram, formatText(ovenProgramInfo))}
+                onPress={() => showInfo(infoTitles.ovenProgram, formatText(ovenProgramInfo) ?? '')}
                 hitSlop={8}
                 style={styles.infoBtn}
               >
@@ -9226,10 +11491,7 @@ function PhaseBlock({
             {hasBakingCheckInfo ? (
               <Pressable
                 accessibilityLabel={bakingCheckTitle}
-                onPress={() => Alert.alert(
-                  bakingCheckTitle,
-                  bakingCheckInfo!,
-                )}
+                onPress={() => showInfo(bakingCheckTitle, bakingCheckInfo!)}
                 hitSlop={8}
                 style={styles.infoBtn}
               >
@@ -9239,13 +11501,29 @@ function PhaseBlock({
           </View>
         );
       })}
+      <Modal visible={proWebInfo && !!webInfo} animationType="fade" transparent onRequestClose={() => setWebInfo(null)}>
+        <Pressable style={styles.tooltipBackdrop} onPress={() => setWebInfo(null)}>
+          <Pressable style={styles.tooltipCard} onPress={() => {}} accessibilityViewIsModal>
+            <View style={styles.tooltipHeader}>
+              <Icon name="information-circle" size={20} color={COLORS.brand} />
+              <Text style={styles.tooltipTitle}>{webInfo?.title}</Text>
+              <Pressable accessibilityLabel="Close contextual help" onPress={() => setWebInfo(null)} hitSlop={8}>
+                <Icon name="close" size={20} color={COLORS.muted} />
+              </Pressable>
+            </View>
+            <ScrollView style={{ maxHeight: 460 }}>
+              <Text style={styles.tooltipBody}>{webInfo?.body}</Text>
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
 
-function OvenCard({ active, onPress, icon, imageSrc, title, testID }: any) {
+function OvenCard({ active, onPress, icon, imageSrc, title, testID, cardStyle }: any) {
   return (
-    <Pressable testID={testID} onPress={onPress} style={[styles.ovenCard, active && styles.ovenCardActive]}>
+    <Pressable testID={testID} onPress={onPress} style={[styles.ovenCard, cardStyle, active && styles.ovenCardActive]}>
       <View style={[styles.ovenIconWrap, active && styles.ovenIconWrapActive]}>
         {imageSrc ? (
           <Image source={imageSrc} style={styles.ovenImage} resizeMode="contain" />
@@ -9306,12 +11584,14 @@ function LeftoverModal({ onClose }: { onClose: () => void }) {
 function SavedRecipesModal({
   editingRecipe,
   localOnly,
+  recipeMode,
   onClose,
   onLoad,
   onSave,
 }: {
   editingRecipe: { id: string; name: string } | null;
   localOnly: boolean;
+  recipeMode: SavedRecipeMode;
   onClose: () => void;
   onLoad: (recipe: SavedRecipe) => void;
   onSave: (name: string, recipeId?: string | null) => Promise<SavedRecipe>;
@@ -9325,7 +11605,7 @@ function SavedRecipesModal({
 
   useEffect(() => {
     let mounted = true;
-    const loadRecipes = localOnly ? getProSavedRecipes() : api('/api/recipes');
+    const loadRecipes = localOnly ? getSavedRecipes(recipeMode) : api('/api/recipes');
     loadRecipes.then((data) => {
       if (mounted) setRecipes(data || []);
     }).catch(() => {
@@ -9334,7 +11614,7 @@ function SavedRecipesModal({
       if (mounted) setLoading(false);
     });
     return () => { mounted = false; };
-  }, [localOnly]);
+  }, [localOnly, recipeMode]);
 
   const save = async () => {
     if (!name.trim()) return;
@@ -9361,6 +11641,13 @@ function SavedRecipesModal({
     } catch {
       setError(true);
     }
+  };
+
+  const confirmRemove = (recipe: SavedRecipe) => {
+    Alert.alert(t.calc.deleteRecipe, recipe.name, [
+      { text: t.common.cancel, style: 'cancel' },
+      { text: t.calc.deleteRecipe, style: 'destructive', onPress: () => { void remove(recipe.recipe_id); } },
+    ]);
   };
 
   return (
@@ -9396,7 +11683,7 @@ function SavedRecipesModal({
                   <Icon name="create-outline" size={18} color={COLORS.brand} />
                   <Text style={styles.savedRecipeActionText}>{t.calc.loadAndEdit}</Text>
                 </Pressable>
-                <Pressable testID={`delete-recipe-${recipe.recipe_id}`} onPress={() => { void remove(recipe.recipe_id); }} style={styles.savedRecipeDelete}>
+                <Pressable testID={`delete-recipe-${recipe.recipe_id}`} onPress={() => confirmRemove(recipe)} style={styles.savedRecipeDelete}>
                   <Icon name="trash-outline" size={18} color={COLORS.error} />
                 </Pressable>
               </View>
@@ -9409,7 +11696,7 @@ function SavedRecipesModal({
 }
 
 function ShoppingModal({ onClose }: { onClose: () => void }) {
-  const { t } = useT();
+  const { t, lang } = useT();
   const measurementSystem = useSyncExternalStore(subscribeMeasurementSystem, getCachedMeasurementSystem, getCachedMeasurementSystem) ?? 'metric';
   const [recipe, setRecipe] = useState<any>(null);
   const [copied, setCopied] = useState(false);
@@ -9427,25 +11714,52 @@ function ShoppingModal({ onClose }: { onClose: () => void }) {
     );
   }
 
-  const methodLabel = recipe.method === 'biga' ? t.calc.biga : recipe.method === 'poolish' ? t.calc.poolish : t.calc.direct;
+  const methodLabel = recipe.method === 'biga' ? t.calc.biga : recipe.method === 'poolish' ? t.calc.poolish : recipe.method === 'sponge' ? t.calc.sponge : t.calc.direct;
+  const spongeCopy = SPONGE_COPY[lang];
+  const recipeYeastType = recipe.yeastType ?? recipe.spongeYeastType;
+  const recipeYeastTypeLabel = spongeCopy[recipeYeastType === 'activeDry'
+    ? 'activeDry'
+    : recipeYeastType === 'dry' ? 'instantDry' : 'fresh'];
   const ing = t.shopping.ingredients;
 
+  const isCustomBlend = recipe.proMode && recipe.settings?.flour === 'custom';
+  const blendPctA = Math.max(0, Math.min(100, Number(recipe.settings?.blendPctA ?? 70)));
+  const blendFlourA = isCustomBlend ? Math.round(recipe.flour * blendPctA / 100) : 0;
+  const blendFlourB = isCustomBlend ? recipe.flour - blendFlourA : 0;
+  const flourItems = isCustomBlend
+    ? [
+        { key: 'flour-a', qty: formatWeight(blendFlourA, measurementSystem), name: flourName(lang, recipe.settings.blendA) },
+        { key: 'flour-b', qty: formatWeight(blendFlourB, measurementSystem), name: flourName(lang, recipe.settings.blendB) },
+      ]
+    : [{ key: 'flour', qty: formatWeight(recipe.flour, measurementSystem), name: `${ing.flour} (${recipe.flourType || '00'})` }];
   const items = [
-    { key: 'flour', qty: formatWeight(recipe.flour, measurementSystem), name: `${ing.flour} (${recipe.flourType || '00'})` },
+    ...flourItems,
     { key: 'water', qty: formatWeight(recipe.water, measurementSystem), name: ing.water },
     { key: 'salt', qty: formatWeight(recipe.salt, measurementSystem, true), name: ing.salt },
-    { key: 'yeast', qty: formatWeight(recipe.yeast, measurementSystem, true), name: ing.yeast },
+    ...(recipe.method === 'sponge'
+      ? [
+          { key: 'sponge-yeast', qty: formatWeight(recipe.spongeYeastGrams ?? 0, measurementSystem, true), name: `${spongeCopy.spongeYeastLabel} (${recipeYeastTypeLabel})` },
+          { key: 'final-dough-yeast', qty: formatWeight(recipe.finalDoughYeastGrams ?? 0, measurementSystem, true), name: `${spongeCopy.finalDoughYeastLabel} (${recipeYeastTypeLabel})` },
+        ]
+      : [{ key: 'yeast', qty: formatWeight(recipe.yeast, measurementSystem, true), name: `${ing.yeast} (${recipeYeastTypeLabel})` }]),
+    ...(recipe.proMode && recipe.psyllium > 0 ? [{ key: 'psyllium', qty: formatWeight(recipe.psyllium, measurementSystem, true), name: ing.psyllium }] : []),
     ...(recipe.oil > 0 ? [{ key: 'oil', qty: formatWeight(recipe.oil, measurementSystem), name: ing.oil }] : []),
     ...(recipe.sauce ? [{ key: 'sauce', qty: formatWeight(recipe.sauce, measurementSystem), name: ing.sauce }] : []),
     ...(recipe.cheese ? [{ key: 'cheese', qty: formatWeight(recipe.cheese, measurementSystem), name: ing.cheese }] : []),
   ];
 
-  const headerText = t.shopping.headerFmt
-    .replace('{N}', String(recipe.pizzas))
-    .replace('{H}', String(recipe.hydration))
-    .replace('{M}', methodLabel);
+  const isProTeglia = recipe.proMode && recipe.style_id === 'romana' && recipe.settings?.romanFormat === 'teglia';
+  const trayUnit = ({ hr: recipe.pizzas === 1 ? 'tepsija' : 'tepsije', en: recipe.pizzas === 1 ? 'tray' : 'trays', de: recipe.pizzas === 1 ? 'Blech' : 'Bleche', sl: recipe.pizzas === 1 ? 'pekač' : 'pekače' } as Record<Lang, string>)[lang];
+  const headerText = isProTeglia
+    ? `${({ hr: `Za {N} ${trayUnit} · {H}% · {M}`, en: `For {N} ${trayUnit} · {H}% · {M}`, de: `Für {N} ${trayUnit} · {H}% · {M}`, sl: `Za {N} ${trayUnit} · {H}% · {M}` } as Record<Lang, string>)[lang].replace('{N}', String(recipe.pizzas)).replace('{H}', String(recipe.hydration)).replace('{M}', methodLabel)}`
+    : t.shopping.headerFmt
+      .replace('{N}', String(recipe.pizzas))
+      .replace('{H}', String(recipe.hydration))
+      .replace('{M}', methodLabel);
 
-  const copyHeader = t.shopping.copyHeaderFmt.replace('{N}', String(recipe.pizzas));
+  const copyHeader = isProTeglia
+    ? `${({ hr: `Pizzabook - Recept za {N} ${trayUnit}:`, en: `Pizzabook - Recipe for {N} ${trayUnit}:`, de: `Pizzabook - Rezept für {N} ${trayUnit}:`, sl: `Pizzabook - Recept za {N} ${trayUnit}:` } as Record<Lang, string>)[lang].replace('{N}', String(recipe.pizzas))}`
+    : t.shopping.copyHeaderFmt.replace('{N}', String(recipe.pizzas));
 
   const listText = `${copyHeader}\n\n` +
     items.map((it) => `☐ ${it.qty} — ${it.name}`).join('\n');
@@ -9686,7 +12000,9 @@ const styles = StyleSheet.create({
   phaseGuideButton: { width: 40, height: 36, alignItems: 'center', justifyContent: 'center', marginLeft: 4 },
 
   ovenRow: { flexDirection: 'row', gap: SPACING.sm },
+  ovenRowWrap: { flexWrap: 'wrap' },
   ovenCard: { flex: 1, paddingVertical: SPACING.md, paddingHorizontal: SPACING.sm, borderRadius: RADIUS.md, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center', gap: 6, minHeight: 88 },
+  ovenCardTwoColumns: { flexBasis: '48%' },
   ovenCardActive: { backgroundColor: COLORS.brand, borderColor: COLORS.brand },
   ovenIconWrap: { width: 52, height: 52, borderRadius: RADIUS.md, backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center' },
   ovenIconWrapActive: { backgroundColor: 'transparent' },
@@ -9695,6 +12011,12 @@ const styles = StyleSheet.create({
   ovenText: { color: COLORS.onSurface, fontSize: 11, fontWeight: '700', textAlign: 'center' },
   bakeInstructions: { marginTop: SPACING.md, gap: SPACING.sm, paddingTop: SPACING.md, borderTopWidth: 1, borderTopColor: COLORS.divider },
   bakeTemperatureInputRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: SPACING.xs },
+  kamadoProfileStyleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SPACING.sm },
+  kamadoProfileRangeRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  kamadoProfileLabel: { flex: 1, minWidth: 0, color: COLORS.muted, fontSize: 12, fontWeight: '700' },
+  kamadoProfileInput: { width: 56, height: 36, borderRadius: RADIUS.pill, borderWidth: 1, borderColor: COLORS.borderStrong, paddingHorizontal: 4, fontSize: 13, color: COLORS.onSurface, textAlign: 'center' },
+  kamadoProfileSaveButton: { alignSelf: 'center', minHeight: 40, borderRadius: RADIUS.pill, backgroundColor: COLORS.brand, paddingHorizontal: SPACING.lg, alignItems: 'center', justifyContent: 'center' },
+  kamadoProfileSaveText: { color: '#fff', fontSize: 13, fontWeight: '800' },
   bakeTempLabel: { color: COLORS.muted, fontSize: 12, fontWeight: '700' },
   bakeTempUnit: { color: COLORS.muted, fontSize: 12, fontWeight: '700' },
   bakeTimeTable: { alignSelf: 'center', gap: 4 },
@@ -9711,11 +12033,13 @@ const styles = StyleSheet.create({
   subhead: { fontSize: 12, color: COLORS.brand, fontWeight: '800', textTransform: 'uppercase', marginBottom: 4 },
   hint: { fontSize: 12, color: COLORS.muted, fontStyle: 'italic', marginTop: 4, marginBottom: 4 },
 
-  actionsRow: { flexDirection: 'row', gap: SPACING.sm },
-  actionBtn: { flex: 1, flexDirection: 'row', gap: SPACING.sm, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: RADIUS.md },
-  actionBtnText: { fontSize: 14, fontWeight: '700' },
-  saveRecipeBtn: { flexDirection: 'row', gap: SPACING.sm, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.brand, backgroundColor: COLORS.brandTertiary },
-  saveRecipeBtnText: { color: COLORS.brand, fontSize: 14, fontWeight: '700' },
+  actionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.sm },
+  actionBtn: { flexGrow: 1, flexShrink: 1, flexBasis: '48%', minWidth: 112, minHeight: 52, flexDirection: 'row', gap: SPACING.sm, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SPACING.sm, paddingVertical: 10, borderRadius: RADIUS.md },
+  actionBtnText: { flexShrink: 1, textAlign: 'center', fontSize: 14, fontWeight: '700' },
+  saveRecipeBtn: { borderWidth: 1, borderColor: COLORS.brand, backgroundColor: COLORS.brandTertiary },
+  saveRecipeBtnText: { color: COLORS.brand },
+  costCalculatorBtn: { borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surfaceSecondary },
+  costCalculatorBtnText: { color: COLORS.brand },
 
   moreRow: { flexDirection: 'row', flexWrap: 'wrap', gap: SPACING.md, justifyContent: 'center', paddingVertical: SPACING.md },
   moreLink: { flexDirection: 'row', gap: 6, alignItems: 'center' },

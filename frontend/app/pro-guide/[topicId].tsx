@@ -13,7 +13,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@react-native-vector-icons/ionicons';
 
 import { useT } from '../../src/i18n/LanguageProvider';
-import LegacySchoolPage from '../../src/proLearn/LegacySchoolPage';
 import MarkdownContent from '../../src/proLearn/MarkdownContent';
 import { findProLearnAnchor, PRO_LEARN_MANUALS } from '../../src/proLearn/manuals';
 import { COLORS, RADIUS, SPACING } from '../../src/theme';
@@ -33,8 +32,7 @@ export default function ProGuideTopic() {
   const pendingAnchor = useRef<string | null>(null);
 
   const goBack = useCallback(() => {
-    if (router.canGoBack()) router.back();
-    else router.replace('/pro-guide');
+    router.replace('/pro-guide');
   }, [router]);
 
   const scrollToAnchor = useCallback((anchor: string) => {
@@ -53,8 +51,9 @@ export default function ProGuideTopic() {
   }, [topic?.id]);
 
   useEffect(() => {
+    sectionPositions.current = {};
+    pendingAnchor.current = initialSection ?? null;
     if (!initialSection) return;
-    pendingAnchor.current = initialSection;
     requestAnimationFrame(() => {
       const position = sectionPositions.current[initialSection];
       if (position !== undefined) scrollToAnchor(initialSection);
@@ -69,8 +68,6 @@ export default function ProGuideTopic() {
     );
   }
 
-  if (!manual) return <LegacySchoolPage onBack={goBack} />;
-
   if (!topic) {
     return (
       <View style={[styles.root, { paddingTop: insets.top }]} testID="pro-guide-topic-not-found">
@@ -84,7 +81,7 @@ export default function ProGuideTopic() {
           <Icon name="arrow-back" size={20} color={COLORS.brand} />
           <Text style={styles.backText}>{t.common.backToTopics}</Text>
         </Pressable>
-        <Text style={styles.notFound}>Tema nije pronađena.</Text>
+        <Text style={styles.notFound}>{t.common.topicNotFound}</Text>
       </View>
     );
   }

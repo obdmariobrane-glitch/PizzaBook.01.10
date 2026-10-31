@@ -4,6 +4,7 @@ import { BlurView } from 'expo-blur';
 import Icon from '@react-native-vector-icons/ionicons';
 import { COLORS } from '../../src/theme';
 import { useT } from '../../src/i18n/LanguageProvider';
+import { COMMUNITY_ENABLED } from '../../src/communityFeature';
 
 export default function TabsLayout() {
   const { t } = useT();
@@ -37,6 +38,7 @@ export default function TabsLayout() {
         name="feed"
         options={{
           title: t.tabs.feed,
+          href: COMMUNITY_ENABLED ? undefined : null,
           tabBarIcon: ({ color, size }) => <Icon name="pizza" size={size} color={color} />,
         }}
       />

@@ -12,6 +12,57 @@ const plannerUi = fs.readFileSync(path.join(frontend, 'app', '(tabs)', 'planner.
 const settingsUi = fs.readFileSync(path.join(frontend, 'app', 'settings.tsx'), 'utf8');
 const proRecipesSource = fs.readFileSync(path.join(frontend, 'src', 'proSavedRecipes.ts'), 'utf8');
 const translationsSource = fs.readFileSync(path.join(frontend, 'src', 'i18n', 'translations.ts'), 'utf8');
+const calculatorModule = { exports: {} };
+vm.runInNewContext(ts.transpileModule(
+  fs.readFileSync(path.join(frontend, 'src', 'calculator.ts'), 'utf8'),
+  { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } },
+).outputText, {
+  module: calculatorModule,
+  exports: calculatorModule.exports,
+});
+const {
+  bakingCalc,
+  formatBakingTimeRange,
+  getBakingTimeRange,
+  getBeginnerPreheatMinutes,
+  getOvenBehaviorType,
+  isProMethodAllowedForFlour,
+  normalizeBeginnerSavedState,
+} = calculatorModule.exports;
+const styleStepsModule = { exports: {} };
+vm.runInNewContext(ts.transpileModule(
+  fs.readFileSync(path.join(frontend, 'src', 'i18n', 'styleSteps.ts'), 'utf8'),
+  { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } },
+).outputText, {
+  module: styleStepsModule,
+  exports: styleStepsModule.exports,
+  require: (specifier) => {
+    assert.equal(specifier, '../calculator');
+    return calculatorModule.exports;
+  },
+});
+
+assert.equal(getOvenBehaviorType('kamado'), 'ooni', 'Kamado uses Pizza oven behavior without changing its saved oven identity');
+assert.equal(getBakingTimeRange('kamado', 450), null, 'Kamado has no unapproved inherited Pizza-oven baking range');
+assert.throws(() => formatBakingTimeRange('kamado', 450, 'en'), /Kamado baking time has not been approved/);
+assert.throws(() => bakingCalc('kamado'), /Kamado baking recommendations have not been approved/);
+assert.equal(getBeginnerPreheatMinutes('kamado'), getBeginnerPreheatMinutes('ooni'), 'Existing schedule buffer remains unchanged while Kamado bake timers are disabled');
+assert.equal(styleStepsModule.exports.getStyleBakingSteps('romana', 'kamado', 'hr'), null);
+assert.equal(styleStepsModule.exports.getStyleBakingTemp('romana', 'kamado', 'hr'), null);
+const ooniBakeRange = getBakingTimeRange('ooni', 450);
+assert.equal(ooniBakeRange.min, 1, 'Pizza oven minimum baking time remains unchanged');
+assert.equal(ooniBakeRange.max, 1.5, 'Pizza oven maximum baking time remains unchanged');
+assert.equal(typeof bakingCalc('ooni').time, 'string', 'Pizza oven baking instructions remain available');
+const beginnerKamado = normalizeBeginnerSavedState({ pizzaStyle: 'neapolitan', oven: 'kamado', ovenTemp: 450 });
+assert.equal(beginnerKamado.oven, 'kamado', 'Beginner normalization preserves the separate Kamado selection');
+assert.equal(beginnerKamado.ovenTemp, 450, 'Beginner normalization preserves the saved calculator temperature without using it as the Kamado maximum');
+assert.doesNotMatch(calculatorUi, /getBakingTimeRange\('kamado'|formatBakingTimeRange\('kamado'/);
+assert.match(calculatorUi, /if \(isBeginner\) return oven === 'kamado' \? insertKamadoPreheatPhase\(phases, lang, kamadoProfileForExperience\)/, 'Beginner Biga Kamado recipe includes the dedicated preheat phase without exposing the PRO-only default maximum');
+assert.match(calculatorUi, /kamadoProHomeMixerSteps \?\? kamadoProDirectSteps/, 'PRO Kamado direct recipes prioritize the safe phase adaptation');
+assert.match(calculatorUi, /<OvenCard cardStyle=\{styles\.ovenCardTwoColumns\} active=\{oven === 'kamado'\}/, 'Kamado is available in the shared Beginner and Pro oven picker');
+assert.match(calculatorUi, /<View style=\{\[styles\.ovenRow, !isRomanTeglia && styles\.ovenRowWrap\]\}>/, 'round-pizza ovens use the responsive two-column grid in both modes');
+assert.match(calculatorUi, /Roter Kamado-Keramikgrill mit Holztischen\.png/, 'Kamado uses the already-provided image');
+assert.equal([...translationsSource.matchAll(/kamado: 'Kamado'/g)].length, 4, 'Kamado is translated in all four supported languages');
 
 assert.doesNotMatch(`${calculatorUi}\n${plannerUi}\n${settingsUi}`, /isPremiumUnlocked|FREE_PIZZA_STYLE|FREE_FLOUR_TYPES|lock-closed|Pizzabook Premium|Otključaj Premium/i);
 assert.match(calculatorUi, /\(\['neapolitan', 'romana', 'ny_style'\] as PizzaStyle\[\]\)\.map/);
@@ -72,13 +123,34 @@ const proPizzaSizeSection = calculatorUi.slice(calculatorUi.indexOf('{/* 2. VELI
 assert.doesNotMatch(proPizzaSizeSection, /pizzaStyle === 'romana' && !isBeginner/, 'Pro Romana format controls are not duplicated in pizza size');
 assert.equal((calculatorUi.match(/testID="romana-tonda"/g) ?? []).length, 2, 'Tonda selector appears once for Beginner and once for Pro');
 assert.equal((calculatorUi.match(/testID="romana-teglia"/g) ?? []).length, 2, 'Teglia selector appears once for Beginner and once for Pro');
-assert.match(plannerUi, /\(\['neapolitan', 'romana', 'ny_style'\] as PizzaStyle\[\]\)\.map/);
+assert.doesNotMatch(plannerUi, /testID=\{`planner-style-/,
+  'Planner no longer exposes a separate pizza-style selector');
+assert.doesNotMatch(plannerUi, /testID=\{`planner-method-/,
+  'Planner no longer exposes a separate dough-method selector');
+assert.doesNotMatch(plannerUi, /onPress=\{\(\) => setStyle\(/,
+  'Planner style is not independently editable');
+assert.doesNotMatch(plannerUi, /onPress=\{\(\) => setSelectedMethod\(/,
+  'Planner dough method is not independently editable');
+assert.match(plannerUi, /AsyncStorage\.getItem\('calculatorSettings'\)/,
+  'Planner restores saved calculator settings');
+assert.match(plannerUi, /sharedCalculatorPlanSettings\.pizzaStyle/,
+  'Planner uses the active calculator pizza style');
+assert.match(plannerUi, /sharedCalculatorPlanSettings\.method/,
+  'Planner uses the active calculator dough method');
 for (const method of ['direct', 'biga', 'poolish']) {
-  assert.ok(plannerUi.includes(`key: '${method}'`), `Planner option ${method} is present`);
   assert.ok(calculatorUi.includes(`k: '${method}'`), `calculator option ${method} is present`);
 }
-assert.match(plannerUi, /\]\.filter\(\(m\) => isBeginner \? m\.key === 'direct' : true\)\.map/);
-assert.match(calculatorUi, /flour !== 'glutenFree' \|\| m\.k === 'direct'/, 'gluten-free method compatibility remains enforced');
+assert.match(calculatorUi, /isProMethodAllowedForFlour\(m\.k, flour, blendA, blendB, blendPctA\)/, 'method options use the shared flour-eligibility rule');
+assert.deepEqual(
+  ['direct', 'biga', 'poolish'].filter((method) => isProMethodAllowedForFlour(method, 'glutenFree', 'caputo00', 'wholeWheat', 70)),
+  ['direct'],
+  'pure gluten-free flour exposes only the Direct method',
+);
+assert.deepEqual(
+  ['direct', 'biga', 'poolish'].filter((method) => isProMethodAllowedForFlour(method, 'custom', 'glutenFree', 'caputo00', 70)),
+  ['direct', 'biga', 'poolish'],
+  'a custom blend containing gluten-containing flour retains all methods',
+);
 assert.match(calculatorUi, /testID="mix-hand" onPress=\{\(\) => step\(\(\) => \{ setMixing\('hand'\)/);
 assert.match(calculatorUi, /testID="mix-mixer" onPress=\{\(\) => step\(\(\) => \{ setMixing\('mixer'\)/);
 assert.match(calculatorUi, /testID="mix-toggle" onPress=\{\(\) => setShowMixSteps\(!showMixSteps\)\}/, 'Pro exposes the Show/Hide steps control');
@@ -86,15 +158,15 @@ assert.match(calculatorUi, /showMixSteps \? t\.calc\.hideSteps : t\.calc\.showSt
 assert.match(calculatorUi, /showMixSteps \|\| isBeginner/, 'Pro displays detailed steps when requested');
 assert.match(calculatorUi, /completed=\{completedSteps\}[\s\S]{0,200}onToggle=\{toggleStep\}[\s\S]{0,180}activeTimers=\{activeTimers\}[\s\S]{0,180}onStartTimer=\{startTimer\}[\s\S]{0,120}onStopTimer=\{stopTimer\}/, 'step completion and active timer state remain wired to each recipe phase');
 assert.match(calculatorUi, /stepInfo=\{isBeginner[\s\S]{0,600}: phase\.stepInfo\}/, 'Pro phases reuse existing information while Beginner keeps its existing gates');
-assert.match(calculatorUi, /phaseGuide=\{flour === 'glutenFree'/, 'Pro phases reuse the existing visual guides without Beginner gating');
+assert.match(calculatorUi, /phaseGuide=\{isWorkflowGlutenFree && !isRomanTeglia && index ===/, 'Pro gluten-free phases reuse the existing visual guides');
 assert.doesNotMatch(calculatorUi, /phaseGuide=\{isBeginner &&/, 'visual guides are not locked to Beginner mode');
 for (const oven of ['homePan', 'homeStone', 'ooni']) {
   assert.ok(calculatorUi.includes(`testID="oven-${oven}"`), `oven option ${oven} remains available`);
 }
 assert.match(calculatorUi, /if \(isFlourType\(saved\.flour\)\) setFlour\(saved\.flour\)/);
 assert.match(calculatorUi, /if \(saved\.pizzaStyle === 'neapolitan' \|\| saved\.pizzaStyle === 'romana' \|\| saved\.pizzaStyle === 'ny_style'\)/);
-assert.match(calculatorUi, /localOnly=\{!user\}/);
-assert.match(calculatorUi, /if \(!user && isBeginner\) \{ router\.push\('\/login'\); return; \}/);
+assert.match(calculatorUi, /localOnly=\{OFFLINE_ONLY_MODE \|\| !user\}/);
+assert.match(calculatorUi, /if \(!OFFLINE_ONLY_MODE && !user && isBeginner\) \{ router\.push\('\/login'\); return; \}/);
 assert.match(calculatorUi, /if \(settings\.method\) setMethod\(settings\.flour === 'glutenFree' \? 'direct' : settings\.method\)/);
 
 const compiled = ts.transpileModule(proRecipesSource, {

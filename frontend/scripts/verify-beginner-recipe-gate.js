@@ -23,9 +23,14 @@ assert.match(
 );
 assert.match(
   source,
-  /\(beginnerDirectHomeSteps \?\? beginnerUnscheduledDirectSteps \?\? beginnerDirectRecipeSteps \?\? yeastAwareDetailedDirectSteps \?\? detailedDirectSteps\)\.map/,
-  'The existing scheduled and unscheduled recipe step sources must remain unchanged',
+  /\?\s*kamadoProHomeMixerSteps \?\? kamadoProDirectSteps/,
+  'The Kamado-specific PRO override must use adapted safe bake instructions',
 );
+const proFallbackIndex = source.indexOf(': proHomeMixerDetailedSteps ?? proSpiralDirectInstructions');
+const beginnerSourcesIndex = source.indexOf('?? beginnerDirectHomeSteps');
+assert.ok(proFallbackIndex >= 0 && beginnerSourcesIndex > proFallbackIndex,
+  'The PRO home-mixer override must precede, without replacing, the existing Beginner recipe step sources');
+assert.match(source, /const proSpiralDirectInstructions = !isBeginner && method === 'direct' && mixingForExperience === 'spiral'/);
 assert.match(source, /const beginnerHomeRecipeLayout = isBeginner && !!\(/);
 assert.match(source, /method === 'direct' && directHomeSchedule/);
 assert.match(source, /pizzaStyle === 'ny_style'/);

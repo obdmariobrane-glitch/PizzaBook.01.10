@@ -6,6 +6,8 @@ export type ProSavedRecipe = {
   recipe: any;
 };
 
+export type SavedRecipeMode = 'beginner' | 'pro';
+
 const PRO_SAVED_RECIPES_KEY = 'proSavedRecipes';
 
 function isProSavedRecipe(value: unknown): value is ProSavedRecipe {
@@ -17,17 +19,20 @@ function isProSavedRecipe(value: unknown): value is ProSavedRecipe {
     && recipe.recipe !== null;
 }
 
-export async function getProSavedRecipes(): Promise<ProSavedRecipe[]> {
-  const stored = await AsyncStorage.getItem(PRO_SAVED_RECIPES_KEY);
-  if (stored === null) return [];
-  const parsed: unknown = JSON.parse(stored);
-  if (!Array.isArray(parsed) || !parsed.every(isProSavedRecipe)) {
-    throw new Error('Saved Pro recipes have an invalid format.');
-  }
-  return parsed;
+function getRecipeMode(recipe: ProSavedRecipe): SavedRecipeMode {
+  return recipe.recipe.proMode === false ? 'beginner' : 'pro';
 }
 
-export async function saveProRecipe(
+export async function getSavedRecipes(mode: SavedRecipeMode): Promise<ProSavedRecipe[]> {
+  const recipes = await getAllSavedRecipes();
+  return recipes.filter((recipe) => getRecipeMode(recipe) === mode);
+}
+
+export function getProSavedRecipes(): Promise<ProSavedRecipe[]> {
+  return getSavedRecipes('pro');
+}
+
+export async function saveLocalRecipe(
   name: string,
   recipe: unknown,
   recipeId?: string | null,
@@ -36,24 +41,51 @@ export async function saveProRecipe(
   if (!normalizedName) throw new Error('A saved recipe needs a name.');
   if (!recipe || typeof recipe !== 'object') throw new Error('A saved recipe needs valid recipe data.');
 
-  const recipes = await getProSavedRecipes();
+  const allRecipes = await getAllSavedRecipes();
+  const recipeMode = getRecipeMode({
+    recipe_id: '',
+    name: normalizedName,
+    recipe,
+  });
+  const existing = allRecipes.find((item) => item.recipe_id === recipeId);
+  if (existing && getRecipeMode(existing) !== recipeMode) {
+    throw new Error('A saved recipe cannot be moved between experience modes.');
+  }
   const saved: ProSavedRecipe = {
     recipe_id: recipeId ?? `local_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`,
     name: normalizedName,
     recipe,
   };
-  const existingIndex = recipes.findIndex((item) => item.recipe_id === saved.recipe_id);
+  const existingIndex = allRecipes.findIndex((item) => item.recipe_id === saved.recipe_id);
   const updated = existingIndex === -1
-    ? [saved, ...recipes]
-    : recipes.map((item) => item.recipe_id === saved.recipe_id ? saved : item);
+    ? [saved, ...allRecipes]
+    : allRecipes.map((item) => item.recipe_id === saved.recipe_id ? saved : item);
   await AsyncStorage.setItem(PRO_SAVED_RECIPES_KEY, JSON.stringify(updated));
   return saved;
 }
 
+export function saveProRecipe(
+  name: string,
+  recipe: unknown,
+  recipeId?: string | null,
+): Promise<ProSavedRecipe> {
+  return saveLocalRecipe(name, recipe, recipeId);
+}
+
 export async function deleteProRecipe(recipeId: string): Promise<void> {
-  const recipes = await getProSavedRecipes();
+  const recipes = await getAllSavedRecipes();
   await AsyncStorage.setItem(
     PRO_SAVED_RECIPES_KEY,
     JSON.stringify(recipes.filter((recipe) => recipe.recipe_id !== recipeId)),
   );
+}
+
+async function getAllSavedRecipes(): Promise<ProSavedRecipe[]> {
+  const stored = await AsyncStorage.getItem(PRO_SAVED_RECIPES_KEY);
+  if (stored === null) return [];
+  const parsed: unknown = JSON.parse(stored);
+  if (!Array.isArray(parsed) || !parsed.every(isProSavedRecipe)) {
+    throw new Error('Saved recipes have an invalid format.');
+  }
+  return parsed;
 }

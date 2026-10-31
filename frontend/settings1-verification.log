@@ -1,0 +1,22 @@
+$ npx tsc --noEmit
+PASS
+$ npm run check:beginner-plan-persistence
+
+> frontend@1.0.0 check:beginner-plan-persistence
+> node ./scripts/verify-beginner-plan-persistence.js
+
+Beginner plan persistence and async restore checks passed using production persistence, calculator, guided-plan, and restore-coordinator functions.
+$ npm run check:pro-options
+
+> frontend@1.0.0 check:pro-options
+> node ./scripts/verify-pro-options.js
+
+Pro options and local saved-recipe access checks passed.
+$ npm run check:home-pizza-plan
+
+> frontend@1.0.0 check:home-pizza-plan
+> node ./scripts/verify-home-pizza-plan.js
+
+Home Pizza schedule and fermentation window checks passed.
+$ git diff --check
+PASS

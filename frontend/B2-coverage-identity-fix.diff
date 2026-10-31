@@ -1,0 +1,26 @@
+--- a/frontend/src/beginnerPlanPersistence.ts
++++ b/frontend/src/beginnerPlanPersistence.ts
+@@ -109,7 +109,7 @@
+   return createBeginnerPlanInputKey([
+     input.bakeAt,
+     input.pizzaStyle,
+-    input.romanFormat,
++    input.pizzaStyle === 'romana' ? input.romanFormat : null,
+     input.pizzas,
+     input.effectiveBall,
+     input.roomTemp,
+--- a/frontend/scripts/verify-beginner-plan-persistence.js
++++ b/frontend/scripts/verify-beginner-plan-persistence.js
+@@ -99,6 +99,12 @@
+ assert.notEqual(teglia30x40Key, teglia20x60Key, 'Teglia dimensions must reset progress even with equal dough mass');
+ assert.equal(createAppIdentity({ isRomanTeglia: false, trayWidth: 30, trayLength: 40 }), createAppIdentity({ isRomanTeglia: false, trayWidth: 20, trayLength: 60 }), 'non-Teglia tray dimensions must not affect identity');
+ assert.notEqual(createAppIdentity({ diameter: 30, isRomanTeglia: false }), createAppIdentity({ diameter: 33, isRomanTeglia: false }), 'round pizza diameter must reset progress');
++assert.equal(
++  createAppIdentity({ pizzaStyle: 'ny_style', romanFormat: 'tonda', isRomanTeglia: false }),
++  createAppIdentity({ pizzaStyle: 'ny_style', romanFormat: 'teglia', isRomanTeglia: false }),
++  'stale Roman format must not reset non-Romana Beginner progress',
++);
++
+ const initialNow = new Date('2026-10-10T08:00:00.000Z');
+ const laterNow = new Date('2026-10-10T10:00:00.000Z');
+ const thirtyMinutesBeforeBake = new Date('2026-10-10T10:00:00.000Z');

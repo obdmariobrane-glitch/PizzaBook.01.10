@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, Platform, KeyboardAvoidingView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter, Stack } from 'expo-router';
+import { Redirect, useRouter, Stack } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { File as ExpoFile, UploadType } from 'expo-file-system';
@@ -12,11 +12,12 @@ import { api, getToken } from '../src/auth';
 import { useT } from '../src/i18n/LanguageProvider';
 import { COLORS, SPACING, RADIUS } from '../src/theme';
 import PostMedia from '../src/components/PostMedia';
+import { COMMUNITY_ENABLED } from '../src/communityFeature';
 
 const BACKEND = process.env.EXPO_PUBLIC_BACKEND_URL!;
 type SelectedMedia = { uri: string; type: 'image' | 'video'; path: string };
 
-export default function NewPost() {
+function NewPostContent() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { t } = useT();
@@ -291,3 +292,8 @@ const styles = StyleSheet.create({
   stars: { flexDirection: 'row', gap: SPACING.sm, alignSelf: 'flex-start' },
   starBtn: { padding: 4 },
 });
+
+export default function NewPost() {
+  if (!COMMUNITY_ENABLED) return <Redirect href="/(tabs)" />;
+  return <NewPostContent />;
+}

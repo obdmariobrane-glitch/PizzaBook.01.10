@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, FlatList, Pressable, RefreshControl, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { Redirect, useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Icon from '@react-native-vector-icons/ionicons';
 import * as Haptics from 'expo-haptics';
@@ -13,6 +13,7 @@ import { COLORS, SPACING, RADIUS } from '../../src/theme';
 import PizzaRatingSlider from '../../src/components/PizzaRatingSlider';
 import PostMedia from '../../src/components/PostMedia';
 import type { PostMediaSource } from '../../src/components/PostMedia';
+import { COMMUNITY_ENABLED } from '../../src/communityFeature';
 
 type Post = {
   post_id: string; user_id: string; author_name: string; author_picture?: string;
@@ -34,7 +35,7 @@ function getPostMedia(post: Post): PostMediaSource[] {
   return post.image_url ? [{ type: 'image', uri: fileUrl(post.image_url) }] : [];
 }
 
-export default function Feed() {
+function FeedContent() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { t } = useT();
@@ -297,3 +298,8 @@ const styles = StyleSheet.create({
   featuredMeta: { flexDirection: 'row', gap: 4, alignItems: 'center', marginTop: 4 },
   featuredMetaText: { color: '#fff', fontSize: 13, fontWeight: '700' },
 });
+
+export default function Feed() {
+  if (!COMMUNITY_ENABLED) return <Redirect href="/(tabs)" />;
+  return <FeedContent />;
+}

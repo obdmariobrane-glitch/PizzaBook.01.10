@@ -1,0 +1,113 @@
+{
+  "schema": "pizzabook-instruction-system/branch-coverage/v1",
+  "static_axes": [
+    {
+      "axis": "language",
+      "values": [
+        "hr",
+        "en",
+        "de",
+        "sl"
+      ],
+      "tested": true
+    },
+    {
+      "axis": "method",
+      "values": [
+        "direct",
+        "biga",
+        "poolish"
+      ],
+      "tested": true
+    },
+    {
+      "axis": "mixing",
+      "values": [
+        "hand",
+        "mixer/home",
+        "spiral"
+      ],
+      "tested": true
+    },
+    {
+      "axis": "yeast",
+      "values": [
+        "fresh",
+        "activeDry",
+        "dry"
+      ],
+      "tested": true
+    },
+    {
+      "axis": "style",
+      "values": [
+        "neapolitan",
+        "romana",
+        "ny_style"
+      ],
+      "tested": true
+    },
+    {
+      "axis": "flour",
+      "values": [
+        "caputo00",
+        "manitoba",
+        "spelt",
+        "wholeWheat",
+        "glutenFree",
+        "custom"
+      ],
+      "tested": true
+    },
+    {
+      "axis": "oven",
+      "values": [
+        "ooni",
+        "homeStone",
+        "homePan"
+      ],
+      "tested": true
+    },
+    {
+      "axis": "schedule",
+      "values": [
+        "roomOnly",
+        "fridgeRoom",
+        "unscheduled"
+      ],
+      "tested": true,
+      "note": "Covered by beginnerDirect using runtime-extracted index.tsx assemblers."
+    }
+  ],
+  "runtime_smoke_cases": [
+    {
+      "command": "preferment",
+      "matrix": "4 languages x 2 methods x 3 yeast types x 3 mixing paths"
+    },
+    {
+      "command": "spiral",
+      "matrix": "4 languages x 3 methods x 3 yeast types"
+    },
+    {
+      "command": "style",
+      "matrix": "styles/flours/ovens through exported legacy API"
+    },
+    {
+      "command": "directSchedule",
+      "matrix": "deterministic representative room/fridge schedule"
+    },
+    {
+      "command": "bigaSchedule",
+      "matrix": "deterministic representative schedule"
+    },
+    {
+      "command": "poolishSchedule",
+      "matrix": "deterministic representative schedule"
+    },
+    {
+      "command": "beginnerDirect",
+      "matrix": "Beginner direct style/flour/mixing/schedule outputs from exact index.tsx local functions"
+    }
+  ],
+  "exact_beginner_display_coverage": "available through runtime extraction of index.tsx local functions; outputs include numbered steps, quantities, and schedule timestamps"
+}

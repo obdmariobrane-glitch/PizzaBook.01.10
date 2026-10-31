@@ -1,7 +1,9 @@
 import LegalPage from '../src/components/LegalPage';
+import { Redirect } from 'expo-router';
 import { useT } from '../src/i18n/LanguageProvider';
+import { COMMUNITY_ENABLED } from '../src/communityFeature';
 
-export default function CommunityGuidelines() {
+function CommunityGuidelinesContent() {
   const { t } = useT();
   const legal = t.legal.community;
   return (
@@ -17,4 +19,9 @@ export default function CommunityGuidelines() {
       ]}
     />
   );
+}
+
+export default function CommunityGuidelines() {
+  if (!COMMUNITY_ENABLED) return <Redirect href="/(tabs)" />;
+  return <CommunityGuidelinesContent />;
 }

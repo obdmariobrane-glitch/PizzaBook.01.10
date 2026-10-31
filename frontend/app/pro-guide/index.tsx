@@ -5,7 +5,6 @@ import { useRouter } from 'expo-router';
 import Icon from '@react-native-vector-icons/ionicons';
 
 import { useT } from '../../src/i18n/LanguageProvider';
-import LegacySchoolPage from '../../src/proLearn/LegacySchoolPage';
 import { PRO_LEARN_MANUALS } from '../../src/proLearn/manuals';
 import { COLORS, RADIUS, SPACING } from '../../src/theme';
 
@@ -27,8 +26,6 @@ export default function ProGuideIndex() {
       </View>
     );
   }
-
-  if (!manual) return <LegacySchoolPage onBack={goBack} />;
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]} testID="pro-guide-home">

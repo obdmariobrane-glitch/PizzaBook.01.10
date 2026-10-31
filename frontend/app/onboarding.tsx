@@ -12,9 +12,7 @@ export default function Onboarding() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
-  const choose = (level: UserExperienceLevel) => {
-    void setExperienceLevel(level);
-  };
+  const choose = (level: UserExperienceLevel) => void setExperienceLevel(level);
 
   return (
     <View style={styles.root} testID="onboarding-screen">

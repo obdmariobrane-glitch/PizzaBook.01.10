@@ -1,0 +1,22 @@
+{
+  "expo": {
+    "name": "Pizzabook",
+    "slug": "pizzabook",
+    "version": "1.0.4",
+    "android": {
+      "package": "com.pizzabook.app",
+      "versionCode": 5
+    },
+    "plugins": [
+      "expo-router",
+      "expo-notifications",
+      "expo-iap",
+      "expo-image",
+      "expo-secure-store",
+      "expo-web-browser",
+      "expo-video"
+    ],
+    "sdkVersion": "57.0.0"
+  },
+  "_evidence_note": "Sanitized relevant extract from frontend/app.json and resolved Expo config. Local versionCode is 5; the successful EAS production build incremented remote versionCode to 6."
+}

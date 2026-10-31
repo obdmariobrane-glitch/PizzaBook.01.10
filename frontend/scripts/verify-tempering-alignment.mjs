@@ -19,6 +19,12 @@ const loadTypeScriptModule = (source, filename) => {
         'spiralMixing.ts',
       );
     }
+    if (filename === 'spiralMixing.ts' && specifier === './proIceWaterInstructions') {
+      return loadTypeScriptModule(
+        fs.readFileSync(path.join(root, 'src/i18n/proIceWaterInstructions.ts'), 'utf8'),
+        'proIceWaterInstructions.ts',
+      );
+    }
     throw new Error(`Unexpected dependency "${specifier}" in ${filename}.`);
   };
   vm.runInNewContext(compiled, { module: moduleRef, exports: moduleRef.exports, require }, { filename });

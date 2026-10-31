@@ -1,5 +1,5 @@
-import { useSyncExternalStore } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, useWindowDimensions } from 'react-native';
+import { useState, useSyncExternalStore } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, Switch, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
@@ -8,6 +8,7 @@ import Icon from '@react-native-vector-icons/ionicons';
 import { useT } from '../src/i18n/LanguageProvider';
 import { LANGS } from '../src/i18n/translations';
 import { COLORS, SPACING, RADIUS } from '../src/theme';
+import { useBugReport } from '../src/components/BugReportProvider';
 import { getCachedExperienceLevel, setExperienceLevel, subscribeExperienceLevel } from '../src/experienceLevel';
 import {
   MeasurementSystem,
@@ -21,6 +22,8 @@ export default function Settings() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const { t, lang, setLang } = useT();
+  const { shakeEnabled, setShakeEnabled, openBugReport } = useBugReport();
+  const [shakePreferenceError, setShakePreferenceError] = useState(false);
   const experienceLevel = useSyncExternalStore(subscribeExperienceLevel, getCachedExperienceLevel, getCachedExperienceLevel);
   const measurementSystem = useSyncExternalStore(subscribeMeasurementSystem, getCachedMeasurementSystem, getCachedMeasurementSystem) ?? 'metric';
   const preferredYeastType = useSyncExternalStore(subscribePreferredYeastType, getCachedPreferredYeastType, getCachedPreferredYeastType) ?? 'fresh';
@@ -92,7 +95,7 @@ export default function Settings() {
               <Text style={styles.label}>{t.profile.preferences.experienceLevel}</Text>
               <View style={choiceGroupStyle} accessibilityRole="radiogroup" accessibilityLabel={t.profile.preferences.experienceLevel}>
                 {choice(experienceLevel === 'beginner', t.profile.preferences.beginner, () => setExperienceLevel('beginner'), 'settings-experience-beginner')}
-                {choice(experienceLevel === 'pro', t.profile.preferences.pro, () => setExperienceLevel('pro'), 'settings-experience-pro')}
+                {choice(experienceLevel === 'pro', t.profile.preferences.pro, () => void setExperienceLevel('pro'), 'settings-experience-pro')}
               </View>
             </View>
 
@@ -117,6 +120,39 @@ export default function Settings() {
                 </View>
                 <Text style={styles.yeastHint}>{t.profile.preferences.defaultYeastHint}</Text>
               </View>
+            </View>
+            <View style={[rowStyle, styles.rowDivider]}>
+              <Pressable
+                testID="settings-report-bug"
+                accessibilityRole="button"
+                accessibilityLabel={t.profile.preferences.reportBug}
+                onPress={openBugReport}
+                style={styles.reportBugButton}
+              >
+                <Icon name="bug-outline" size={21} color={COLORS.brand} />
+                <Text style={styles.reportBugText}>{t.profile.preferences.reportBug}</Text>
+                <Icon name="chevron-forward" size={18} color={COLORS.brand} />
+              </Pressable>
+              <View style={styles.shakeSetting}>
+                <Text style={[styles.label, styles.shakeLabel]}>{t.profile.preferences.shakeToReportBug}</Text>
+                <Switch
+                  testID="settings-shake-to-report"
+                  accessibilityLabel={t.profile.preferences.shakeToReportBug}
+                  value={shakeEnabled === true}
+                  disabled={shakeEnabled === null}
+                  onValueChange={(enabled) => {
+                    setShakePreferenceError(false);
+                    void setShakeEnabled(enabled).catch(() => setShakePreferenceError(true));
+                  }}
+                  trackColor={{ false: COLORS.borderStrong, true: COLORS.brand }}
+                  thumbColor="#fff"
+                />
+              </View>
+              {shakePreferenceError ? (
+                <Text accessibilityRole="alert" style={styles.shakeError}>
+                  {t.profile.preferences.shakePreferenceSaveError}
+                </Text>
+              ) : null}
             </View>
           </View>
 
@@ -210,6 +246,19 @@ const styles = StyleSheet.create({
   rowWide: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   rowNarrow: { flexDirection: 'column', alignItems: 'stretch' },
   rowDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: COLORS.divider },
+  reportBugButton: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.md,
+    paddingHorizontal: SPACING.sm,
+    borderRadius: RADIUS.md,
+    backgroundColor: COLORS.surface,
+  },
+  reportBugText: { flex: 1, color: COLORS.brand, fontSize: 15, fontWeight: '700' },
+  shakeSetting: { minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: SPACING.sm },
+  shakeLabel: { flex: 1, flexShrink: 1 },
+  shakeError: { color: COLORS.error, fontSize: 12, lineHeight: 17 },
   label: { color: COLORS.onSurface, fontSize: 15, fontWeight: '700' },
   choiceGroup: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: SPACING.sm },
   choiceGroupWide: { flex: 1, justifyContent: 'flex-end' },

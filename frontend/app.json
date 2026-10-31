@@ -2,6 +2,7 @@
   "expo": {
     "name": "Pizzabook",
     "slug": "pizzabook",
+    "owner": "mrbranees-team",
     "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -13,16 +14,37 @@
     },
     "android": {
       "versionCode": 5,
+      "blockedPermissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.ACTIVITY_RECOGNITION",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "com.android.vending.BILLING"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#D15900"
       },
-      "package": "com.emergent.doughtimer.ia80uq"
+      "package": "com.pizzabook.app"
     },
     "web": {
       "bundler": "metro",
       "output": "single",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "name": "PizzaBook",
+      "shortName": "PizzaBook",
+      "lang": "en",
+      "description": "Calculate pizza dough, plan fermentation, and save recipes.",
+      "themeColor": "#D15900",
+      "backgroundColor": "#FAF5F0",
+      "display": "standalone",
+      "startUrl": "/",
+      "scope": "/",
+      "orientation": "any"
     },
     "plugins": [
       "expo-router",
@@ -45,6 +67,7 @@
         }
       ],
       "expo-font",
+      "expo-iap",
       "expo-image",
       "expo-secure-store",
       "expo-web-browser",
@@ -60,7 +83,7 @@
       "router": {},
       "updateManifestUrl": "https://raw.githubusercontent.com/branimirjeli-svg/pizzabook-updates/main/update.json",
       "eas": {
-        "projectId": "0d36eeb4-694f-4640-bd26-583ab48a9611"
+        "projectId": "497fc00a-4814-4a1f-abd5-fd111c073d43"
       }
     }
   }

@@ -56,7 +56,8 @@ for (let index = 0; index < sourceTopics.length; index += 1) {
 
 const manualRegistry = fs.readFileSync(path.join(root, 'frontend/src/proLearn/manuals.ts'), 'utf8');
 for (const locale of ['en', 'de', 'sl']) {
-  assert.match(manualRegistry, new RegExp(`${locale}: null`), `Missing-language marker for ${locale}`);
+  assert.match(manualRegistry, new RegExp(`${locale}: PRO_LEARN_${locale.toUpperCase()}`), `Missing localized manual for ${locale}`);
+  assert.doesNotMatch(manualRegistry, new RegExp(`${locale}: null`), `Missing-language fallback remains for ${locale}`);
 }
 for (const entryFile of ['frontend/app/(tabs)/index.tsx', 'frontend/app/settings.tsx']) {
   const code = fs.readFileSync(path.join(root, entryFile), 'utf8');

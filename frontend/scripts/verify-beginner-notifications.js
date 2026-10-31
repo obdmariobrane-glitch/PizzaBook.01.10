@@ -169,7 +169,7 @@ assert.match(appSource, /setPlannerNotificationRestoreStatus\('pending'\)/);
 assert.match(appSource, /setPlannerNotificationRestoreStatus\(loadedIsBeginner \|\| restoredBakeAt !== undefined \? 'ready' : 'unavailable'\)/);
 assert.match(restoreCoordinatorSource, /if \(status === 'pending'\) return false/);
 assert.match(plannerSource, /source: 'pizza-planner',\s*method,\s*planId: planKey/);
-assert.match(plannerSource, /const planKey = bakeAt \? JSON\.stringify\(\[[\s\S]*steps\.map\(\(step\) => step\.at\.getTime\(\)\)[\s\S]*plannerDirectHomeSchedule,[\s\S]*plannerPoolishHomeSchedule/);
+assert.match(plannerSource, /const planKey = bakeAt && hasCurrentCalculatorRecipe \? JSON\.stringify\(\[\s*method,\s*effectiveStyle,[\s\S]*steps\.map\(\(step\) => step\.at\.getTime\(\)\),\s*plannerDirectHomeSchedule,\s*plannerBigaHomeSchedule,\s*plannerPoolishHomeSchedule,\s*activeCalculatorPlanSettings,\s*activePlannerTegliaSettings,\s*\]\) : ''/);
 assert.match(plannerSource, /cancelObsoletePlannerNotifications\(planKey \|\| null\)/);
 assert.match(notificationsSource, /type: mod\.SchedulableTriggerInputTypes\?\.DATE \?\? 'date'[\s\S]*date: scheduledAt/);
 assert.match(notificationsSource, /type: mod\.SchedulableTriggerInputTypes\?\.TIME_INTERVAL \?\? 'timeInterval'/);
@@ -199,7 +199,7 @@ assert.match(guidedSource, /event\.at\.getTime\(\) > now/);
 assert.match(guidedSource, /completedAt\[event\.id\] === undefined/);
 assert.match(persistenceSource, /input\.bakeAt,[\s\S]*input\.preferredYeastType,[\s\S]*input\.beginnerScheduleMode/);
 assert.doesNotMatch(persistenceSource, /input\.language|input\.temperatureUnit|input\.measurementSystem/);
-assert.match(plannerSource, /const planKey = bakeAt \? JSON\.stringify\(\[[\s\S]*steps\.map\(\(step\) => step\.at\.getTime\(\)\)[\s\S]*plannerDirectHomeSchedule,[\s\S]*plannerPoolishHomeSchedule/);
+assert.match(plannerSource, /const planKey = bakeAt && hasCurrentCalculatorRecipe \? JSON\.stringify\(\[\s*method,\s*effectiveStyle,[\s\S]*steps\.map\(\(step\) => step\.at\.getTime\(\)\),\s*plannerDirectHomeSchedule,\s*plannerBigaHomeSchedule,\s*plannerPoolishHomeSchedule,\s*activeCalculatorPlanSettings,\s*activePlannerTegliaSettings,\s*\]\) : ''/);
 
 async function verifyTriggerAndCancellationPayloads() {
   const nativeCalls = [];
@@ -253,7 +253,7 @@ async function verifyTriggerAndCancellationPayloads() {
     },
   }, { filename: 'notifications.native.test.ts' });
 
-  const scheduledAt = new Date('2026-10-25T01:30:00.000Z');
+  const scheduledAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 3);
   await nativeModule.exports.scheduleLocalAt('Bake', 'Bake now', scheduledAt, {
     source: 'pizza-guided-recipe',
     planId: 'guided-plan-a',

@@ -8,6 +8,8 @@ const vm = require('node:vm');
 
 const appPath = path.join(__dirname, '..', 'app', '(tabs)', 'index.tsx');
 const source = fs.readFileSync(appPath, 'utf8');
+const kamadoProfilePath = path.join(__dirname, '..', 'src', 'kamadoOvenProfile.ts');
+const kamadoProfileSource = fs.readFileSync(kamadoProfilePath, 'utf8');
 const sourceFile = ts.createSourceFile(appPath, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const requestedFunctions = new Set([
   'buildBeginnerPhaseBSteps',
@@ -31,6 +33,7 @@ const requestedFunctions = new Set([
   'getBeginnerPhaseCTimers',
   'addSequentialBeginnerPhaseLetters',
   'getBeginnerOvenTimers',
+  'insertKamadoPreheatPhase',
 ]);
 const functionSources = [];
 
@@ -61,9 +64,22 @@ function formatDuration(seconds) {
   const minutes = totalMinutes % 60;
   return minutes ? \`\${hours} h \${minutes} min\` : \`\${hours} h\`;
 }
-function getBeginnerPreheatMinutes(oven) { return oven === 'homeStone' ? 60 : 20; }
+function getOvenBehaviorType(oven) { return oven === 'kamado' ? 'ooni' : oven; }
+function usesPizzaOvenBehavior(oven) { return getOvenBehaviorType(oven) === 'ooni'; }
+function getBeginnerPreheatMinutes(oven) { return getOvenBehaviorType(oven) === 'homeStone' ? 60 : 20; }
 function formatBeginnerClockTime(at) { return at.toISOString().slice(11, 16); }
 function formatTemperature(value) { return String(value) + '°C'; }
+function formatKamadoBakeTimeRange(range, minuteLabel) {
+  return range.minMinutes === range.maxMinutes ? \`\${range.minMinutes} \${minuteLabel}\` : \`\${range.minMinutes}–\${range.maxMinutes} \${minuteLabel}\`;
+}
+function getKamadoBakeBlockedText(lang) {
+  return ({
+    hr: 'Automatska temperatura i vrijeme pečenja za Kamado nisu odobreni.',
+    en: 'Automatic Kamado baking temperatures and times are not approved.',
+    de: 'Automatische Backtemperaturen und Backzeiten für den Kamado sind nicht freigegeben.',
+    sl: 'Samodejne temperature in časi peke za Kamado niso odobreni.',
+  })[lang];
+}
 function labelSelectedYeast(text) { return text; }
 const TEGLIA_FINAL_PROOF_MINUTES = { minimumProof: 60, maximumProof: 120, maxPressRelaxation: 15 };
 function getTegliaFinalProofPlan(availableRoomMinutes) {
@@ -79,6 +95,7 @@ function getTegliaFinalProofPlan(availableRoomMinutes) {
 ${functionSources.join('\n')}
 module.exports = {
   buildBeginnerDirectHomeSteps,
+  buildBeginnerFinalPhaseInfo,
   buildBeginnerTegliaHomeSteps,
   getBeginnerOvenTimers,
   getBeginnerRoomOnlyEnd,
@@ -90,15 +107,25 @@ module.exports = {
 const compiled = ts.transpileModule(runtimeSource, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
+const compiledKamadoProfile = ts.transpileModule(kamadoProfileSource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText;
+const kamadoProfileModule = { exports: {} };
+vm.runInNewContext(compiledKamadoProfile, {
+  module: kamadoProfileModule,
+  exports: kamadoProfileModule.exports,
+}, { filename: 'kamadoOvenProfile.ts' });
 const moduleRef = { exports: {} };
 vm.runInNewContext(compiled, {
   module: moduleRef,
   exports: moduleRef.exports,
   getBakingTimeRange: () => ({ min: 1, max: 3 }),
+  insertKamadoPhaseOnce: kamadoProfileModule.exports.insertKamadoPhaseOnce,
 }, { filename: 'beginnerPhaseAdapters.ts' });
 
 const {
   buildBeginnerDirectHomeSteps,
+  buildBeginnerFinalPhaseInfo,
   buildBeginnerTegliaHomeSteps,
   getBeginnerOvenTimers,
   getBeginnerRoomOnlyEnd,
@@ -200,6 +227,40 @@ function roundPhases(flour, style) {
 }
 
 for (const lang of languages) {
+  const beginnerOvenPhases = (oven) => buildBeginnerDirectHomeSteps(
+    roundPhases('caputo00', 'neapolitan'),
+    schedule(8, 2, 3, oven),
+    phaseBPlanFor('caputo00', 2),
+    22,
+    4,
+    oven === 'kamado' ? 380 : 450,
+    oven,
+    oven === 'kamado' ? '' : '60 s–90 s',
+    lang,
+    'fresh',
+    'neapolitan',
+    30,
+    70,
+    100,
+    'caputo00',
+    '1250 g',
+    '250 g',
+    5,
+    oven === 'kamado' ? { maximumTemperatureC: 380 } : null,
+  );
+  const kamadoPhases = beginnerOvenPhases('kamado');
+  const ooniPhases = beginnerOvenPhases('ooni');
+  assert.equal(kamadoPhases.length, ooniPhases.length + 1, 'Kamado adds one distinct preheating phase');
+  assert.match(kamadoPhases.at(-2).title, /Phase E: Kamado preheating|Faza E: Predgrijavanje Kamada|Phase E: Kamado vorheizen|Faza E: Predgrevanje Kamada/i);
+  assert.equal(kamadoPhases.at(-2).stepInfo.length, 3, 'each Kamado preheating step has its own INFO entry');
+  assert.match(kamadoPhases.at(-2).steps[2], /380 °C/);
+  assert.match(kamadoPhases.at(-1).steps.at(-1), /not approved|nisu odobreni|nicht freigegeben|niso odobreni/i);
+  assert.doesNotMatch(kamadoPhases.at(-1).steps.at(-1), /450 °C|60 s–90 s|3–4 min/);
+  assert.equal(JSON.stringify(getBeginnerOvenTimers('kamado', 450)), '[]', `Kamado has no unapproved bake or preheat timers in ${lang}`);
+  const kamadoFinalInfo = buildBeginnerFinalPhaseInfo(lang, 'neapolitan', 'caputo00', 'kamado');
+  const pizzaOvenFinalInfo = buildBeginnerFinalPhaseInfo(lang, 'neapolitan', 'caputo00', 'ooni');
+  assert.notDeepEqual(kamadoFinalInfo, pizzaOvenFinalInfo, `Kamado guidance is separate from Pizza-oven guidance in ${lang}`);
+  assert.match(kamadoFinalInfo[7].body, /not approved|no approved|nema odobrenu|keine freigegebene|nima odobrene/i);
   for (const style of styles) {
     for (const flour of [...flours, 'glutenFree']) {
       for (const fridgeHours of [0, 1, 8]) {
@@ -299,7 +360,11 @@ for (const lang of languages) {
             assert.equal(!!cold, fridgeHours > 0, 'only strategies with refrigeration should retain Phase D');
             if (cold) {
               assert.equal(cold.steps.length, 1);
-              assert.deepEqual(Array.from(cold.timers), []);
+              assert.deepEqual(
+                Array.from(cold.timers, (timer) => timer.seconds),
+                [fridgeHours * 3600],
+                'cold fermentation Phase D should expose the selected refrigerator duration',
+              );
             }
           }
         }
@@ -456,7 +521,7 @@ for (const lang of languages) {
 }
 
 assert.match(source, /const customStepInfo = stepInfo\?\.\[i\]/);
-assert.match(source, /Alert\.alert\(customStepInfo\.title, formatText\(customStepInfo\.body\)\)/);
+assert.match(source, /showInfo\(customStepInfo\.title, formatText\(customStepInfo\.body\) \?\? ''\)/);
 
 const scheduledOoni = buildBeginnerDirectHomeSteps(
   roundPhases('caputo00', 'neapolitan'),
@@ -579,7 +644,7 @@ for (const flourBranch of [
 ]) assert.ok(mixRestFormula[1].includes(flourBranch), `${flourBranch} keeps its short mix-rest branch`);
 assert.match(mixRestFormula[1], /\?\s*5[\s\S]*?:\s*beginnerMode\s*\?\s*5\.5/);
 assert.match(mixRestFormula[1], /^isNewYorkMixerBeginner\s*\?\s*6\s*:/);
-assert.match(source, /timer\(hand && !isGlutenFree \? 'post-mix-rest15m' : 'post-mix-rest', mixRestMinutes \* 60, 'rest'\)/);
+assert.match(source, /timer\(!beginnerMode && isNapolitana && flourType === 'caputo00' && hand \? 'post-mix-rest' : hand && !isGlutenFree \? 'post-mix-rest15m' : 'post-mix-rest', mixRestMinutes \* 60, 'rest'\)/);
 assert.doesNotMatch(source, /timer\('hand-knead'|timer\('mixer-low'|timer\('mixer-develop'/);
 assert.doesNotMatch(source, /4 minutes|4 Minuten|4 minuti|4 minuti/);
 assert.match(source, /timer\('post-mix-rest', Math\.round\(mixRestMinutes \* 60\), 'rest'\)/);

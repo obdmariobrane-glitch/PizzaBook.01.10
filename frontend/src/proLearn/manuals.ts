@@ -1,12 +1,15 @@
 import type { Lang } from '../i18n/translations';
+import { PRO_LEARN_DE } from './manualContent.de';
+import { PRO_LEARN_EN } from './manualContent.en';
 import { PRO_LEARN_HR } from './manualContent.generated';
+import { PRO_LEARN_SL } from './manualContent.sl';
 import type { ProGuideManual, ProGuideTopic } from './types';
 
-export const PRO_LEARN_MANUALS: Record<Lang, ProGuideManual | null> = {
+export const PRO_LEARN_MANUALS: Record<Lang, ProGuideManual> = {
   hr: PRO_LEARN_HR,
-  en: null,
-  de: null,
-  sl: null,
+  en: PRO_LEARN_EN,
+  de: PRO_LEARN_DE,
+  sl: PRO_LEARN_SL,
 };
 
 export function findProLearnAnchor(

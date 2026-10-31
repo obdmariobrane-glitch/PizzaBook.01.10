@@ -8,6 +8,9 @@ registerHooks({
     if (specifier === './spiralMixing' && context.parentURL?.endsWith('/src/i18n/prefermentSteps.ts')) {
       return nextResolve('./spiralMixing.ts', context);
     }
+    if (specifier === './proIceWaterInstructions' && context.parentURL?.endsWith('/src/i18n/spiralMixing.ts')) {
+      return nextResolve('./proIceWaterInstructions.ts', context);
+    }
     return nextResolve(specifier, context);
   },
 });

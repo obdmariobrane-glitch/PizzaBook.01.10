@@ -9,14 +9,29 @@ export type PlannerPhaseStep = {
 };
 
 export const PLANNER_PHASE_OVERRIDES_STORAGE_KEY = 'plannerPhaseOverrides';
+export const PRO_PLANNER_BAKE_TARGET_STORAGE_KEY = 'proPlannerBakeAt';
 
-export function getPlannerPhaseOverridesStorageKey(scope: PlannerExperienceScope): string {
-  return `${PLANNER_PHASE_OVERRIDES_STORAGE_KEY}:${scope}`;
+export function parseProPlannerBakeTarget(serialized: string | null): Date | null {
+  if (serialized === null) return null;
+  const target = new Date(serialized);
+  if (Number.isNaN(target.getTime()) || target.toISOString() !== serialized) return null;
+  return target;
+}
+
+export function getPlannerPhaseOverridesStorageKey(
+  scope: PlannerExperienceScope,
+  scheduleIdentity?: string,
+): string {
+  const key = `${PLANNER_PHASE_OVERRIDES_STORAGE_KEY}:${scope}`;
+  return scope === 'pro' && scheduleIdentity
+    ? `${key}:${encodeURIComponent(scheduleIdentity)}`
+    : key;
 }
 
 export function assignPlannerPhaseKeys<T extends { title: string }>(
   steps: T[],
   stableScope?: string,
+  stableFallback = false,
 ): (T & { phaseKey: string })[] {
   const occurrences = new Map<string, number>();
   return steps.map((step, index) => {
@@ -26,7 +41,10 @@ export function assignPlannerPhaseKeys<T extends { title: string }>(
     }
     const occurrence = occurrences.get(step.title) ?? 0;
     occurrences.set(step.title, occurrence + 1);
-    return { ...step, phaseKey: `${step.title}\u001f${occurrence}${stableScope ? `:${index}` : ''}` };
+    const fallbackKey = stableScope && stableFallback
+      ? `${stableScope}:step:${index}:${occurrence}`
+      : `${step.title}\u001f${occurrence}${stableScope ? `:${index}` : ''}`;
+    return { ...step, phaseKey: fallbackKey };
   });
 }
 

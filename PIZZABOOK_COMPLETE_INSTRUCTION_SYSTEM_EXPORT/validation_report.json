@@ -1,0 +1,176 @@
+{
+  "schema": "pizzabook-instruction-system/validation/v1",
+  "generated_at": "2026-10-13T08:21:11.555Z",
+  "production_source_modified": false,
+  "copied_sources": [
+    {
+      "file": "app/(tabs)/index.tsx",
+      "copied_verbatim": true,
+      "sha256": "e9b30e4b22f0604fb54c7f128ed42a93c54385b7e450208f7072744b8d588b81"
+    },
+    {
+      "file": "app/(tabs)/planner.tsx",
+      "copied_verbatim": true,
+      "sha256": "fed0a728b84df39a7b1beffcdd479c514ad7723cc7cad8ac95c1637b2d79da0f"
+    },
+    {
+      "file": "src/calculator.ts",
+      "copied_verbatim": true,
+      "sha256": "6a5025620e3e077cede94ad24f29a6b61bf63b3cf0cf086507c16eb8b7209519"
+    },
+    {
+      "file": "src/i18n/prefermentSteps.ts",
+      "copied_verbatim": true,
+      "sha256": "d8a92d2862032784431fece924797f84a770e2b7987fa735f318f74701a91807"
+    },
+    {
+      "file": "src/i18n/spiralMixing.ts",
+      "copied_verbatim": true,
+      "sha256": "e23d94307db07a27788ae0430e7a7497a659e2cbd0aa4b89c066e32c877d4929"
+    },
+    {
+      "file": "src/i18n/styleSteps.ts",
+      "copied_verbatim": true,
+      "sha256": "176893ef8acba5a0294e9bb0f802d279261e1e370570b24c60a6a849d04dac0a"
+    },
+    {
+      "file": "src/i18n/translations.ts",
+      "copied_verbatim": true,
+      "sha256": "8e66edba9982a7ba29f30f207056bc0512989b3d89ca06fe56a183fe4a457b02"
+    },
+    {
+      "file": "src/guidedRecipe.ts",
+      "copied_verbatim": true,
+      "sha256": "7ff063ab2bea860288a6d5fd9ce133e0a220f517b81f87bb8b08ec6ac0205091"
+    },
+    {
+      "file": "src/notifications.ts",
+      "copied_verbatim": true,
+      "sha256": "c2b02e2b2e47e63f21cd5fd6c51fe429fa14ea60c17acad4f05b38196a9c26ca"
+    },
+    {
+      "file": "src/proLearn/manualContent.generated.ts",
+      "copied_verbatim": true,
+      "sha256": "d564fe9c5391c3e431c49823f2919c954cd1ae5a256ad153ca39962139e63720"
+    }
+  ],
+  "json_checks": [
+    {
+      "file": "all_texts.json",
+      "valid_json": true
+    },
+    {
+      "file": "all_conditions.json",
+      "valid_json": true
+    },
+    {
+      "file": "instruction_dependencies.json",
+      "valid_json": true
+    },
+    {
+      "file": "branch_coverage.json",
+      "valid_json": true
+    }
+  ],
+  "runtime_smoke": {
+    "status": "passed",
+    "cases": [
+      {
+        "kind": "preferment",
+        "returned": true
+      },
+      {
+        "kind": "spiral",
+        "returned": true
+      },
+      {
+        "kind": "style",
+        "returned": true
+      },
+      {
+        "kind": "directSchedule",
+        "returned": true
+      },
+      {
+        "kind": "bigaSchedule",
+        "returned": true
+      },
+      {
+        "kind": "poolishSchedule",
+        "returned": true
+      },
+      {
+        "kind": "beginnerDirect",
+        "returned": true
+      },
+      {
+        "kind": "beginnerDirect",
+        "returned": true
+      },
+      {
+        "kind": "beginnerDirect",
+        "returned": true
+      }
+    ]
+  },
+  "beginner_matrix": {
+    "generated_at": "2026-10-13T08:21:11.555Z",
+    "total": 576,
+    "passed": 576,
+    "failed": 0,
+    "dimensions": {
+      "languages": [
+        "hr",
+        "en",
+        "de",
+        "sl"
+      ],
+      "styles": [
+        "neapolitan",
+        "romana",
+        "ny_style"
+      ],
+      "flours": [
+        "caputo00",
+        "manitoba",
+        "spelt",
+        "wholeWheat",
+        "glutenFree",
+        "custom"
+      ],
+      "mixings": [
+        "hand",
+        "mixer"
+      ],
+      "schedules": [
+        "unscheduled",
+        "roomOnly",
+        "fridgeRoom"
+      ]
+    },
+    "failures": []
+  },
+  "non_reproducible_configurations": [
+    {
+      "case": "Beginner schedule restored from persisted AsyncStorage snapshot",
+      "reason": "Standalone generator accepts explicit inputs only and does not load app-local persisted state by key."
+    },
+    {
+      "case": "UI overlays/tooltips outside instruction phase output",
+      "reason": "Generator exports instruction phases, steps, quantities, and schedule timestamps; it does not execute modal interaction state."
+    }
+  ],
+  "live_preview": {
+    "status": "partial",
+    "url": "https://dough-timer-1.preview.emergentagent.com/",
+    "snapshot": "live_preview_snapshot.txt",
+    "screenshot": "live_preview.png",
+    "rendered": "Preview onboarding and language selector rendered successfully.",
+    "note": "Instruction-phase text parity could not be fully captured in this run because the onboarding overlay prevented deterministic progression to full phase lists for automated extraction."
+  },
+  "known_limitations": [
+    "Static AST inventory does not evaluate runtime-generated strings.",
+    "Exact rendered-UI parity still depends on app runtime state (for example restored schedules from AsyncStorage) that is not part of standalone generator inputs.",
+    "No production deploy or commit was performed."
+  ]
+}

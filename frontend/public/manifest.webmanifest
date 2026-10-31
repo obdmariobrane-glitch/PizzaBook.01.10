@@ -1,0 +1,25 @@
+{
+  "id": "/",
+  "name": "PizzaBook",
+  "short_name": "PizzaBook",
+  "description": "Calculate pizza dough, plan fermentation, and save recipes.",
+  "lang": "en",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#FAF5F0",
+  "theme_color": "#D15900",
+  "icons": [
+    {
+      "src": "/icons/pizzabook-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/pizzabook-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

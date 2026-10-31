@@ -1,5 +1,5 @@
 // Pizza calculator logic
-export type Method = 'direct' | 'biga' | 'poolish';
+export type Method = 'direct' | 'biga' | 'poolish' | 'sponge';
 export type CommercialYeastType = 'fresh' | 'activeDry' | 'dry';
 export type YeastType = CommercialYeastType | 'sourdough';
 export const YEAST_MASS_FACTORS: Record<CommercialYeastType, number> = {
@@ -7,10 +7,77 @@ export const YEAST_MASS_FACTORS: Record<CommercialYeastType, number> = {
   activeDry: 0.4,
   dry: 1 / 3,
 };
+export type SpongeYeastMode = 'automatic' | 'manual';
+export type SpongeManualYeastError = 'empty' | 'invalid' | 'zero' | 'negative' | 'unreasonable';
+export type ManualYeastError = SpongeManualYeastError;
+
+export const SPONGE_YEAST_REFERENCE = {
+  flourShare: 70,
+  freshYeastPctOfTotalFlour: 2.2,
+  fermentationTempC: 27,
+  fermentationHours: 4.5,
+  provisionalQ10: 2,
+} as const;
+
+export function calculateSpongeAutomaticYeastGrams(
+  totalFlourGrams: number,
+  fermentationTempC: number,
+  fermentationHours: number,
+  yeastType: CommercialYeastType,
+): number {
+  if (
+    !Number.isFinite(totalFlourGrams)
+    || totalFlourGrams <= 0
+    || !Number.isFinite(fermentationTempC)
+    || fermentationTempC < 4
+    || fermentationTempC > 35
+    || !Number.isFinite(fermentationHours)
+    || fermentationHours <= 0
+    || fermentationHours > 48
+  ) {
+    throw new RangeError('Sponge automatic yeast inputs must be finite and positive where applicable.');
+  }
+
+  const freshYeastGrams = totalFlourGrams
+    * (SPONGE_YEAST_REFERENCE.freshYeastPctOfTotalFlour / 100)
+    * (SPONGE_YEAST_REFERENCE.fermentationHours / fermentationHours)
+    * Math.pow(SPONGE_YEAST_REFERENCE.provisionalQ10, (SPONGE_YEAST_REFERENCE.fermentationTempC - fermentationTempC) / 10);
+  const yeastGrams = freshYeastGrams * YEAST_MASS_FACTORS[yeastType];
+  if (!Number.isFinite(yeastGrams) || yeastGrams <= 0) {
+    throw new RangeError('Sponge automatic yeast calculation produced an unsupported result.');
+  }
+  return yeastGrams;
+}
+
+export function validateSpongeManualYeastGrams(
+  input: string,
+  spongeFlourGrams: number,
+): SpongeManualYeastError | null {
+  return validateManualYeastGrams(input, spongeFlourGrams);
+}
+
+export function validateManualYeastGrams(
+  input: string,
+  flourGrams: number,
+): ManualYeastError | null {
+  if (!input.trim()) return 'empty';
+  const grams = Number(input.trim().replace(',', '.'));
+  if (!Number.isFinite(grams)) return 'invalid';
+  if (grams < 0) return 'negative';
+  if (grams === 0) return 'zero';
+  if (!Number.isFinite(flourGrams) || flourGrams <= 0 || grams > flourGrams * 0.1) {
+    return 'unreasonable';
+  }
+  return null;
+}
 export type Mixing = 'hand' | 'home' | 'spiral';
 export type MixingSelection = 'hand' | 'mixer' | 'spiral';
 export type Fermentation = 'sameDay' | 'coldLong';
-export type OvenType = 'ooni' | 'homeStone' | 'homePan';
+export type OvenType = 'ooni' | 'homeStone' | 'homePan' | 'kamado';
+export type OvenBehaviorType = Exclude<OvenType, 'kamado'>;
+export function getOvenBehaviorType(oven: OvenType): OvenBehaviorType {
+  return oven === 'kamado' ? 'ooni' : oven;
+}
 export type PizzaStyle = 'neapolitan' | 'romana' | 'ny_style';
 export type BakingLanguage = 'hr' | 'en' | 'de' | 'sl';
 export type BeginnerDirectDoughStyle = 'neapolitan' | 'newYork' | 'romanaTonda' | 'romanaTeglia';
@@ -40,7 +107,7 @@ export type BeginnerPhaseBFlourBehavior = 'standard' | 'gentle' | 'glutenFree';
 export type BeginnerPhaseBWorkflow = 'round' | 'teglia';
 
 export function getBeginnerPreheatMinutes(ovenType: OvenType): number {
-  return ovenType === 'homeStone' ? 60 : 20;
+  return getOvenBehaviorType(ovenType) === 'homeStone' ? 60 : 20;
 }
 
 export function getTemperingWindow(roomTemp: number) {
@@ -51,6 +118,21 @@ export function getTemperingWindow(roomTemp: number) {
     maximumMinutes,
     initialMinutes: Math.round((minimumMinutes + maximumMinutes) / 2),
   };
+}
+
+export function getPlannerRoomAfterFridgeHours(
+  method: Method,
+  style: PizzaStyle,
+  romanFormat: 'tonda' | 'teglia',
+  roomHours: number,
+  fridgeHours: number,
+  roomTemp: number,
+): number {
+  if (fridgeHours <= 0) return 0;
+  if (method === 'direct' && style === 'romana' && romanFormat === 'teglia') {
+    return Math.max(0, roomHours);
+  }
+  return getTemperingWindow(roomTemp).initialMinutes / 60;
 }
 
 export const TEGLIA_FINAL_PROOF_MINUTES = {
@@ -220,14 +302,15 @@ export interface BakingTimeRange {
   max: number;
 }
 
-const BAKING_TIME_POINTS: Record<OvenType, { temperature: number; min: number; max: number }[]> = {
+const BAKING_TIME_POINTS: Record<OvenBehaviorType, { temperature: number; min: number; max: number }[]> = {
   homePan: [{ temperature: 200, min: 15, max: 20 }, { temperature: 220, min: 13, max: 17 }, { temperature: 230, min: 12, max: 15 }, { temperature: 250, min: 10, max: 14 }, { temperature: 270, min: 8, max: 12 }, { temperature: 280, min: 7, max: 11 }, { temperature: 300, min: 6, max: 9 }],
   ooni: [{ temperature: 350, min: 3, max: 4 }, { temperature: 400, min: 2, max: 3 }, { temperature: 450, min: 1, max: 1.5 }, { temperature: 480, min: 0.75, max: 1.25 }],
   homeStone: [{ temperature: 200, min: 9, max: 13 }, { temperature: 220, min: 8, max: 11 }, { temperature: 230, min: 7, max: 10 }, { temperature: 250, min: 5, max: 8 }, { temperature: 270, min: 4, max: 6 }, { temperature: 280, min: 3.5, max: 5 }, { temperature: 300, min: 3, max: 4.5 }],
 };
 
-export function getBakingTimeRange(oven: OvenType, temperature: number): BakingTimeRange {
-  const points = BAKING_TIME_POINTS[oven];
+export function getBakingTimeRange(oven: OvenType, temperature: number): BakingTimeRange | null {
+  if (oven === 'kamado') return null;
+  const points = BAKING_TIME_POINTS[getOvenBehaviorType(oven)];
   const value = Math.max(points[0].temperature, Math.min(points[points.length - 1].temperature, temperature));
   const upperIndex = points.findIndex((point) => point.temperature >= value);
   if (upperIndex <= 0) return { min: points[0].min, max: points[0].max };
@@ -242,6 +325,7 @@ export function getBakingTimeRange(oven: OvenType, temperature: number): BakingT
 
 export function formatBakingTimeRange(oven: OvenType, temperature: number, lang: BakingLanguage): string {
   const range = getBakingTimeRange(oven, temperature);
+  if (!range) throw new RangeError('Kamado baking time has not been approved.');
   const format = (minutes: number) => {
     const rounded = Math.round(minutes * 4) / 4;
     const secondsUnit = lang === 'de' ? 'Sek.' : 's';
@@ -269,17 +353,40 @@ export interface HomePizzaPlanInput {
   beginnerScheduleMode?: BeginnerDirectScheduleMode;
 }
 
+export type CalculatorYeastSummary = {
+  method: Method;
+  yeastType: CommercialYeastType;
+  mode: SpongeYeastMode;
+  quantityGrams: number;
+  bakerPercentage: number;
+  finalDoughQuantityGrams?: number;
+};
+
 export type SharedCalculatorPlanSettings = {
   pizzaStyle: PizzaStyle;
   romanFormat: 'tonda' | 'teglia';
   method: Method;
   mixing: Mixing;
+  oven: OvenType;
+  ovenTemp: number;
   roomTemp: number;
   roomHours: number;
   fridgeTemp: number;
   fridgeHours: number;
   bigaHours: number;
+  bigaPct: number;
+  bigaHydrationPct: number;
   poolishHours: number;
+  poolishPct: number;
+  poolishHydrationPct: number;
+  poolishFermentationTempC: number;
+  spongeFlourPct: number;
+  spongeHydrationPct: number;
+  spongeFermentationTempC: number;
+  spongeFermentationHours: number;
+  spongePreparation: { title: string; steps: string[] } | null;
+  spongePreparationByLanguage: Record<BakingLanguage, { title: string; steps: string[] }> | null;
+  yeastSummary?: CalculatorYeastSummary | null;
   trayCount: number;
   doughPerTray: number;
   trayWidth: number;
@@ -1151,6 +1258,29 @@ export function generateDirectHomeCandidates(
 
 export type FlourType = 'caputo00' | 'manitoba' | 'spelt' | 'wholeWheat' | 'glutenFree' | 'custom';
 
+export function isEffectivelyGlutenFreeBlend(
+  blendA: Exclude<FlourType, 'custom'>,
+  blendB: Exclude<FlourType, 'custom'>,
+  blendPctA: number,
+): boolean {
+  if (!Number.isFinite(blendPctA)) return false;
+  const pctA = Math.max(0, Math.min(100, blendPctA));
+  return (blendA === 'glutenFree' || pctA === 0)
+    && (blendB === 'glutenFree' || pctA === 100);
+}
+
+export function isProMethodAllowedForFlour(
+  method: Method,
+  flour: FlourType,
+  blendA: Exclude<FlourType, 'custom'>,
+  blendB: Exclude<FlourType, 'custom'>,
+  blendPctA: number,
+): boolean {
+  const effectivelyGlutenFree = flour === 'glutenFree'
+    || (flour === 'custom' && isEffectivelyGlutenFreeBlend(blendA, blendB, blendPctA));
+  return !effectivelyGlutenFree || method === 'direct';
+}
+
 export type PizzaStyleProfile = {
   defaultDiameter: number;
   ballWeight: number;
@@ -1839,7 +1969,17 @@ export type BeginnerRestoredState = {
   useIce: false;
 };
 
-const BEGINNER_OVEN_RANGES: Record<OvenType, { min: number; max: number; fallback: number }> = {
+export function isValidProTrayDimension(value: unknown): value is number {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 20 && value <= 60;
+}
+
+export function parseProTrayDimensionInput(value: string): number | null {
+  if (!/^(?:2\d|[3-5]\d|60)$/.test(value)) return null;
+  const dimension = Number(value);
+  return isValidProTrayDimension(dimension) ? dimension : null;
+}
+
+const BEGINNER_OVEN_RANGES: Record<OvenBehaviorType, { min: number; max: number; fallback: number }> = {
   ooni: { min: 350, max: 480, fallback: 450 },
   homeStone: { min: 200, max: 300, fallback: 300 },
   homePan: { min: 200, max: 300, fallback: 250 },
@@ -1857,14 +1997,15 @@ export function normalizeBeginnerSavedState(saved: Record<string, any>): Beginne
   const trayLength = isTeglia && validTray(saved.trayWidth) && validTray(saved.trayLength) ? saved.trayLength : 40;
   const autoBall = isTeglia ? Math.round(trayWidth * trayLength * 0.4) : profile.ballWeight;
   const customOk = isNum(saved.customBallWeight) && saved.customBallWeight >= autoBall * 0.65 && saved.customBallWeight <= autoBall * 1.35;
-  const ovenRange = BEGINNER_OVEN_RANGES[saved.oven as OvenType];
+  const ovenBehavior = saved.oven === 'kamado' ? 'ooni' : saved.oven;
+  const ovenRange = BEGINNER_OVEN_RANGES[ovenBehavior as OvenBehaviorType];
   const ovenOk = !!ovenRange && isNum(saved.ovenTemp) && saved.ovenTemp >= ovenRange.min && saved.ovenTemp <= ovenRange.max
     && (!isTeglia || saved.oven === 'homePan');
   const stale = (pizzaStyle !== 'romana' && saved.romanFormat === 'teglia')
     || (!isTeglia && isNum(saved.diameter) && saved.diameter !== profile.defaultDiameter)
     || (isNum(saved.customBallWeight) && !customOk)
     || !ovenOk;
-  const defaultOven: OvenType = isTeglia ? 'homePan' : pizzaStyle === 'neapolitan' ? 'ooni' : 'homeStone';
+  const defaultOven: OvenBehaviorType = isTeglia ? 'homePan' : pizzaStyle === 'neapolitan' ? 'ooni' : 'homeStone';
   const oven: OvenType = stale ? defaultOven : saved.oven;
   const ovenTemp = stale ? BEGINNER_OVEN_RANGES[defaultOven].fallback : saved.ovenTemp;
   const flour: FlourType = ALL_FLOUR_IDS.includes(saved.flour) ? saved.flour : 'caputo00';
@@ -1926,6 +2067,7 @@ export type FermentationSchedule = {
   prefermentHours: number;
   prefermentRoomHours: number;
   prefermentFridgeHours: number;
+  prefermentTemperatureC?: number;
 };
 
 type FermentationScheduleOptions = {
@@ -1935,6 +2077,7 @@ type FermentationScheduleOptions = {
   fridgeHours: number;
   fridgeTemp: number;
   prefermentHours?: number;
+  prefermentTempC?: number;
   roomAfterFridgeHours?: number;
   prefermentRoomHours?: number;
   prefermentFridgeHours?: number;
@@ -1959,18 +2102,93 @@ export function getFermentationSchedule(opts: FermentationScheduleOptions): Ferm
     0,
     opts.prefermentHours ?? Math.max(0, opts.prefermentRoomHours ?? 0) + Math.max(0, opts.prefermentFridgeHours ?? 0),
   );
-  const prefermentRoomHours = opts.method === 'biga'
-    ? Math.min(8, prefermentHours)
-    : Math.min(1, prefermentHours);
-  const prefermentFridgeHours = Math.max(0, prefermentHours - prefermentRoomHours);
+  if (opts.method === 'poolish'
+    && opts.prefermentTempC !== undefined
+    && (!Number.isFinite(opts.prefermentTempC) || opts.prefermentTempC < 4 || opts.prefermentTempC > 35)) {
+    throw new RangeError('Poolish fermentation temperature must be between 4°C and 35°C.');
+  }
+  const prefermentRoomHours = opts.method === 'poolish' && opts.prefermentTempC !== undefined
+    ? prefermentHours
+    : opts.method === 'biga'
+      ? Math.min(8, prefermentHours)
+      : Math.min(1, prefermentHours);
+  const prefermentFridgeHours = opts.method === 'poolish' && opts.prefermentTempC !== undefined
+    ? 0
+    : Math.max(0, prefermentHours - prefermentRoomHours);
 
-  addPhase({ kind: 'preferment', environment: 'room', hours: prefermentRoomHours, temperature: opts.roomTemp });
+  addPhase({
+    kind: 'preferment',
+    environment: 'room',
+    hours: prefermentRoomHours,
+    temperature: opts.method === 'poolish' && opts.prefermentTempC !== undefined ? opts.prefermentTempC : opts.roomTemp,
+  });
   addPhase({ kind: 'preferment', environment: 'fridge', hours: prefermentFridgeHours, temperature: opts.fridgeTemp });
   addPhase({ kind: 'final', environment: 'room', hours: roomHours, temperature: opts.roomTemp });
   addPhase({ kind: 'final', environment: 'fridge', hours: fridgeHours, temperature: opts.fridgeTemp });
   addPhase({ kind: 'final-rest', environment: 'room', hours: Math.max(0, opts.roomAfterFridgeHours ?? 0), temperature: opts.roomTemp });
 
-  return { phases, prefermentHours, prefermentRoomHours, prefermentFridgeHours };
+  return {
+    phases,
+    prefermentHours,
+    prefermentRoomHours,
+    prefermentFridgeHours,
+    ...(opts.method === 'poolish' && opts.prefermentTempC !== undefined
+      ? { prefermentTemperatureC: opts.prefermentTempC }
+      : {}),
+  };
+}
+
+export function getSpongeFermentationSchedule(
+  spongeHours: number,
+  spongeTemp: number,
+  roomHours: number,
+  roomTemp: number,
+  fridgeHours: number,
+  fridgeTemp: number,
+  roomAfterFridgeHours = 0,
+): FermentationSchedule {
+  const durations = [roomHours, fridgeHours, roomAfterFridgeHours];
+  if (!Number.isFinite(spongeHours)
+    || spongeHours < 0.5
+    || spongeHours > 48
+    || durations.some((hours) => !Number.isFinite(hours) || hours < 0)
+    || !Number.isFinite(spongeTemp)
+    || spongeTemp < 4
+    || spongeTemp > 35
+    || !Number.isFinite(roomTemp)
+    || !Number.isFinite(fridgeTemp)) {
+    throw new RangeError('Sponge fermentation schedule values must be finite and non-negative.');
+  }
+  const phases: FermentationPhase[] = [];
+  if (spongeHours > 0) {
+    phases.push({ kind: 'preferment', environment: 'room', hours: spongeHours, temperature: spongeTemp });
+  }
+  if (roomHours > 0) phases.push({ kind: 'final', environment: 'room', hours: roomHours, temperature: roomTemp });
+  if (fridgeHours > 0) phases.push({ kind: 'final', environment: 'fridge', hours: fridgeHours, temperature: fridgeTemp });
+  if (roomAfterFridgeHours > 0) {
+    phases.push({ kind: 'final-rest', environment: 'room', hours: roomAfterFridgeHours, temperature: roomTemp });
+  }
+  return {
+    phases,
+    prefermentHours: spongeHours,
+    prefermentRoomHours: spongeHours,
+    prefermentFridgeHours: 0,
+  };
+}
+
+export function getTegliaFinalProofWindowMinutes(schedule: Pick<FermentationSchedule, 'phases'>): number {
+  const finalRestMinutes = schedule.phases
+    .filter((phase) => phase.kind === 'final-rest' && phase.environment === 'room')
+    .reduce((total, phase) => total + phase.hours * 60, 0);
+  if (finalRestMinutes > 0) return finalRestMinutes;
+
+  const hasFinalColdFermentation = schedule.phases
+    .some((phase) => phase.kind === 'final' && phase.environment === 'fridge' && phase.hours > 0);
+  if (hasFinalColdFermentation) return 0;
+
+  return schedule.phases
+    .filter((phase) => phase.kind === 'final' && phase.environment === 'room')
+    .reduce((total, phase) => total + phase.hours * 60, 0);
 }
 
 export function getDirectHomeFermentationSchedule(
@@ -2090,6 +2308,7 @@ interface DoughCalculationResult {
   waterTemperature?: BeginnerDirectWaterTemperature;
   yeastPct: number;
   eTotal: number;
+  spongeYeastPct?: number;
 }
 
 export function doughCalc(opts: {
@@ -2097,6 +2316,18 @@ export function doughCalc(opts: {
   method: Method;
   bigaPct?: number;
   poolishPct?: number;
+  bigaHydrationPct?: number;
+  poolishHydrationPct?: number;
+  poolishFermentationTempC?: number;
+  spongeFlourPct?: number;
+  spongeHydrationPct?: number;
+  spongeYeastMode?: SpongeYeastMode;
+  spongeManualYeastGrams?: number;
+  spongeYeastType?: CommercialYeastType;
+  yeastMode?: SpongeYeastMode;
+  manualYeastGrams?: number;
+  spongeFermentationTempC?: number;
+  spongeFermentationHours?: number;
   roomHours: number; roomTemp: number;
   fridgeHours: number; fridgeTemp: number;
   prefermentHours?: number;
@@ -2113,11 +2344,51 @@ export function doughCalc(opts: {
   fermentationSchedule?: FermentationSchedule;
 }): DoughCalculationResult {
   // === Fermentation math (dynamic yeast) ===
-  const fermentation = opts.fermentationSchedule ?? (opts.method === 'biga' && opts.bigaHomeSchedule
+  const baseFermentation = opts.fermentationSchedule ?? (opts.method === 'biga' && opts.bigaHomeSchedule
     ? getBigaHomeFermentationSchedule(opts.bigaHomeSchedule, opts.roomTemp, opts.fridgeTemp)
     : opts.method === 'poolish' && opts.poolishHomeSchedule
       ? getPoolishHomeFermentationSchedule(opts.poolishHomeSchedule, opts.roomTemp, opts.fridgeTemp)
-      : getFermentationSchedule(opts));
+      : opts.method === 'sponge'
+        ? getSpongeFermentationSchedule(
+          opts.spongeFermentationHours ?? SPONGE_YEAST_REFERENCE.fermentationHours,
+          opts.spongeFermentationTempC ?? SPONGE_YEAST_REFERENCE.fermentationTempC,
+          opts.roomHours,
+          opts.roomTemp,
+          opts.fridgeHours,
+          opts.fridgeTemp,
+          opts.fridgeHours > 0 ? opts.roomHours : 0,
+        )
+        : getFermentationSchedule({
+          ...opts,
+          prefermentTempC: opts.method === 'poolish' ? opts.poolishFermentationTempC : undefined,
+        }));
+  const fermentation = opts.method === 'poolish' && opts.poolishFermentationTempC !== undefined
+    ? (() => {
+      if (!Number.isFinite(opts.poolishFermentationTempC)
+        || opts.poolishFermentationTempC < 4
+        || opts.poolishFermentationTempC > 35) {
+        throw new RangeError('Poolish fermentation temperature must be between 4°C and 35°C.');
+      }
+      const prefermentHours = baseFermentation.phases
+        .filter((phase) => phase.kind === 'preferment')
+        .reduce((total, phase) => total + phase.hours, 0);
+      return {
+        ...baseFermentation,
+        phases: [
+          ...(prefermentHours > 0 ? [{
+            kind: 'preferment' as const,
+            environment: 'room' as const,
+            hours: prefermentHours,
+            temperature: opts.poolishFermentationTempC,
+          }] : []),
+          ...baseFermentation.phases.filter((phase) => phase.kind !== 'preferment'),
+        ],
+        prefermentRoomHours: prefermentHours,
+        prefermentFridgeHours: 0,
+        prefermentTemperatureC: opts.poolishFermentationTempC,
+      };
+    })()
+    : baseFermentation;
   const eTotal = Math.max(0.5, fermentation.phases.reduce((total, phase) => {
     const rate = phase.environment === 'room'
       ? 1 + 0.08 * (phase.temperature - 20)
@@ -2129,16 +2400,48 @@ export function doughCalc(opts: {
   const freshYeastPct = K / eTotal;
   const yeastType = opts.yeastType === 'sourdough' ? 'fresh' : opts.yeastType ?? 'fresh';
   const yeastPct = freshYeastPct * YEAST_MASS_FACTORS[yeastType];
-  const effectiveYeastPct = yeastPct;
-
   // === Baker's percentages ===
   const totalDough = opts.pizzas * opts.ballWeight;
   const psylliumPct = opts.flourType === 'glutenFree' ? 2 : 0;
-  const totalPercent = 100 + opts.hydration + opts.saltPct + effectiveYeastPct + opts.oilPct + psylliumPct;
-  const flour = (totalDough / totalPercent) * 100;
+  const standardBasePercent = 100 + opts.hydration + opts.saltPct + opts.oilPct + psylliumPct;
+  const standardTotalPercent = standardBasePercent + yeastPct;
+  const spongeYeastMode = opts.spongeYeastMode ?? 'automatic';
+  const yeastMode = opts.yeastMode ?? 'automatic';
+  const spongeYeastType = opts.spongeYeastType ?? 'fresh';
+  const spongeFermentationTempC = opts.spongeFermentationTempC ?? SPONGE_YEAST_REFERENCE.fermentationTempC;
+  const spongeFermentationHours = opts.spongeFermentationHours ?? SPONGE_YEAST_REFERENCE.fermentationHours;
+  const spongeFreshYeastRatio = opts.method === 'sponge' && spongeYeastMode === 'automatic'
+    ? (SPONGE_YEAST_REFERENCE.freshYeastPctOfTotalFlour / 100)
+      * (SPONGE_YEAST_REFERENCE.fermentationHours / spongeFermentationHours)
+      * Math.pow(SPONGE_YEAST_REFERENCE.provisionalQ10, (SPONGE_YEAST_REFERENCE.fermentationTempC - spongeFermentationTempC) / 10)
+      * YEAST_MASS_FACTORS[spongeYeastType]
+    : 0;
+  const spongeManualYeastGrams = opts.spongeManualYeastGrams ?? 0;
+  const manualYeastGrams = opts.manualYeastGrams ?? 0;
+  if (opts.method !== 'sponge' && yeastMode === 'manual'
+    && (!Number.isFinite(manualYeastGrams) || manualYeastGrams <= 0 || manualYeastGrams >= totalDough)) {
+    throw new RangeError('Manual yeast must be a finite positive quantity smaller than total dough weight.');
+  }
+  if (opts.method === 'sponge' && spongeYeastMode === 'manual'
+    && (!Number.isFinite(spongeManualYeastGrams) || spongeManualYeastGrams <= 0)) {
+    throw new RangeError('Manual Sponge yeast must be a finite positive quantity.');
+  }
+  const totalPercent = standardTotalPercent + spongeFreshYeastRatio * 100;
+  const flour = opts.method === 'sponge' && spongeYeastMode === 'manual'
+    ? ((totalDough - spongeManualYeastGrams) / standardTotalPercent) * 100
+    : opts.method !== 'sponge' && yeastMode === 'manual'
+      ? ((totalDough - manualYeastGrams) / standardBasePercent) * 100
+      : (totalDough / totalPercent) * 100;
+  if (opts.method !== 'sponge' && yeastMode === 'manual' && manualYeastGrams > flour * 0.1) {
+    throw new RangeError('Manual yeast must be no more than 10% of total flour.');
+  }
+  const effectiveYeastPct = opts.method !== 'sponge' && yeastMode === 'manual'
+    ? manualYeastGrams / flour * 100
+    : yeastPct;
+  const effectiveYeast = flour * (effectiveYeastPct / 100);
   const water = flour * (opts.hydration / 100);
   const salt = flour * (opts.saltPct / 100);
-  const yeast = flour * (yeastPct / 100);
+  const yeast = effectiveYeast;
   const oil = flour * (opts.oilPct / 100);
   const psyllium = flour * (psylliumPct / 100);
 
@@ -2182,16 +2485,21 @@ export function doughCalc(opts: {
   if (opts.method === 'biga') {
     // Split the calculated total yeast dose in proportion to the displayed flour quantities.
     const bigaFlour = flour * (Math.max(20, Math.min(100, opts.bigaPct ?? 50)) / 100);
-    const bigaWater = bigaFlour * 0.45;
+    const bigaHydrationPct = opts.bigaHydrationPct ?? 45;
+    if (!Number.isFinite(bigaHydrationPct) || bigaHydrationPct <= 0 || bigaHydrationPct > 200) {
+      throw new RangeError('Biga hydration must be greater than 0% and no more than 200%.');
+    }
+    const bigaWater = bigaFlour * (bigaHydrationPct / 100);
     const totalFlour = R0(flour);
+    const roundedBigaFlour = R0(bigaFlour);
     const totalYeast = R2(yeast);
-    const bigaYeast = R2(totalYeast * R0(bigaFlour) / totalFlour);
+    const bigaYeast = R2(totalYeast * roundedBigaFlour / totalFlour);
     const mainYeast = R2(totalYeast - bigaYeast);
     return {
       method: 'biga' as const,
-      preferment: { flour: R0(bigaFlour), water: R0(bigaWater), yeast: R2(bigaYeast) },
+      preferment: { flour: roundedBigaFlour, water: R0(bigaWater), yeast: R2(bigaYeast) },
       main: {
-        flour: R0(flour - bigaFlour), water: R0(water - bigaWater),
+        flour: totalFlour - roundedBigaFlour, water: R0(water) - R0(bigaWater),
         salt: R1(salt), oil: R0(oil), yeast: R2(mainYeast),
         psyllium: R0(psyllium),
       },
@@ -2204,18 +2512,23 @@ export function doughCalc(opts: {
   }
 
   if (opts.method === 'poolish') {
-    // Poolish: configurable flour percentage and 100% hydration; split yeast by its flour share.
+    // Split the existing total yeast dose by the Poolish flour share.
     const pFlour = flour * (Math.max(20, Math.min(100, opts.poolishPct ?? 35)) / 100);
-    const pWater = pFlour * 1.0;
+    const poolishHydrationPct = opts.poolishHydrationPct ?? 100;
+    if (!Number.isFinite(poolishHydrationPct) || poolishHydrationPct <= 0 || poolishHydrationPct > 200) {
+      throw new RangeError('Poolish hydration must be greater than 0% and no more than 200%.');
+    }
+    const pWater = pFlour * (poolishHydrationPct / 100);
     const totalFlour = R0(flour);
+    const roundedPoolishFlour = R0(pFlour);
     const totalYeast = R2(yeast);
-    const pYeast = R2(totalYeast * R0(pFlour) / totalFlour);
+    const pYeast = R2(totalYeast * roundedPoolishFlour / totalFlour);
     const mainYeast = R2(totalYeast - pYeast);
     return {
       method: 'poolish' as const,
-      preferment: { flour: R0(pFlour), water: R0(pWater), yeast: R2(pYeast) },
+      preferment: { flour: roundedPoolishFlour, water: R0(pWater), yeast: R2(pYeast) },
       main: {
-        flour: R0(flour - pFlour), water: R0(water - pWater),
+        flour: totalFlour - roundedPoolishFlour, water: R0(water) - R0(pWater),
         salt: R1(salt), oil: R0(oil), yeast: R2(mainYeast),
         psyllium: R0(psyllium),
       },
@@ -2224,6 +2537,50 @@ export function doughCalc(opts: {
       waterTemp: R0(waterTemp),
       yeastPct: R2(effectiveYeastPct),
       eTotal: R1(eTotal),
+    };
+  }
+
+  if (opts.method === 'sponge') {
+    const spongeFlourPct = opts.spongeFlourPct ?? SPONGE_YEAST_REFERENCE.flourShare;
+    const spongeHydrationPct = opts.spongeHydrationPct ?? 62;
+    if (!Number.isFinite(spongeFlourPct) || spongeFlourPct <= 0 || spongeFlourPct > 100) {
+      throw new RangeError('Sponge flour share must be greater than 0% and no more than 100%.');
+    }
+    if (!Number.isFinite(spongeHydrationPct) || spongeHydrationPct <= 0 || spongeHydrationPct > 200) {
+      throw new RangeError('Sponge hydration must be greater than 0% and no more than 200%.');
+    }
+    const spongeFlour = flour * (spongeFlourPct / 100);
+    const spongeWater = spongeFlour * (spongeHydrationPct / 100);
+    if (spongeYeastMode === 'manual'
+      && (!Number.isFinite(spongeManualYeastGrams)
+        || spongeManualYeastGrams <= 0
+        || spongeManualYeastGrams > spongeFlour * 0.1)) {
+      throw new RangeError('Manual Sponge yeast must be positive and no more than 10% of Sponge flour.');
+    }
+    if (spongeWater > water + 1e-8) {
+      throw new RangeError('Sponge water cannot exceed the total recipe water.');
+    }
+    const spongeYeast = spongeYeastMode === 'automatic'
+      ? calculateSpongeAutomaticYeastGrams(flour, spongeFermentationTempC, spongeFermentationHours, spongeYeastType)
+      : spongeManualYeastGrams;
+    const mainYeast = R2(yeast);
+    const roundedSpongeFlour = R0(spongeFlour);
+    const roundedTotalFlour = R0(flour);
+    return {
+      method: 'sponge',
+      preferment: { flour: roundedSpongeFlour, water: R0(spongeWater), yeast: R2(spongeYeast) },
+      main: {
+        flour: roundedTotalFlour - roundedSpongeFlour,
+        water: R0(water) - R0(spongeWater),
+        salt: R1(salt), oil: R0(oil), yeast: mainYeast,
+        psyllium: R0(psyllium),
+      },
+      total: { ...buildBlock(), yeast: R2(spongeYeast + mainYeast) },
+      totalDough: R0(totalDough),
+      waterTemp: R0(waterTemp),
+      yeastPct: R2(effectiveYeastPct),
+      eTotal: R1(eTotal),
+      spongeYeastPct: roundedSpongeFlour === 0 ? 0 : R2(spongeYeast / spongeFlour * 100),
     };
   }
 
@@ -2236,13 +2593,15 @@ export function doughCalc(opts: {
     totalDough: R0(totalDough),
     waterTemp: R0(waterTemp),
     ...(beginnerDirectWaterTemperature ? { waterTemperature: beginnerDirectWaterTemperature } : {}),
-    yeastPct: R2(yeastPct),
+    yeastPct: R2(effectiveYeastPct),
     eTotal: R1(eTotal),
   };
 }
 
 export function bakingCalc(oven: OvenType) {
-  if (oven === 'ooni') {
+  if (oven === 'kamado') throw new RangeError('Kamado baking recommendations have not been approved.');
+  const ovenBehavior = getOvenBehaviorType(oven);
+  if (ovenBehavior === 'ooni') {
     return {
       temp: '430–500°C',
       time: '60–90 s',
@@ -2253,7 +2612,7 @@ export function bakingCalc(oven: OvenType) {
       ],
     };
   }
-  if (oven === 'homeStone') {
+  if (ovenBehavior === 'homeStone') {
     return {
       temp: '300°C + grill',
       time: '4–6 min',
@@ -2284,9 +2643,10 @@ export function iceCalc(totalWater: number, tapTemp: number, targetTemp: number)
   const q = totalWater * (tapTemp - targetTemp);
   const iceCap = 80 + (targetTemp - 0);
   const ice = Math.max(0, Math.min(totalWater * 0.5, q / iceCap));
+  const roundedIce = Math.round(ice);
   return {
-    ice: Math.round(ice),
-    water: Math.round(totalWater - ice),
+    ice: roundedIce,
+    water: totalWater - roundedIce,
   };
 }
 
@@ -2301,8 +2661,11 @@ export type PlannerStepCopy = {
   ovenDesc: string;
   bakeTitle?: string;
   bakeDesc?: string;
+  poolishBakeTitle?: string;
+  poolishBakeDesc?: string;
   ovenRomanDesc: string;
   ovenNyDesc: string;
+  ovenPreheatDesc?: Partial<Record<OvenType, string>>;
   warmTitle: string;
   warmDesc: string;
   coldTitle: string;
@@ -2352,6 +2715,11 @@ export type PlannerTegliaSettings = {
   trayWidth: number;
   trayLength: number;
 };
+
+export function getPoolishFinalMixDurationMinutes(mixing: Mixing): number {
+  // Reserve the upper end of the existing guidance: 10–12 minutes by hand, 7–9 with a mixer.
+  return mixing === 'hand' ? 12 : 9;
+}
 
 type DirectHomePlannerCopy = {
   start: string;
@@ -2420,12 +2788,37 @@ export function reversePlan(
   roomTemp = 22,
   selectedFermentationSchedule?: FermentationSchedule,
   tegliaSettings?: PlannerTegliaSettings | null,
+  selectedOvenType?: OvenType,
+  selectedOvenTemp?: number,
+  plannerPreheatMinutes?: number,
+  mixing: Mixing = 'home',
+  spongePreparation?: { title: string; steps: string[] } | null,
+  bigaHydrationPct?: number,
 ) {
   const steps: { at: Date; title: string; desc: string; phaseId?: string }[] = [];
+  const ovenType = selectedOvenType ?? homeSchedule?.ovenType ?? 'homeStone';
+  const ovenTemp = selectedOvenTemp ?? homeSchedule?.ovenTemp ?? 250;
   const push = (offsetMin: number, title: string, desc: string, phaseId?: string) => {
     const at = new Date(bakeAt.getTime() - offsetMin * 60000);
     steps.push({ at, title, desc, ...(phaseId ? { phaseId } : {}) });
   };
+  if (method === 'sponge') {
+    if (!spongePreparation) return [];
+    const scheduleMinutes = selectedFermentationSchedule?.phases
+      .reduce((total, phase) => total + phase.hours * 60, 0) ?? 0;
+    return [{
+      at: new Date(bakeAt.getTime() - scheduleMinutes * 60000),
+      title: spongePreparation.title,
+      desc: spongePreparation.steps.join('\n'),
+      phaseId: 'sponge.preparation',
+    }];
+  }
+  const preheatDesc = (fallback: string) => plannerPreheatMinutes === undefined
+    ? fallback
+    : fillPlannerCopy(copy.ovenPreheatDesc?.[ovenType] ?? fallback, {
+      OVEN_TEMP: bakingTemperatureLabel ?? `${ovenTemp}°C`,
+      PREHEAT_MINUTES: plannerPreheatMinutes,
+    });
   const tegliaEnabled = style === 'romana'
     && (tegliaSettings?.romanFormat === 'teglia' || homeSchedule?.romanFormat === 'teglia');
   const positiveSetting = (value: number | undefined, fallback: number) =>
@@ -2445,7 +2838,7 @@ export function reversePlan(
     PROOF_WINDOW: formatTemperingDuration(proofPlan.totalMinutes, bakingLanguage),
     PROOF_MINUTES: formatTemperingDuration(proofPlan.proofMinutes, bakingLanguage),
   });
-  const addTegliaProofSteps = (availableRoomMinutes: number) => {
+  const addTegliaProofSteps = (availableRoomMinutes: number, unavailableAt?: Date) => {
     const tegliaCopy = copy.directHomeTegliaCopy;
     if (
       !tegliaEnabled
@@ -2458,7 +2851,7 @@ export function reversePlan(
     if (proofPlan.totalMinutes <= 0) {
       if (tegliaCopy.proofUnavailable) {
         steps.push({
-          at: new Date(bakeAt.getTime() - 60000),
+          at: unavailableAt ?? new Date(bakeAt.getTime() - 60000),
           title: tegliaCopy.finalProofTitle,
           desc: tegliaCopy.proofUnavailable,
           phaseId: 'teglia.finalProof',
@@ -2563,7 +2956,7 @@ export function reversePlan(
       : copy.directHomeCopy;
     if (!homeSchedule!.strategy) {
       const ovenDesc = isRoman ? copy.ovenRomanDesc : isNy ? copy.ovenNyDesc : copy.ovenDesc;
-      push(60, copy.ovenTitle, ovenDesc, 'direct.preheat');
+      push(plannerPreheatMinutes ?? 60, copy.ovenTitle, preheatDesc(ovenDesc), 'direct.preheat');
       const tempering = formatTemperingDuration(roomAfterFridgeHours * 60, bakingLanguage);
       if (roomAfterFridgeHours > 0) {
         const roomValues = {
@@ -2599,17 +2992,19 @@ export function reversePlan(
       push((roomAfterFridgeHours + fridgeHours + roomBeforeFridgeHours) * 60, directTitle, directDesc, 'direct.mix');
       if (isNy) {
         const bakeValues = {
-          BAKE_TIME: formatBakingTimeRange(homeSchedule!.ovenType ?? 'homeStone', homeSchedule!.ovenTemp ?? 250, bakingLanguage),
+          BAKE_TIME: formatBakingTimeRange(ovenType, ovenTemp, bakingLanguage),
           TEMPERING: formatTemperingDuration(roomAfterFridgeHours * 60, bakingLanguage),
-          OVEN_TEMP_DISPLAY: bakingTemperatureLabel ?? `${homeSchedule!.ovenTemp ?? 250}°C`,
+          OVEN_TEMP_DISPLAY: bakingTemperatureLabel ?? `${ovenTemp}°C`,
         };
         push(0, copy.bakeTitle ?? copy.ovenTitle, fillPlannerCopy(copy.directNyBakeDesc ?? copy.bakeDesc ?? copy.ovenDesc, bakeValues), 'direct.bake');
       }
       addTegliaProofSteps(roomAfterFridgeHours * 60);
       return steps.sort((a, b) => a.at.getTime() - b.at.getTime());
     }
-    const preheatAt = homeSchedule!.preheatAt
-      ?? new Date(bakeAt.getTime() - getBeginnerPreheatMinutes(homeSchedule!.ovenType ?? 'homeStone') * 60000);
+    const preheatAt = plannerPreheatMinutes !== undefined
+      ? new Date(bakeAt.getTime() - plannerPreheatMinutes * 60000)
+      : homeSchedule!.preheatAt
+        ?? new Date(bakeAt.getTime() - getBeginnerPreheatMinutes(homeSchedule!.ovenType ?? 'homeStone') * 60000);
     const ballingAt = homeSchedule!.ballingAt
       ?? new Date(homeSchedule!.startAt.getTime() + roomBeforeFridgeHours * 3600000);
     const finalRoomAt = new Date((homeSchedule!.fridgeAt ?? ballingAt).getTime() + fridgeHours * 3600000);
@@ -2646,12 +3041,17 @@ export function reversePlan(
       TEMPERING: formatTemperingDuration(roomAfterFridgeHours * 60, bakingLanguage),
       PREHEAT_MINUTES: Math.round((bakeAt.getTime() - preheatAt.getTime()) / 60000),
       PREHEAT_TIME: formatPlannerClockTime(preheatAt, bakingLanguage),
-      OVEN_TEMP: `${homeSchedule!.ovenTemp ?? 250}°C`,
-      OVEN_TEMP_DISPLAY: bakingTemperatureLabel ?? `${homeSchedule!.ovenTemp ?? 250}°C`,
-      BAKE_TIME: formatBakingTimeRange(homeSchedule!.ovenType ?? 'homeStone', homeSchedule!.ovenTemp ?? 250, bakingLanguage),
+      OVEN_TEMP: `${ovenTemp}°C`,
+      OVEN_TEMP_DISPLAY: bakingTemperatureLabel ?? `${ovenTemp}°C`,
+      BAKE_TIME: formatBakingTimeRange(ovenType, ovenTemp, bakingLanguage),
       ...(tegliaEnabled ? tegliaValues(tegliaProofPlan) : {}),
     };
-    steps.push({ at: preheatAt, title: homeCopy?.preheatTitle ?? copy.ovenTitle, desc: fillPlannerCopy(homeCopy?.preheat ?? copy.ovenDesc, values), phaseId: 'direct.preheat' });
+    steps.push({
+      at: preheatAt,
+      title: homeCopy?.preheatTitle ?? copy.ovenTitle,
+      desc: preheatDesc(fillPlannerCopy(homeCopy?.preheat ?? copy.ovenDesc, values)),
+      phaseId: 'direct.preheat',
+    });
     if (fridgeHours > 0) {
       if (roomAfterFridgeHours > 0) {
         steps.push({ at: finalRoomAt, title: homeCopy?.finalRoomTitle ?? copy.warmTitle, desc: fillPlannerCopy(homeCopy?.finalRoom ?? copy.warmDesc, values), phaseId: 'direct.finalRoom' });
@@ -2711,6 +3111,9 @@ export function reversePlan(
     const prefermentRoomHours = sumHours('preferment', 'room');
     const prefermentFridgeHours = sumHours('preferment', 'fridge');
     const prefermentHours = prefermentRoomHours + prefermentFridgeHours;
+    const poolishMixDurationMinutes = method === 'poolish'
+      ? getPoolishFinalMixDurationMinutes(mixing)
+      : 0;
     const isRoman = style === 'romana';
     const isNy = style === 'ny_style';
     const styleName = isRoman ? 'Romana' : isNy ? 'New York Style' : 'Napolitana';
@@ -2721,7 +3124,11 @@ export function reversePlan(
     const finalMixDesc = isRoman ? copy.directRomanDesc : isNy ? copy.directNyDesc : copy.directDesc;
     const tegliaCopy = tegliaEnabled ? copy.directHomeTegliaCopy : undefined;
 
-    push(60, copy.ovenTitle, isRoman ? copy.ovenRomanDesc : isNy ? copy.ovenNyDesc : copy.ovenDesc);
+    push(
+      plannerPreheatMinutes ?? 60,
+      copy.ovenTitle,
+      preheatDesc(isRoman ? copy.ovenRomanDesc : isNy ? copy.ovenNyDesc : copy.ovenDesc),
+    );
     if (warmBeforeBake > 0) {
       push(
         warmBeforeBake,
@@ -2772,11 +3179,24 @@ export function reversePlan(
           HOURS: formatHoursLabel(prefermentHours),
           ROOM_HOURS: formatHoursLabel(prefermentRoomHours),
           FRIDGE_HOURS: formatHoursLabel(prefermentFridgeHours),
+          PREFERMENT_TEMP: selectedFermentationSchedule.prefermentTemperatureC === undefined
+            ? ''
+            : `${selectedFermentationSchedule.prefermentTemperatureC}°C`,
         };
-        push(finalRoomOffset + prefermentHours * 60, method === 'biga' ? copy.bigaTitle : copy.poolishTitle,
-          fillPlannerCopy(method === 'biga' ? copy.bigaDesc : copy.poolishDesc, prefermentValues));
+        const bigaDesc = bigaHydrationPct === undefined
+          ? copy.bigaDesc
+          : copy.bigaDesc.replace(/\d+(?:[.,]\d+)?%/, `${bigaHydrationPct}%`);
+        const prefermentDesc = method === 'poolish' && selectedFermentationSchedule.prefermentTemperatureC !== undefined
+          ? fillPlannerCopy({
+            hr: 'Fermentirajte Poolish {HOURS} pri odabranoj temperaturi {PREFERMENT_TEMP}.',
+            en: 'Ferment the Poolish for {HOURS} at the selected temperature of {PREFERMENT_TEMP}.',
+            de: 'Den Poolish {HOURS} bei der ausgewählten Temperatur von {PREFERMENT_TEMP} fermentieren lassen.',
+            sl: 'Poolish fermentirajte {HOURS} pri izbrani temperaturi {PREFERMENT_TEMP}.',
+          }[bakingLanguage], prefermentValues)
+          : fillPlannerCopy(method === 'biga' ? bigaDesc : copy.poolishDesc, prefermentValues);
+        push(finalRoomOffset + prefermentHours * 60 + poolishMixDurationMinutes, method === 'biga' ? copy.bigaTitle : copy.poolishTitle, prefermentDesc);
       }
-      push(finalRoomOffset, fillPlannerCopy(copy.finalMixTitle, {
+      push(finalRoomOffset + poolishMixDurationMinutes, fillPlannerCopy(copy.finalMixTitle, {
         PREFERMENT: method === 'biga' ? copy.bigaName : copy.poolishName,
       }), method === 'biga' ? copy.finalBigaDesc : copy.finalPoolishDesc);
       if (finalRoomHours > 0) {
@@ -2790,16 +3210,26 @@ export function reversePlan(
       const finalProofWindowMinutes = finalRestHours > 0
         ? finalRestHours * 60
         : finalFridgeHours === 0 ? finalRoomHours * 60 : 0;
-      addTegliaProofSteps(finalProofWindowMinutes);
+      const proofUnavailableAt = method === 'direct'
+        ? new Date(bakeAt.getTime() - finalProofWindowMinutes * 60000)
+        : undefined;
+      addTegliaProofSteps(finalProofWindowMinutes, proofUnavailableAt);
     }
 
     if (isNy) {
       const bakeValues = {
-        BAKE_TIME: formatBakingTimeRange('homeStone', 250, bakingLanguage),
+        BAKE_TIME: formatBakingTimeRange(ovenType, ovenTemp, bakingLanguage),
         TEMPERING: tempering,
-        OVEN_TEMP_DISPLAY: bakingTemperatureLabel ?? '250°C',
+        OVEN_TEMP_DISPLAY: bakingTemperatureLabel ?? `${ovenTemp}°C`,
       };
-      push(0, copy.bakeTitle ?? copy.ovenTitle, fillPlannerCopy(copy.directNyBakeDesc ?? copy.bakeDesc ?? copy.ovenDesc, bakeValues));
+      push(0, method === 'poolish' ? copy.poolishBakeTitle ?? copy.bakeTitle ?? copy.ovenTitle : copy.bakeTitle ?? copy.ovenTitle,
+        fillPlannerCopy(copy.directNyBakeDesc ?? copy.bakeDesc ?? copy.ovenDesc, bakeValues),
+        method === 'poolish' ? 'poolish.bake' : undefined);
+    } else if (method === 'poolish') {
+      push(0, copy.poolishBakeTitle ?? copy.bakeTitle ?? copy.ovenTitle, fillPlannerCopy(copy.poolishBakeDesc ?? copy.bakeDesc ?? copy.ovenDesc, {
+        BAKE_TIME: formatBakingTimeRange(ovenType, ovenTemp, bakingLanguage),
+        OVEN_TEMP_DISPLAY: bakingTemperatureLabel ?? `${ovenTemp}°C`,
+      }), 'poolish.bake');
     }
     return steps.sort((a, b) => a.at.getTime() - b.at.getTime());
   }
@@ -2813,7 +3243,11 @@ export function reversePlan(
     const bulkMinutes = method === 'direct' ? 60 : method === 'biga' ? 60 : 60;
     const finalMixHours = method === 'direct' ? 0 : method === 'biga' ? 18 : 16;
 
-    push(60, copy.ovenTitle, isRoman ? copy.ovenRomanDesc : copy.ovenNyDesc);
+    push(
+      plannerPreheatMinutes ?? 60,
+      copy.ovenTitle,
+      preheatDesc(isRoman ? copy.ovenRomanDesc : copy.ovenNyDesc),
+    );
     push(warmBeforeBake, copy.warmTitle, fillPlannerCopy(copy.warmDesc, {
       STYLE: styleName,
       TEMPERING: tempering,
@@ -2844,7 +3278,7 @@ export function reversePlan(
   }
 
   // reverse order
-  push(60, copy.ovenTitle, copy.ovenDesc);
+  push(plannerPreheatMinutes ?? 60, copy.ovenTitle, preheatDesc(copy.ovenDesc));
   const profile = PIZZA_STYLE_PROFILES[style];
   push(60 * 5, copy.ballsTitle, fillPlannerCopy(copy.ballsDesc, { WEIGHT: profile.ballWeight }));
   if (method === 'biga') {

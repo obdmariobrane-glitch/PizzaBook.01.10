@@ -9,11 +9,15 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AuthProvider, useAuth, api } from '../src/auth';
+import { OFFLINE_ONLY_MODE } from '../src/offlineMode';
 import { LanguageProvider, useT } from '../src/i18n/LanguageProvider';
 import { LANGS, Lang } from '../src/i18n/translations';
 import { COLORS } from '../src/theme';
 import AnimatedSplash from '../src/components/AnimatedSplash';
+import { BugReportProvider } from '../src/components/BugReportProvider';
+import { ProBillingProvider } from '../src/components/ProBillingProvider';
 import { getCachedExperienceLevel, loadExperienceLevel, subscribeExperienceLevel } from '../src/experienceLevel';
+import { getOnboardingRedirect } from '../src/onboardingRouting';
 import { loadTemperatureUnit, loadMeasurementSystem, loadPreferredYeastType } from '../src/preferences';
 import {
   setupHandlerAndChannel,
@@ -111,7 +115,7 @@ function AuthGate() {
   };
 
   useEffect(() => {
-    if (Platform.OS === 'web') return;
+    if (OFFLINE_ONLY_MODE || Platform.OS === 'web') return;
     let cancelled = false;
     (async () => {
       try {
@@ -147,6 +151,7 @@ function AuthGate() {
 
   // Handle deep links w/ session_id
   useEffect(() => {
+    if (OFFLINE_ONLY_MODE) return;
     if (Platform.OS === 'web') {
       const url = typeof window !== 'undefined' ? window.location.href : '';
       const m = url.match(/[?#&]session_id=([^&#]+)/);
@@ -214,7 +219,7 @@ function AuthGate() {
 
   // Register push for every installed device, then associate it with the user after login.
   useEffect(() => {
-    if (Platform.OS === 'web' || !isPushSupported() || !startupPermissionSettled) return;
+    if (OFFLINE_ONLY_MODE || Platform.OS === 'web' || !isPushSupported() || !startupPermissionSettled) return;
     (async () => {
       const token = await requestAndGetDeviceToken();
       if (!token) return;
@@ -236,18 +241,15 @@ function AuthGate() {
 
   // Auth gate: allow anonymous browsing. Only redirect logged-in users off /login.
   useEffect(() => {
-    if (loading) return;
+    if (loading || experienceLevel === undefined) return;
     const inAuth = segments[0] === 'login';
-    if (user && inAuth) router.replace('/(tabs)');
-  }, [user, loading, segments, router]);
+    if (user && inAuth && experienceLevel !== null) router.replace('/(tabs)');
+  }, [user, loading, experienceLevel, segments, router]);
 
   // Onboarding gate: first launch (no saved experience level) must see it before the rest of the app.
   useEffect(() => {
-    if (experienceLevel === undefined) return;
-    const inOnboarding = segments[0] === 'onboarding';
-    const inProGuide = segments[0] === 'pro-guide';
-    if (experienceLevel === null && !inOnboarding && !inProGuide) router.replace('/onboarding');
-    else if (experienceLevel !== null && inOnboarding) router.replace('/(tabs)');
+    const redirect = getOnboardingRedirect(experienceLevel, segments);
+    if (redirect) router.replace(redirect);
   }, [experienceLevel, segments, router]);
 
   if (loading || !animationDone || experienceLevel === undefined || storedSettingsLoadStatus === 'loading') {
@@ -368,9 +370,13 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: '#F7C894' }}>
       <SafeAreaProvider>
         <LanguageProvider>
-          <AuthProvider>
-            <AuthGate />
-          </AuthProvider>
+          <BugReportProvider>
+            <ProBillingProvider>
+              <AuthProvider>
+                <AuthGate />
+              </AuthProvider>
+            </ProBillingProvider>
+          </BugReportProvider>
         </LanguageProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

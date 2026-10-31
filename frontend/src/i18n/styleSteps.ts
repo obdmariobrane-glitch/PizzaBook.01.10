@@ -1,4 +1,4 @@
-import type { FlourType, Method, OvenType, PizzaStyle } from '../calculator';
+import { getOvenBehaviorType, type FlourType, type Method, type OvenType, type PizzaStyle } from '../calculator';
 import type { Lang } from './translations';
 import type { BaseTimer } from './prefermentSteps';
 
@@ -209,7 +209,7 @@ const preferment = (method: 'biga' | 'poolish', mixing: 'hand' | 'mixer', style:
         ? [...(('bakingSteps' in tray && tray.bakingSteps?.length) ? [tray.bakingSteps[0]] : []), 'Izvadite tijesto 30–45 minuta prije oblikovanja.', `Tepsiju ${tray.width}×${tray.length} cm obilno nauljite.`, 'Istresite tijesto u tepsiju i utiskujte ga prstima od sredine prema rubovima bez rastezanja u zraku.', 'Dodajte nadjev ravnomjerno.', ...(('bakingSteps' in tray && tray.bakingSteps) ? tray.bakingSteps.slice(1) : [])]
         : isRoman
           ? [`Izvadite loptice iz hladnjaka 15–20 minuta prije razvlačenja ili kada se približno udvostruče, ali pazite da ne predignu.`, 'Brzim i nježnim pokretom izvadite kuglu iz posude i stavite je naopako na semolu.', isSpelt ? 'Pirovo tijesto pažljivo utiskujte prstima; ne razvlačite ga agresivno.' : isWholeWheat ? 'Integralno tijesto nježno utiskujte prstima; baza će biti rustikalnija i manje prozračna.' : 'Radnu površinu pospite semolom i bez rastezanja u zraku oblikujte ravnu Romanu pažljivim pritiskanjem prstima ili valjkom.', 'Nafilujte tanko i ravnomjerno te pecite odmah.']
-          : [`Izvadite loptice iz hladnjaka 15–20 minuta prije razvlačenja ili kada se približno udvostruče, ali pazite da ne predignu.`, 'Prstima istisnite zrak prema rubu i ostavite tanak centar s izraženim, mekanim rubom.', isGlutenFree ? 'Bezglutensko tijesto oblikujte samo pritiskanjem prstima; NY format od 40 cm i rastezanje u zraku nisu prikladni.' : isSpelt ? 'Pirovo tijesto otvorite isključivo pritiskanjem prstima; ne radite knuckle stretch.' : isWholeWheat ? 'Integralno tijesto otvorite pritiskanjem prstima; ne radite klasično rastezanje u zraku jer baza ostaje gušća.' : isManitoba ? 'Nakon pritiska dlanovima razvucite tijesto preko šaka (knuckle stretch) do tanke baze.' : 'Nakon pritiska dlanovima možete pažljivo razvlačiti tijesto u zraku do tanke baze.', 'Nafilujte ravnomjerno i ne preopterećujte sredinu; za NY prvo stavite suhu ribanu mozzarellu, zatim gusti umak i dodatke.'],
+          : [`Izvadite loptice iz hladnjaka 15–20 minuta prije razvlačenja ili kada se približno udvostruče, ali pazite da ne predignu.`, 'Neposredno prije oblikovanja lagano pospite kuglicu tijesta semolom sa svih strana. Na radnu površinu stavite nešto više semole, zatim položite kuglicu na nju i započnite oblikovanje pizze.', 'Prstima istisnite zrak prema rubu i ostavite tanak centar s izraženim, mekanim rubom.', isGlutenFree ? 'Bezglutensko tijesto oblikujte samo pritiskanjem prstima; NY format od 40 cm i rastezanje u zraku nisu prikladni.' : isSpelt ? 'Pirovo tijesto otvorite isključivo pritiskanjem prstima; ne radite knuckle stretch.' : isWholeWheat ? 'Integralno tijesto otvorite pritiskanjem prstima; ne radite klasično rastezanje u zraku jer baza ostaje gušća.' : isManitoba ? 'Nakon pritiska dlanovima razvucite tijesto preko šaka (knuckle stretch) do tanke baze.' : 'Nakon pritiska dlanovima možete pažljivo razvlačiti tijesto u zraku do tanke baze.', 'Nafilujte ravnomjerno i ne preopterećujte sredinu; za NY prvo stavite suhu ribanu mozzarellu, zatim gusti umak i dodatke.'],
       bakingInfo: isTray ? 'Teglia se peče u kućnoj pećnici na približno 250 °C; vrijeme prilagodite debljini tijesta i boji dna.' : 'Tonda se peče pojedinačno na najvišoj temperaturi koju odabrana pećnica može postići.',
       timers: [timer('style-preferment-pre-bake', 15 * 60, 'preBake')],
     },
@@ -221,17 +221,19 @@ export function getStyleSteps(style: PizzaStyle, method: Method, mixing: 'hand' 
   if (style === 'neapolitan') return null;
   const actualMixing = mixing === 'hand' ? 'hand' : 'mixer';
   const instructionFlour = flour === 'custom' ? 'caputo00' : flour;
+  if (method === 'sponge') return null;
   if (method === 'direct') return direct(actualMixing, style, roomHours, fridgeHours, instructionFlour, romanTray);
   return preferment(method, actualMixing, style, roomHours, fridgeHours, instructionFlour, romanTray);
 }
 const baking = (style: 'romana' | 'ny_style', oven: OvenType): string[] => {
   const isRoman = style === 'romana';
-  if (oven === 'ooni') {
+  const ovenBehavior = getOvenBehaviorType(oven);
+  if (ovenBehavior === 'ooni') {
     return isRoman
       ? ['Zagrijte peć na 350–400°C oko 20 minuta.', 'Pecite 2–3 minute na sredini kamena i okrećite svakih 30 sekundi.', 'Pizza treba biti ravna, zlatna i izrazito hrskava.']
       : ['Zagrijte peć na 320–350°C oko 20 minuta.', 'Smanjite plamen i pecite 3–4 minute, okrećući nakon 90 sekundi.', 'Rub treba biti mekan i obojen, a sredina savitljiva.'];
   }
-  if (oven === 'homeStone') {
+  if (ovenBehavior === 'homeStone') {
     return isRoman
       ? ['Postavite kamen ili čelik dvije rešetke ispod gornjeg grijača i zagrijte ga 45 minuta na 270–300°C uz uključen grill.', 'Isključite grill i prebacite pećnicu na Pizza program, ako je dostupan. Ako Pizza program nije dostupan, odaberite gornji i donji grijač bez ventilatora te postavite maksimalnu temperaturu. Pecite pizzu približno 4–5 minuta.', 'Zatim uključite grill i pecite dok rub i vrh ne dobiju željenu boju. Pizza treba biti tanka, čvrsta i hrskava cijelom površinom.']
       : ['Postavite kamen ili čelik dvije rešetke ispod gornjeg grijača. Zagrijte ga 50 minuta na 250–280°C uz uključen grill.', 'Pecite 5–7 minuta i uključite grill zadnje 2 minute.', 'Rub treba biti zlatan i mekan, a centar tanak i čvrst.'];
@@ -242,15 +244,15 @@ const baking = (style: 'romana' | 'ny_style', oven: OvenType): string[] => {
 };
 
 export function getStyleBakingSteps(style: PizzaStyle, oven: OvenType, lang: Lang): string[] | null {
-  if (lang !== 'hr') return null;
+  if (lang !== 'hr' || oven === 'kamado') return null;
   return style === 'neapolitan' ? null : baking(style, oven);
 }
 
 export function getStyleBakingTemp(style: PizzaStyle, oven: OvenType, lang: Lang): string | null {
-  if (lang !== 'hr' || style === 'neapolitan') return null;
+  if (lang !== 'hr' || style === 'neapolitan' || oven === 'kamado') return null;
+  const ovenBehavior = getOvenBehaviorType(oven);
   if (style === 'romana') {
-    return oven === 'ooni' ? '350–400°C · 2–3 min' : oven === 'homeStone' ? '270–300°C · 4–5 min' : '250°C · 6–8 min';
+    return ovenBehavior === 'ooni' ? '350–400°C · 2–3 min' : ovenBehavior === 'homeStone' ? '270–300°C · 4–5 min' : '250°C · 6–8 min';
   }
-  return oven === 'ooni' ? '320–350°C · 3–4 min' : oven === 'homeStone' ? '250–280°C · 5–7 min' : '250°C · 7–9 min';
+  return ovenBehavior === 'ooni' ? '320–350°C · 3–4 min' : ovenBehavior === 'homeStone' ? '250–280°C · 5–7 min' : '250°C · 7–9 min';
 }
-

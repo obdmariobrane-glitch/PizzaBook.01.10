@@ -95,7 +95,7 @@ assert.match(localizedSource, /Priporočena temperatura vode: \$\{waterTemperatu
 assert.match(source, /doughHandlingInfoStepIndex=\{\(\(isTargetNeapolitanGlutenFreeHandPhaseA \|\| isTargetNeapolitanGlutenFreeMixerPhaseA \|\| isTargetTegliaGlutenFreeHandPhaseA \|\| isTargetTegliaGlutenFreeMixerPhaseA\) \? index === 0 \? 6/);
 assert.match(source, /isTargetNeapolitanGlutenFreeMixerPhaseA \|\| isTargetTegliaGlutenFreeHandPhaseA \|\| isTargetTegliaGlutenFreeMixerPhaseA\) \? index === 0 \? 6/);
 assert.match(source, /isTargetNeapolitanGlutenFreeMixerPhaseA \|\| isTargetTegliaGlutenFreeHandPhaseA \|\| isTargetTegliaGlutenFreeMixerPhaseA.*index === 0 \? 2/);
-assert.match(source, /Ulijte svu vodu, odnosno \$\{ingredients\.water\} g/);
+assert.match(dedicatedCroatianSteps, /U svu vodu, odnosno \$\{ingredients\.water\} g/);
 assert.match(localizedSource, /gesamte Wasser.*ingredients\.water.*Mixerschüssel/);
 assert.match(localizedSource, /all the water.*ingredients\.water.*mixer bowl/);
 assert.match(localizedSource, /vso vodo.*ingredients\.water/);
@@ -141,7 +141,8 @@ assert.match(source, /Geben Sie nach und nach die restlichen 10 % Wasser, also \
 assert.match(source, /Wenn das Wasser fast vollständig aufgenommen ist, geben Sie \$\{ingredients\.salt\} g Salz hinzu\./);
 assert.doesNotMatch(source, /isNeapolitanWholeWheatBeginnerHand \? \[[\s\S]*?weiter, bis das Wasser fast vollständig aufgenommen ist/);
 assert.match(source, /timer\('post-mix-rest', Math\.round\(mixRestMinutes \* 60\), 'rest'\)/);
-assert.match(source, /const mixRestMinutes = isNewYorkMixerBeginner \? 6 : isNeapolitanBeginner \|\|/);
+assert.match(source, /const mixRestMinutes = isNewYorkMixerBeginner \? 6 : beginnerMode && isNewYork && !hand && isGlutenFree \? 5 : !beginnerMode && !biga && !poolish && isGlutenFree \? 5 : !beginnerMode && isRomanTeglia \? 5 :/);
+assert.match(source, /: beginnerMode \? 5\.5 : hand \? 15 : 5;/, 'Beginner keeps its existing rest-duration branch');
 assert.match(source, /const mixRestLabel = isGlutenFree && beginnerMode \? '5 minuta' : isNeapolitanBeginner \? '5 minuta' : isNewYorkMixerBeginner \? '6 minuta' : beginnerMode \? '5–6 minuta'/);
 assert.match(source, /Pokrijte tijesto i ostavite ga \$\{mixRestLabel\}/);
 assert.match(source, /Manitoba brašna obično traje oko 10–15 minuta/);

@@ -72,7 +72,9 @@ assert.match(plannerSource, /fmt\(bakeAt, lang\)/);
 assert.doesNotMatch(indexSource, /elastično ter se počne/);
 assert.match(indexSource, /elastično i počne se prikladno odvajati/);
 
-const { buildBeginnerFinalPhaseInfo } = extractFunction(indexFile, 'buildBeginnerFinalPhaseInfo');
+const { buildBeginnerFinalPhaseInfo } = extractFunction(indexFile, 'buildBeginnerFinalPhaseInfo', {
+  getOvenBehaviorType: calculator.getOvenBehaviorType,
+});
 const helpCopyChecks = {
   hr: {
     semolina: /bezglutensk|rižin/i,
@@ -171,7 +173,7 @@ assert.match(croatianDirectSource, /const isNewYorkInstantMixerBeginner = isNewY
 assert.match(croatianDirectSource, /\] : instantMixerInstructions \? \[/);
 assert.match(croatianDirectSource, /instantMixerInstructions\.initialMix/);
 assert.match(croatianDirectSource, /instantMixerInstructions\.addYeast/);
-assert.match(indexSource, /getDetailedDirectSteps\(mixingForExperience, directStepIngredients,[^\n]*proFinalRestMinutes, preferredYeastType\)/);
+assert.match(indexSource, /getDetailedDirectSteps\(mixingForExperience, beginnerTextMode \? directStepIngredients : proDirectStepIngredients,[^\n]*proFinalRestMinutes, preferredYeastType, fridgeTemp\)/);
 const localizedFunction = indexFile.statements.find((statement) =>
   ts.isFunctionDeclaration(statement) && statement.name?.text === 'getDetailedDirectStepsLocalized');
 assert.ok(localizedFunction);

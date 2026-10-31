@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
+import { OFFLINE_ONLY_MODE } from './offlineMode';
 
 const BACKEND = process.env.EXPO_PUBLIC_BACKEND_URL!;
 
@@ -108,6 +109,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (OFFLINE_ONLY_MODE) {
+      setLoading(false);
+      return;
+    }
     (async () => {
       const stored = await storage.get('session_token');
       if (stored) {

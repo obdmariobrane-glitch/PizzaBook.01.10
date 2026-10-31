@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Platform, ActivityIndicator, ImageBackground } from 'react-native';
+import { Redirect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
@@ -9,10 +10,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../src/auth';
 import { useT } from '../src/i18n/LanguageProvider';
 import { COLORS, SPACING, RADIUS } from '../src/theme';
+import { OFFLINE_ONLY_MODE } from '../src/offlineMode';
 
-WebBrowser.maybeCompleteAuthSession();
+if (!OFFLINE_ONLY_MODE) WebBrowser.maybeCompleteAuthSession();
 
-export default function Login() {
+function LoginContent() {
   const { t } = useT();
   const { signInWithSessionId } = useAuth();
   const insets = useSafeAreaInsets();
@@ -20,6 +22,7 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
 
   const onLogin = async () => {
+    if (OFFLINE_ONLY_MODE) return;
     setBusy(true);
     setError(null);
     try {
@@ -91,6 +94,11 @@ export default function Login() {
       </ImageBackground>
     </View>
   );
+}
+
+export default function Login() {
+  if (OFFLINE_ONLY_MODE) return <Redirect href="/(tabs)" />;
+  return <LoginContent />;
 }
 
 const styles = StyleSheet.create({

@@ -1,0 +1,22 @@
+Source: frontend/node_modules/expo-iap/android/src/main/AndroidManifest.xml
+2: <uses-permission android:name="com.android.vending.BILLING"/>
+
+Source: frontend/node_modules/expo-notifications/android/src/main/AndroidManifest.xml
+2: <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+3: <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
+Source: frontend/node_modules/expo-image-picker/android/src/main/AndroidManifest.xml
+4: <uses-permission android:name="android.permission.CAMERA" />
+7: <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+8: <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+
+Source: frontend/node_modules/react-native/ReactAndroid/src/main/AndroidManifest.xml
+12: android:targetSdkVersion="36"
+
+Resolved Expo config additionally reports:
+android.permission.RECORD_AUDIO
+android.permission.READ_EXTERNAL_STORAGE
+android.permission.WRITE_EXTERNAL_STORAGE
+android.permission.INTERNET
+
+Important: the repository has no generated frontend/android project. These dependency manifests and Expo config are evidence of merge inputs, not a dump of the final merged AAB manifest. The artifact manifest and permission merger should be verified before release.

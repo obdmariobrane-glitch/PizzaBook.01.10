@@ -1,0 +1,2700 @@
+diff --git a/frontend/app/(tabs)/index.tsx b/frontend/app/(tabs)/index.tsx
+index ec82aa5..5030649 100644
+--- a/frontend/app/(tabs)/index.tsx
++++ b/frontend/app/(tabs)/index.tsx
+@@ -14,15 +14,15 @@ import { useT } from '../../src/i18n/LanguageProvider';
+ import type { Lang } from '../../src/i18n/translations';
+ import { scheduleLocal, cancelLocal, cancelGuidedNotificationForStep, cancelGuidedNotificationsForPlan, cancelPlannerNotificationsForMethods, isPushSupported, requestNotificationPermissions, scheduleLocalAt } from '../../src/notifications';
+ import { COLORS, SPACING, RADIUS } from '../../src/theme';
+-import { getCachedExperienceLevel, loadExperienceLevel, subscribeExperienceLevel } from '../../src/experienceLevel';
++import { applyLoadedExperienceLevel, getCachedExperienceLevel, subscribeExperienceLevel } from '../../src/experienceLevel';
+ import {
+   getCachedTemperatureUnit, subscribeTemperatureUnit,
+   getCachedMeasurementSystem, subscribeMeasurementSystem,
+-  getCachedPreferredYeastType, subscribePreferredYeastType,
++  getCachedPreferredYeastType, subscribePreferredYeastType, applyLoadedCalculatorPreferences,
+ } from '../../src/preferences';
+ import { displayTemperature, formatLength, formatTemperature, formatUnitText, formatWeight, temperatureInputToCelsius, weightInputToGrams } from '../../src/units';
+ import {
+-  dimensionsCalc, doughCalc, getFermentationSchedule, iceCalc, getBakingTimeRange, formatBakingTimeRange,
++  dimensionsCalc, doughCalc, getFermentationSchedule, iceCalc, getBakingTimeRange, formatBakingTimeRange, isHomeScheduleDurationValid,
+   Method, OvenType, FlourType, PizzaStyle, HomeFlourStrengthSource, PIZZA_STYLE_PROFILES, FLOUR_PROFILES, BASE_FLOURS, normalizeBeginnerSavedState, beginnerHydrationFor, beginnerBallWeightForDiameter, beginnerDiameterForBallWeight, blendIdealHydration,
+   calculateBeginnerPhaseBPlan, createDirectHomePizzaPlan, createBigaHomePizzaPlan, createPoolishHomePizzaPlan, getBeginnerFlourGuidanceKind, getBeginnerPreheatMinutes, getHomeFlourStrengthInput, getHomePlanLegacyFermentationHours,
+   BeginnerPhaseBPlan, BeginnerDirectScheduleMode,
+@@ -30,8 +30,14 @@ import {
+   setSharedHomeBakeAt, setSharedHomeDirectSchedule, setSharedHomeBigaSchedule, setSharedHomePoolishSchedule,
+ } from '../../src/calculator';
+ import { api, useAuth } from '../../src/auth';
++import {
++  BEGINNER_PLAN_STORAGE_KEY, BEGINNER_PLAN_STORAGE_VERSION,
++  BeginnerPlanSnapshot, createBeginnerPlanInputKeyFromState, isBeginnerPlanActive,
++  parseBeginnerPlanSnapshot, serializeBeginnerSchedule,
++} from '../../src/beginnerPlanPersistence';
+ import GuidedRecipePanel, { GuidedRecipeSchedule } from '../../src/components/GuidedRecipePanel';
+ import MixingGuideCarousel, { MixingGuideKind } from '../../src/components/MixingGuideCarousel';
++import { createBeginnerPlanRestoreCoordinator, createBeginnerPlanRestoreLoaders, resolveBeginnerRestoreBakeAt } from '../../src/beginnerPlanRestoreCoordinator';
+ import {
+   createGuidedPlanId,
+   getGuidedCountdown,
+@@ -46,7 +52,6 @@ import {
+ 
+ const DIAMETERS = [28, 30, 33, 35];
+ const CALCULATOR_SETTINGS_KEY = 'calculatorSettings';
+-const BEGINNER_BAKE_AT_KEY = 'beginnerBakeAt';
+ const GUIDED_NOTIFICATIONS_ENABLED_KEY = 'beginnerGuidedNotificationsEnabled';
+ const GUIDED_PROGRESS_STORAGE_PREFIX = 'beginnerGuidedProgress:';
+ const GUIDED_NIGHT_WARNING_CONFIRMED_PREFIX = 'beginnerNightWarningConfirmed:';
+@@ -216,6 +221,7 @@ type CalculatorSettings = {
+   oven: OvenType;
+   ovenTemp: number;
+   mixing: 'hand' | 'mixer';
++  beginnerScheduleMode?: BeginnerDirectScheduleMode;
+ };
+ 
+ type FlourEntry = { key: FlourType; label: string; suffix: string; info?: string };
+@@ -433,6 +439,13 @@ export default function CalculatorHome() {
+   const [quantityExpanded, setQuantityExpanded] = useState(false);
+   const [activeTimers, setActiveTimers] = useState<Record<string, { endsAt: number; label: string; notifId?: string | null }>>({});
+   const [settingsLoaded, setSettingsLoaded] = useState(false);
++  const [settingsLoadStatus, setSettingsLoadStatus] = useState<'pending' | 'loaded' | 'error'>('pending');
++  const [beginnerPlanHydrated, setBeginnerPlanHydrated] = useState(false);
++  const [restoredBeginnerSchedule, setRestoredBeginnerSchedule] = useState<HomePizzaPlanSchedule | null>(null);
++  const [restoredBeginnerPlanKey, setRestoredBeginnerPlanKey] = useState<string | null>(null);
++  const [restoredBeginnerCalculationNow, setRestoredBeginnerCalculationNow] = useState<Date | null>(null);
++  const pendingBeginnerPlanSnapshot = useRef<(BeginnerPlanSnapshot & { parsedSchedule: HomePizzaPlanSchedule; parsedCalculationNow: Date }) | null>(null);
++  const beginnerRestoreCoordinator = useRef(createBeginnerPlanRestoreCoordinator());
+   const beginnerSectionY = useRef<Partial<Record<BeginnerSection, number>>>({});
+   const beginnerSectionRefs = useRef<Partial<Record<BeginnerSection, View | null>>>({});
+   const beginnerScrollOffset = useRef(0);
+@@ -443,20 +456,6 @@ export default function CalculatorHome() {
+   // ticker: force re-render each second for countdowns AND check for expired timers
+   const [now, setNow] = useState(() => Date.now());
+ 
+-  useEffect(() => {
+-    AsyncStorage.getItem(BEGINNER_BAKE_AT_KEY).then((value) => {
+-      if (!value) return;
+-      const parsed = new Date(value);
+-      const availableHours = (parsed.getTime() - Date.now()) / 3600000;
+-      if (Number.isFinite(parsed.getTime()) && parsed.getTime() > Date.now()
+-        && (!isBeginner || availableHours >= 1)) {
+-        setSharedHomeBakeAt(parsed);
+-      }
+-    }).catch((error) => {
+-      console.error('Unable to restore the scheduled bake time:', error);
+-    });
+-  }, [isBeginner]);
+-
+   useEffect(() => {
+     AsyncStorage.getItem(GUIDED_NOTIFICATIONS_ENABLED_KEY).then((value) => {
+       setGuidedNotificationsEnabled(value === 'true');
+@@ -468,7 +467,34 @@ export default function CalculatorHome() {
+   }, []);
+ 
+   useEffect(() => {
+-    Promise.all([AsyncStorage.getItem(CALCULATOR_SETTINGS_KEY), loadExperienceLevel()]).then(([value]) => {
++    beginnerRestoreCoordinator.current.activate();
++    const generation = beginnerRestoreCoordinator.current.begin();
++    setSettingsLoadStatus('pending');
++    setSettingsLoaded(false);
++    setBeginnerPlanHydrated(false);
++    pendingBeginnerPlanSnapshot.current = null;
++    setRestoredBeginnerSchedule(null);
++    setRestoredBeginnerPlanKey(null);
++    setRestoredBeginnerCalculationNow(null);
++    const restoreLoaders = createBeginnerPlanRestoreLoaders({
++      getItem: (key) => AsyncStorage.getItem(key),
++    });
++    void beginnerRestoreCoordinator.current.load(generation, restoreLoaders).then((restoreData) => {
++      if (!restoreData || !beginnerRestoreCoordinator.current.isCurrent(generation)) return;
++      applyLoadedExperienceLevel(restoreData.experienceLevel);
++      applyLoadedCalculatorPreferences(restoreData.preferences);
++      if (!beginnerRestoreCoordinator.current.isCurrent(generation)) return;
++      const { calculatorSettings: value, experienceLevel: loadedExperienceLevel, legacyBakeAt: legacyBakeAtValue, beginnerPlanSnapshot: beginnerPlanValue } = restoreData;
++      const loadedIsBeginner = loadedExperienceLevel !== 'pro';
++      const storedPlan = parseBeginnerPlanSnapshot<HomePizzaPlanSchedule>(beginnerPlanValue, isHomeScheduleDurationValid);
++      const storedPlanIsCurrent = loadedIsBeginner && storedPlan && isBeginnerPlanActive(storedPlan, new Date());
++      if (storedPlanIsCurrent && storedPlan) {
++        pendingBeginnerPlanSnapshot.current = storedPlan;
++        setRestoredBeginnerCalculationNow(storedPlan.parsedCalculationNow);
++        setBeginnerScheduleMode(storedPlan.mode);
++      }
++      const restoredBakeAt = resolveBeginnerRestoreBakeAt(restoreData, storedPlan, new Date());
++      if (restoredBakeAt !== undefined) setSharedHomeBakeAt(restoredBakeAt);
+       if (value) {
+         try {
+           const saved = JSON.parse(value) as Partial<CalculatorSettings>;
+@@ -525,15 +551,26 @@ export default function CalculatorHome() {
+             setOvenTempInput('250');
+           }
+           if (saved.mixing === 'hand' || saved.mixing === 'mixer') setMixing(saved.mixing);
++          if (loadedIsBeginner && !storedPlanIsCurrent && (saved.beginnerScheduleMode === 'roomOnly' || saved.beginnerScheduleMode === 'fridgeRoom')) setBeginnerScheduleMode(saved.beginnerScheduleMode);
+           if (restoreBeginnerStyles) applyBeginnerNormalized(saved);
+         } catch {}
+       }
+       setSettingsLoaded(true);
++      setSettingsLoadStatus('loaded');
++    }).catch((error) => {
++      if (!beginnerRestoreCoordinator.current.isCurrent(generation)) return;
++      console.error('Unable to restore calculator settings and the Beginner plan:', error);
++      setSettingsLoaded(true);
++      setSettingsLoadStatus('error');
++      setBeginnerPlanHydrated(true);
+     });
+-  }, []);
++    return () => beginnerRestoreCoordinator.current.invalidate(generation);
++  }, [isBeginner]);
++
++  useEffect(() => () => beginnerRestoreCoordinator.current.dispose(), []);
+ 
+   useEffect(() => {
+-    if (!settingsLoaded || !experienceLoaded) return;
++    if (!settingsLoaded || settingsLoadStatus !== 'loaded' || !experienceLoaded) return;
+     const parsedStrength = Number(flourStrengthValue);
+     const strengthIsValid = Number.isFinite(parsedStrength) && parsedStrength > 0;
+     const settings: CalculatorSettings = {
+@@ -542,10 +579,10 @@ export default function CalculatorHome() {
+       ...(flourStrengthSource === 'w' && strengthIsValid ? { flourW: parsedStrength } : {}),
+       ...(flourStrengthSource === 'protein' && strengthIsValid ? { flourProteinPct: parsedStrength } : {}),
+       customBallWeight, method, bigaPct, poolishPct, bigaHours, poolishHours, hydration, saltPct, oilPct,
+-      roomTemp, roomHours, fridgeTemp, fridgeHours, useIce, oven, ovenTemp, mixing,
++      roomTemp, roomHours, fridgeTemp, fridgeHours, useIce, oven, ovenTemp, mixing, beginnerScheduleMode,
+     };
+     AsyncStorage.setItem(CALCULATOR_SETTINGS_KEY, JSON.stringify(settings)).catch(() => {});
+-  }, [settingsLoaded, experienceLoaded, pizzaStyle, romanFormat, trayWidth, trayLength, flour, flourStrengthSource, flourStrengthValue, blendA, blendB, blendPctA, pizzas, diameter, customBallWeight, method, bigaPct, poolishPct, bigaHours, poolishHours, hydration, saltPct, oilPct, roomTemp, roomHours, fridgeTemp, fridgeHours, useIce, oven, ovenTemp, mixing]);
++  }, [settingsLoaded, settingsLoadStatus, experienceLoaded, pizzaStyle, romanFormat, trayWidth, trayLength, flour, flourStrengthSource, flourStrengthValue, blendA, blendB, blendPctA, pizzas, diameter, customBallWeight, method, bigaPct, poolishPct, bigaHours, poolishHours, hydration, saltPct, oilPct, roomTemp, roomHours, fridgeTemp, fridgeHours, useIce, oven, ovenTemp, mixing, beginnerScheduleMode]);
+ 
+   useEffect(() => {
+     if (experienceLoaded && isBeginner) void cancelPlannerNotificationsForMethods(['biga', 'poolish']);
+@@ -899,11 +936,31 @@ export default function CalculatorHome() {
+       ? customBallWeight ?? beginnerBallWeightForDiameter(pizzaStyle, diameter)
+       : customBallWeight ?? (diameter === styleProfile.defaultDiameter ? styleProfile.ballWeight : dims.doughBall);
+   const prefermentHours = method === 'biga' ? bigaHours : method === 'poolish' ? poolishHours : 0;
++  const beginnerPlanInputKey = useMemo(() => createBeginnerPlanInputKeyFromState({
++    bakeAt: sharedBakeAt?.getTime() ?? null,
++    pizzaStyle, romanFormat, pizzas, effectiveBall, roomTemp, fridgeTemp, oven, ovenTemp,
++    flour, blendA: flour === 'custom' ? blendA : null, blendB: flour === 'custom' ? blendB : null,
++    blendPctA: flour === 'custom' ? blendPctA : null, mixing, explicitFlourStrength, hydration,
++    preferredYeastType, beginnerScheduleMode, diameter, isRomanTeglia, trayWidth, trayLength,
++  }), [sharedBakeAt, pizzaStyle, romanFormat, pizzas, effectiveBall, roomTemp, fridgeTemp, oven, ovenTemp, flour, blendA, blendB, blendPctA, mixing, explicitFlourStrength, hydration, preferredYeastType, beginnerScheduleMode, diameter, isRomanTeglia, trayWidth, trayLength]);
++  useEffect(() => {
++    if (!settingsLoaded || !experienceLoaded || sharedBakeAt === null) return;
++    const snapshot = pendingBeginnerPlanSnapshot.current;
++    const canRestore = !!snapshot
++      && snapshot.inputKey === beginnerPlanInputKey
++      && snapshot.parsedSchedule.bakeAt.getTime() === sharedBakeAt.getTime();
++    setRestoredBeginnerSchedule(canRestore ? snapshot.parsedSchedule : null);
++    setRestoredBeginnerPlanKey(canRestore ? snapshot.inputKey : null);
++    setBeginnerPlanHydrated(true);
++  }, [settingsLoaded, experienceLoaded, sharedBakeAt, beginnerPlanInputKey]);
+   const fermentationSchedule = useMemo(() => getFermentationSchedule({
+     method, prefermentHours, roomHours, roomTemp, fridgeHours, fridgeTemp,
+   }), [method, prefermentHours, roomHours, roomTemp, fridgeHours, fridgeTemp]);
++  const planCalculationNow = isBeginner && restoredBeginnerPlanKey === beginnerPlanInputKey && restoredBeginnerCalculationNow
++    ? restoredBeginnerCalculationNow
++    : scheduleCalculationNow;
+   const homePlan = useMemo(() => {
+-    if (method !== 'direct' || sharedBakeAt === null) return null;
++    if (!beginnerPlanHydrated || settingsLoadStatus !== 'loaded' || method !== 'direct' || sharedBakeAt === null) return null;
+     return createDirectHomePizzaPlan({
+       style: pizzaStyle,
+       pizzas,
+@@ -918,9 +975,11 @@ export default function CalculatorHome() {
+       flourType: flour,
+       mixing: mixing === 'hand' ? 'hand' : 'home',
+       beginnerScheduleMode,
+-    }, getHomeFlourStrengthInput(flour, explicitFlourStrength), hydration, preferredYeastType, scheduleCalculationNow, isBeginner);
+-  }, [isBeginner, method, sharedBakeAt, pizzaStyle, romanFormat, isRomanTeglia, pizzas, effectiveBall, roomTemp, fridgeTemp, oven, ovenTemp, flour, mixing, beginnerScheduleMode, explicitFlourStrength, hydration, preferredYeastType, scheduleCalculationNow]);
+-  const directHomeSchedule = method === 'direct' ? homePlan?.schedule ?? null : null;
++    }, getHomeFlourStrengthInput(flour, explicitFlourStrength), hydration, preferredYeastType, planCalculationNow, isBeginner);
++  }, [beginnerPlanHydrated, settingsLoadStatus, isBeginner, method, sharedBakeAt, pizzaStyle, romanFormat, isRomanTeglia, pizzas, effectiveBall, roomTemp, fridgeTemp, oven, ovenTemp, flour, mixing, beginnerScheduleMode, explicitFlourStrength, hydration, preferredYeastType, planCalculationNow]);
++  const directHomeSchedule = method === 'direct'
++    ? isBeginner && restoredBeginnerPlanKey === beginnerPlanInputKey ? restoredBeginnerSchedule : homePlan?.schedule ?? null
++    : null;
+   const beginnerCandidateEvaluations = isBeginner && method === 'direct' && (mixing === 'hand' || mixing === 'mixer')
+     ? (homePlan?.candidateEvaluations ?? [])
+     : [];
+@@ -962,13 +1021,14 @@ export default function CalculatorHome() {
+     && (mixing === 'hand' || mixing === 'mixer')
+     && sharedBakeAt !== null;
+   useEffect(() => {
++    if (!beginnerPlanHydrated || settingsLoadStatus !== 'loaded') return;
+     const current = beginnerCandidateEvaluations.find((evaluation) => (evaluation.candidate as unknown as { mode?: BeginnerDirectScheduleMode }).mode === beginnerScheduleMode);
+     if (current?.selectable) return;
+     if (beginnerSelectableModes.length === 0) return;
+     const fallback = beginnerSelectableModes.find((evaluation) => evaluation.recommended) ?? beginnerSelectableModes[0];
+     const mode = (fallback.candidate as unknown as { mode: BeginnerDirectScheduleMode }).mode;
+     if (mode && mode !== beginnerScheduleMode) setBeginnerScheduleMode(mode);
+-  }, [beginnerCandidateEvaluations, beginnerScheduleMode, beginnerSelectableModes]);
++  }, [beginnerPlanHydrated, settingsLoadStatus, beginnerCandidateEvaluations, beginnerScheduleMode, beginnerSelectableModes]);
+   const beginnerDirectHome = isBeginner && method === 'direct' && !!directHomeSchedule;
+   const beginnerPhaseBPlan: BeginnerPhaseBPlan | null = beginnerDirectHome && directHomeSchedule
+     ? calculateBeginnerPhaseBPlan({
+@@ -983,8 +1043,9 @@ export default function CalculatorHome() {
+     })
+     : null;
+   useEffect(() => {
++    if (!beginnerPlanHydrated || settingsLoadStatus !== 'loaded') return;
+     setSharedHomeDirectSchedule(directHomeSchedule && flour === 'glutenFree' ? { ...directHomeSchedule, glutenFree: true } : directHomeSchedule);
+-  }, [directHomeSchedule, flour]);
++  }, [beginnerPlanHydrated, settingsLoadStatus, directHomeSchedule, flour]);
+   const directRecipeRoomHours = directHomeSchedule?.roomAfterFridgeHours ?? roomHours;
+   const directRecipeFridgeHours = directHomeSchedule?.fridgeHours ?? fridgeHours;
+   const directHomeScheduleDisplay = directHomeSchedule ? formatDirectHomeSchedule(directHomeSchedule, roomTemp, fridgeTemp, lang) : null;
+@@ -1022,34 +1083,39 @@ export default function CalculatorHome() {
+     }
+     const ballingAt = directHomeSchedule.ballingAt ?? new Date(startAt.getTime() + roomBeforeFridgeHours * 3600000);
+     if (fridgeHours > 0) {
+-      steps.push({
+-        id: isGlutenFree
+-          ? 'portioning'
+-          : isRomanTeglia || isTargetBeginnerSchedule
+-            ? 'fridgeIn'
+-            : 'fridgeInCombined',
+-        label: isRomanTeglia
+-          ? t.beginnerCalc.timelineRefrigerateDough
+-          : isGlutenFree
+-            ? t.beginnerCalc.timelinePreparePortions
+-            : t.beginnerCalc.timelineDivideBallRefrigerate(
+-              pizzas,
+-              effectiveBall,
+-            ),
+-        at: ballingAt,
+-        actionable: true,
+-      });
+-      if (isTargetBeginnerSchedule && directHomeSchedule.fridgeAt) {
+-        steps[steps.length - 1] = {
+-          id: 'balling',
+-          label: t.beginnerCalc.timelineShapeBalls,
+-          at: ballingAt,
+-          actionable: true,
+-        };
++      const fridgeAt = directHomeSchedule.fridgeAt;
++      const separateFridgeIn = fridgeAt && fridgeAt.getTime() > ballingAt.getTime();
++      if (separateFridgeIn) {
++        if (!isRomanTeglia) {
++          steps.push({
++            id: isTargetBeginnerSchedule ? 'balling' : isGlutenFree ? 'portioning' : 'fridgeInCombined',
++            label: isGlutenFree ? t.beginnerCalc.timelinePreparePortions : t.beginnerCalc.timelineShapeBalls,
++            at: ballingAt,
++            actionable: true,
++          });
++        }
+         steps.push({
+           id: 'fridgeIn',
+           label: t.beginnerCalc.timelineRefrigerateDough,
+-          at: directHomeSchedule.fridgeAt,
++          at: fridgeAt,
++          actionable: true,
++        });
++      } else {
++        steps.push({
++          id: isGlutenFree
++            ? 'portioning'
++            : isRomanTeglia
++              ? 'fridgeIn'
++              : 'fridgeInCombined',
++          label: isRomanTeglia
++            ? t.beginnerCalc.timelineRefrigerateDough
++            : isGlutenFree
++              ? t.beginnerCalc.timelinePreparePortions
++              : t.beginnerCalc.timelineDivideBallRefrigerate(
++                pizzas,
++                effectiveBall,
++              ),
++          at: ballingAt,
+           actionable: true,
+         });
+       }
+@@ -1127,8 +1193,9 @@ export default function CalculatorHome() {
+   const bigaHomeSchedule = isBeginner && method === 'biga' ? bigaHomePlan?.schedule ?? null : null;
+   const beginnerNeapolitanBigaHome = isBeginner && pizzaStyle === 'neapolitan' && method === 'biga' && !!bigaHomeSchedule;
+   useEffect(() => {
++    if (!beginnerPlanHydrated || settingsLoadStatus !== 'loaded') return;
+     setSharedHomeBigaSchedule(bigaHomeSchedule);
+-  }, [bigaHomeSchedule]);
++  }, [beginnerPlanHydrated, settingsLoadStatus, bigaHomeSchedule]);
+   const bigaHomeScheduleDisplay = bigaHomeSchedule ? formatBigaHomeSchedule(bigaHomeSchedule, lang) : null;
+   const bigaHomeScheduleHint = beginnerNeapolitanBigaHome ? (() => {
+     const room = formatDuration(bigaHomeSchedule.bigaRoomHours * 3600, lang);
+@@ -1155,8 +1222,9 @@ export default function CalculatorHome() {
+   }, [isBeginner, method, sharedBakeAt, pizzaStyle, pizzas, effectiveBall, roomTemp, fridgeTemp, oven, poolishHours, scheduleCalculationNow]);
+   const poolishHomeSchedule = isBeginner && method === 'poolish' ? poolishHomePlan?.schedule ?? null : null;
+   useEffect(() => {
++    if (!beginnerPlanHydrated || settingsLoadStatus !== 'loaded') return;
+     setSharedHomePoolishSchedule(poolishHomeSchedule);
+-  }, [poolishHomeSchedule]);
++  }, [beginnerPlanHydrated, settingsLoadStatus, poolishHomeSchedule]);
+   const poolishHomeScheduleDisplay = poolishHomeSchedule ? formatPoolishHomeSchedule(poolishHomeSchedule, lang) : null;
+   const beginnerHomePlanMilestones = !directHomeSchedule
+     ? bigaHomeScheduleDisplay?.steps ?? poolishHomeScheduleDisplay?.steps ?? []
+@@ -1167,32 +1235,26 @@ export default function CalculatorHome() {
+     || (method === 'poolish' && poolishHomeSchedule)
+   );
+   const guidedPlanId = beginnerHomeRecipeLayout && directHomeSchedule && sharedBakeAt
+-    ? createGuidedPlanId([
+-      sharedBakeAt.getTime(),
+-      directHomeSchedule.startAt.getTime(),
+-      directHomeSchedule.roomBeforeFridgeHours,
+-      directHomeSchedule.fridgeHours,
+-      directHomeSchedule.roomAfterFridgeHours,
+-      roomTemp,
+-      fridgeTemp,
+-      pizzaStyle,
+-      isRomanTeglia ? romanFormat : null,
+-      flour,
+-      flour === 'custom' ? blendA : null,
+-      flour === 'custom' ? blendB : null,
+-      flour === 'custom' ? blendPctA : null,
+-      mixing,
+-      oven,
+-      ovenTemp,
+-      hydration,
+-      preferredYeastType,
+-      pizzas,
+-      effectiveBall,
+-      diameter,
+-      trayWidth,
+-      trayLength,
+-    ])
++    ? createGuidedPlanId([beginnerPlanInputKey])
+     : null;
++
++  useEffect(() => {
++    if (!beginnerPlanHydrated || settingsLoadStatus !== 'loaded' || !isBeginner || !sharedBakeAt || !directHomeSchedule || !beginnerScheduleMode) return;
++    const mode = beginnerScheduleMode;
++    const snapshot: BeginnerPlanSnapshot = {
++      version: BEGINNER_PLAN_STORAGE_VERSION,
++      inputKey: beginnerPlanInputKey,
++      bakeAt: sharedBakeAt.toISOString(),
++      calculationNow: (restoredBeginnerPlanKey === beginnerPlanInputKey && restoredBeginnerCalculationNow
++        ? restoredBeginnerCalculationNow
++        : scheduleCalculationNow).toISOString(),
++      mode,
++      schedule: serializeBeginnerSchedule(directHomeSchedule),
++    };
++    AsyncStorage.setItem(BEGINNER_PLAN_STORAGE_KEY, JSON.stringify(snapshot)).catch((error) => {
++      console.error('Unable to persist the Beginner plan snapshot:', error);
++    });
++  }, [beginnerPlanHydrated, settingsLoadStatus, isBeginner, sharedBakeAt, directHomeSchedule, beginnerScheduleMode, beginnerPlanInputKey, restoredBeginnerPlanKey, restoredBeginnerCalculationNow, scheduleCalculationNow]);
+   const guidedDateGroups = useMemo(() => groupGuidedEventsByLocalDate(beginnerScheduleSteps), [beginnerScheduleSteps]);
+   const nextGuidedEvent = useMemo(() => getNextGuidedEvent(beginnerScheduleSteps, guidedCompletedAt), [beginnerScheduleSteps, guidedCompletedAt]);
+   const guidedProgress = useMemo(() => getGuidedProgress(beginnerScheduleSteps, guidedCompletedAt), [beginnerScheduleSteps, guidedCompletedAt]);
+@@ -1306,6 +1368,7 @@ export default function CalculatorHome() {
+   }, [isBeginner, guidedPlanId, beginnerScheduleSteps, lang, router, nighttimeWarningRequest]);
+ 
+   useEffect(() => {
++    if (!beginnerPlanHydrated || settingsLoadStatus !== 'loaded') return;
+     if (!guidedPlanId) {
+       const previousPlanId = previousGuidedPlanId.current;
+       previousGuidedPlanId.current = null;
+@@ -1370,7 +1433,7 @@ export default function CalculatorHome() {
+       notificationSyncGeneration.current += 1;
+     };
+   }, [
+-    guidedPlanId, guidedEventScheduleKey, guidedNotificationPreferenceLoaded, guidedProgressPlanId,
++    beginnerPlanHydrated, settingsLoadStatus, guidedPlanId, guidedEventScheduleKey, guidedNotificationPreferenceLoaded, guidedProgressPlanId,
+     guidedNotificationsEnabled, guidedCompletedAt, pizzas, effectiveBall, t.beginnerCalc,
+   ]);
+ 
+diff --git a/frontend/app/(tabs)/planner.tsx b/frontend/app/(tabs)/planner.tsx
+index 907a75a..cd5ac71 100644
+--- a/frontend/app/(tabs)/planner.tsx
++++ b/frontend/app/(tabs)/planner.tsx
+@@ -247,9 +247,9 @@ export default function Planner() {
+   return (
+     <View style={[styles.root, { paddingTop: insets.top }]}>
+       <View style={styles.header}>
+-        <Pressable testID="planner-back" accessibilityRole="button" accessibilityLabel="Back" onPress={handlePlannerBack} style={styles.backButton}>
++        <Pressable testID="planner-back" accessibilityRole="button" accessibilityLabel={t.common.back} onPress={handlePlannerBack} style={styles.backButton}>
+           <Icon name="arrow-back" size={20} color={COLORS.brand} />
+-          <Text style={styles.backButtonText}>Back</Text>
++          <Text style={styles.backButtonText}>{t.common.back}</Text>
+         </Pressable>
+         <Text style={styles.title}>{t.planner.title}</Text>
+       </View>
+diff --git a/frontend/package.json b/frontend/package.json
+index 4f3b9c8..528a3ea 100644
+--- a/frontend/package.json
++++ b/frontend/package.json
+@@ -14,6 +14,7 @@
+     "check:beginner-final-fixes": "node ./scripts/verify-beginner-final-fixes.js",
+     "check:beginner-direct-schedule": "node ./scripts/verify-beginner-direct-schedule.js",
+     "check:beginner-direct-v1": "node ./scripts/verify-beginner-direct-v1.js",
++    "check:beginner-plan-persistence": "node ./scripts/verify-beginner-plan-persistence.js",
+     "check:beginner-notifications": "node ./scripts/verify-beginner-notifications.js",
+     "check:gallery-sync": "node ./scripts/verify-gallery-sync.js",
+     "check:dough-calc": "node ./scripts/verify-dough-calc.js",
+diff --git a/frontend/scripts/verify-home-pizza-plan.js b/frontend/scripts/verify-home-pizza-plan.js
+index a2897fc..675c063 100644
+--- a/frontend/scripts/verify-home-pizza-plan.js
++++ b/frontend/scripts/verify-home-pizza-plan.js
+@@ -74,6 +74,11 @@ assert.match(bigaUiSource, /if \(index === 3 && schedule\.fridgeHours > 0\)/);
+ assert.match(bigaUiSource, /const activePhases = schedule\.fridgeHours > 0\s*\?\s*phases\s*:\s*phases\.filter/);
+ assert.match(bigaUiSource, /buildBeginnerRoomOnlyFinalStart\(lang, false\)/);
+ assert.match(bigaUiSource, /const coldFinalStart = schedule\.fridgeHours > 0 \? buildBeginnerColdFinalStart\(schedule, lang, false\) : null/);
++assert.match(bigaUiSource, /function getBeginnerFridgeOutAt\(schedule: HomePizzaPlanSchedule\)/);
++assert.match(bigaUiSource, /const fridgeOutAt = getBeginnerFridgeOutAt\(schedule\);/);
++assert.match(bigaUiSource, /const fridgeAt = directHomeSchedule\.fridgeAt;/);
++assert.match(bigaUiSource, /fridgeAt && fridgeAt\.getTime\(\) > ballingAt\.getTime\(\)/);
++assert.match(bigaUiSource, /at: fridgeAt/);
+ assert.match(bigaUiSource, /coldFinalStart!\.step/);
+ assert.match(bigaUiSource, /:\s*roomFinalStart!\.step/);
+ assert.match(bigaUiSource, /if \(fridgeHours > 0\)[\s\S]*isRomanTeglia/);
+@@ -1065,6 +1070,10 @@ const plannerCopy = {
+   directHomeCopy: {
+     start: '{STRATEGY} bulk {ROOM_BEFORE}h at {ROOM_TEMP}C',
+     ballingFridge: 'Ball now and refrigerate {HOURS}h at {FRIDGE_TEMP}C',
++    ballingTitle: 'Shape dough balls',
++    balling: 'Divide and shape {WEIGHT} g dough balls.',
++    fridgeInTitle: 'Refrigerate dough balls',
++    fridgeIn: 'Refrigerate the shaped dough balls for {HOURS} at {FRIDGE_TEMP}.',
+     roomOnlyBalling: 'Ball now and room proof {ROOM_AFTER}h at {ROOM_TEMP}C',
+     finalRoom: 'Room proof {ROOM_AFTER}h at {ROOM_TEMP}C',
+     preheat: 'Preheat for {PREHEAT_MINUTES} min',
+@@ -1073,7 +1082,160 @@ const plannerCopy = {
+     bake: 'Launch at T',
+   },
+ };
++plannerCopy.directHomeTegliaCopy = {
++  ...plannerCopy.directHomeCopy,
++  ballingTitle: 'Prepare tray dough mass',
++  balling: 'Transfer the dough mass to its covered container.',
++  fridgeInTitle: 'Refrigerate the dough mass',
++  fridgeIn: 'Refrigerate the covered dough mass for {HOURS} at {FRIDGE_TEMP}.',
++};
+ const styles = ['neapolitan', 'romana', 'ny_style'];
++
++const b2FridgeSchedule = {
++  startAt: new Date('2027-04-12T07:05:00.000Z'),
++  bakeAt: new Date('2027-04-12T19:00:00.000Z'),
++  ballingAt: new Date('2027-04-12T08:55:00.000Z'),
++  fridgeAt: new Date('2027-04-12T09:00:00.000Z'),
++  preheatAt: new Date('2027-04-12T18:00:00.000Z'),
++  roomBeforeFridgeHours: 115 / 60,
++  fridgeHours: 8,
++  roomAfterFridgeHours: 2,
++  phaseAMinutes: 20,
++  phaseBMinutes: 90,
++  phaseCMinutes: 5,
++  prefermentHours: 0,
++  strategy: 'hybrid',
++  style: 'neapolitan',
++  ovenType: 'homeStone',
++  roomTemp: 22,
++  fridgeTemp: 4,
++};
++const beginnerFridgeOutAt = new Date(
++  b2FridgeSchedule.startAt.getTime()
++    + (b2FridgeSchedule.roomBeforeFridgeHours + b2FridgeSchedule.fridgeHours) * 3600000,
++);
++const legacyPlannerFridgeOutAt = new Date(
++  b2FridgeSchedule.ballingAt.getTime() + b2FridgeSchedule.fridgeHours * 3600000,
++);
++assert.equal(beginnerFridgeOutAt.toISOString(), '2027-04-12T17:00:00.000Z');
++assert.equal(legacyPlannerFridgeOutAt.toISOString(), '2027-04-12T16:55:00.000Z');
++assert.equal(
++  b2FridgeSchedule.fridgeAt.getTime(),
++  b2FridgeSchedule.startAt.getTime() + b2FridgeSchedule.roomBeforeFridgeHours * 3600000,
++);
++assert.equal(
++  b2FridgeSchedule.fridgeAt.getTime() - b2FridgeSchedule.ballingAt.getTime(),
++  b2FridgeSchedule.phaseCMinutes * 60000,
++);
++const b2PlannerSteps = reversePlan(
++  b2FridgeSchedule.bakeAt,
++  'direct',
++  'neapolitan',
++  plannerCopy,
++  b2FridgeSchedule,
++);
++assert.equal(
++  b2PlannerSteps.find((step) => step.title === plannerCopy.warmTitle).at.toISOString(),
++  '2027-04-12T17:00:00.000Z',
++);
++assert.equal(
++  b2PlannerSteps.find((step) => step.title === 'Shape dough balls').at.toISOString(),
++  b2FridgeSchedule.ballingAt.toISOString(),
++);
++assert.equal(
++  b2PlannerSteps.find((step) => step.title === 'Refrigerate dough balls').at.toISOString(),
++  b2FridgeSchedule.fridgeAt.toISOString(),
++);
++assert.match(
++  b2PlannerSteps.find((step) => step.title === 'Refrigerate dough balls').desc,
++  /shaped dough balls/,
++);
++const romanBlendPlannerSteps = reversePlan(
++  b2FridgeSchedule.bakeAt,
++  'direct',
++  'romana',
++  plannerCopy,
++  { ...b2FridgeSchedule, style: 'romana', romanFormat: 'tonda' },
++);
++assert.equal(
++  romanBlendPlannerSteps.find((step) => step.title === 'Shape dough balls').at.toISOString(),
++  b2FridgeSchedule.ballingAt.toISOString(),
++);
++assert.equal(
++  romanBlendPlannerSteps.find((step) => step.title === 'Refrigerate dough balls').at.toISOString(),
++  b2FridgeSchedule.fridgeAt.toISOString(),
++);
++const generatedB2Plan = createDirectHomePizzaPlan({
++  style: 'neapolitan',
++  pizzas: 1,
++  ballWeight: 250,
++  method: 'direct',
++  mixing: 'hand',
++  beginnerScheduleMode: 'fridgeRoom',
++  bakeAt: b2FridgeSchedule.bakeAt,
++  roomTemp: 22,
++  fridgeTemp: 4,
++  ovenType: 'homeStone',
++  ovenTemp: 300,
++}, { source: 'unknown' }, 62, 'fresh', b2FridgeSchedule.startAt, true);
++assert.ok(generatedB2Plan, 'production Beginner plan should be generated');
++const generatedB2Schedule = generatedB2Plan.schedule;
++assert.deepEqual(
++  [generatedB2Schedule.phaseAMinutes, generatedB2Schedule.phaseBMinutes, generatedB2Schedule.phaseCMinutes],
++  [20, 90, 5],
++);
++assert.equal(generatedB2Schedule.bakeAt.getTime(), b2FridgeSchedule.bakeAt.getTime());
++assert.equal(generatedB2Schedule.ballingAt.toISOString(), b2FridgeSchedule.ballingAt.toISOString());
++assert.equal(generatedB2Schedule.fridgeAt.toISOString(), b2FridgeSchedule.fridgeAt.toISOString());
++const generatedB2PlannerSteps = reversePlan(
++  generatedB2Schedule.bakeAt,
++  'direct',
++  'neapolitan',
++  plannerCopy,
++  generatedB2Schedule,
++);
++assert.equal(
++  generatedB2PlannerSteps.find((step) => step.title === plannerCopy.warmTitle).at.toISOString(),
++  beginnerFridgeOutAt.toISOString(),
++);
++const viennaMidnightBakeAt = new Date('2027-04-13T00:30:00.000Z');
++const viennaMidnightNow = new Date('2027-04-12T12:35:00.000Z');
++const viennaMidnightPlan = createDirectHomePizzaPlan({
++  style: 'neapolitan',
++  pizzas: 1,
++  ballWeight: 250,
++  method: 'direct',
++  mixing: 'hand',
++  beginnerScheduleMode: 'fridgeRoom',
++  bakeAt: viennaMidnightBakeAt,
++  roomTemp: 22,
++  fridgeTemp: 4,
++  ovenType: 'homeStone',
++  ovenTemp: 300,
++}, { source: 'unknown' }, 62, 'fresh', viennaMidnightNow, true);
++assert.ok(viennaMidnightPlan, 'production Beginner plan should cross local midnight');
++const viennaMidnightSchedule = viennaMidnightPlan.schedule;
++const viennaTime = new Intl.DateTimeFormat('en-GB', {
++  timeZone: 'Europe/Vienna',
++  dateStyle: 'short',
++  timeStyle: 'short',
++});
++const viennaFridgeOutAt = new Date(
++  viennaMidnightSchedule.startAt.getTime()
++    + (viennaMidnightSchedule.roomBeforeFridgeHours + viennaMidnightSchedule.fridgeHours) * 3600000,
++);
++assert.equal(viennaTime.format(viennaFridgeOutAt), '13/04/2027, 00:30');
++const viennaPlannerSteps = reversePlan(
++  viennaMidnightSchedule.bakeAt,
++  'direct',
++  'neapolitan',
++  plannerCopy,
++  viennaMidnightSchedule,
++);
++assert.equal(
++  viennaPlannerSteps.find((step) => step.title === plannerCopy.warmTitle).at.getTime(),
++  viennaFridgeOutAt.getTime(),
++);
+ const beginnerStrategyTable = {
+   18: ['roomOnly', 'roomOnly', 'roomOnly', 'hybrid', 'coldDominant', 'coldDominant', 'coldDominant'],
+   22: ['hybrid', 'hybrid', 'hybrid', 'hybrid', 'coldDominant', 'coldDominant', 'coldDominant'],
+@@ -1190,7 +1352,28 @@ for (const style of styles) {
+         assert.equal(plannerSteps.at(-1).desc, 'Launch at T');
+         const directMixTitle = style === 'neapolitan' ? plannerCopy.directTitle : plannerCopy.directMixTitle;
+         assert.equal(plannerSteps.find((step) => step.title === directMixTitle).at.getTime(), plan.schedule.startAt.getTime());
+-        assert.equal(plannerSteps.find((step) => step.title === plannerCopy.ballsTitle).at.getTime(), plan.schedule.ballingAt.getTime());
++        const separateFridgeIn = plan.schedule.fridgeAt
++          && plan.schedule.fridgeAt.getTime() > plan.schedule.ballingAt.getTime();
++        const selectedHomeCopy = style === 'romana' && plan.schedule.romanFormat === 'teglia'
++          ? plannerCopy.directHomeTegliaCopy
++          : plannerCopy.directHomeCopy;
++        const ballingTitle = selectedHomeCopy.ballingTitle ?? plannerCopy.ballsTitle;
++        const ballingStep = plannerSteps.find((step) => step.title === ballingTitle);
++        assert.ok(ballingStep, JSON.stringify({
++          style,
++          hours,
++          ballingTitle,
++          ballingAt: plan.schedule.ballingAt,
++          fridgeAt: plan.schedule.fridgeAt,
++          plannerSteps: plannerSteps.map((step) => step.title),
++        }));
++        assert.equal(ballingStep.at.getTime(), plan.schedule.ballingAt.getTime());
++        if (separateFridgeIn) {
++          assert.equal(
++            plannerSteps.find((step) => step.title === selectedHomeCopy.fridgeInTitle).at.getTime(),
++            plan.schedule.fridgeAt.getTime(),
++          );
++        }
+         assert.equal(plannerSteps.find((step) => step.title === plannerCopy.ovenTitle).at.getTime(), plan.schedule.preheatAt.getTime());
+         assert.equal(plannerSteps.find((step) => step.title === 'Shape and top').at.getTime(), bakeAt.getTime() - 15 * 60000);
+         assert.equal(plan.schedule.ballingAt.getTime(), plan.schedule.startAt.getTime() + plan.schedule.roomBeforeFridgeHours * 3600000);
+diff --git a/frontend/src/calculator.ts b/frontend/src/calculator.ts
+index 350001e..5802bed 100644
+--- a/frontend/src/calculator.ts
++++ b/frontend/src/calculator.ts
+@@ -2160,6 +2160,9 @@ type DirectHomePlannerCopy = {
+   start: string;
+   ballingFridge: string;
+   ballingTitle?: string;
++  balling?: string;
++  fridgeInTitle?: string;
++  fridgeIn?: string;
+   roomOnlyBalling: string;
+   roomOnlyTitle?: string;
+   finalRoom: string;
+@@ -2281,7 +2284,7 @@ export function reversePlan(
+       ?? new Date(bakeAt.getTime() - getBeginnerPreheatMinutes(homeSchedule!.ovenType ?? 'homeStone') * 60000);
+     const ballingAt = homeSchedule!.ballingAt
+       ?? new Date(homeSchedule!.startAt.getTime() + roomBeforeFridgeHours * 3600000);
+-    const finalRoomAt = new Date(ballingAt.getTime() + fridgeHours * 3600000);
++    const finalRoomAt = new Date((homeSchedule!.fridgeAt ?? ballingAt).getTime() + fridgeHours * 3600000);
+     if (homeCopy) {
+       const phaseBStart = new Date(
+         homeSchedule!.startAt.getTime() + (homeSchedule!.phaseAMinutes ?? 0) * 60000,
+@@ -2319,11 +2322,25 @@ export function reversePlan(
+     steps.push({ at: preheatAt, title: homeCopy?.preheatTitle ?? copy.ovenTitle, desc: fillPlannerCopy(homeCopy?.preheat ?? copy.ovenDesc, values) });
+     if (fridgeHours > 0) {
+       steps.push({ at: finalRoomAt, title: homeCopy?.finalRoomTitle ?? copy.warmTitle, desc: fillPlannerCopy(homeCopy?.finalRoom ?? copy.warmDesc, values) });
+-      steps.push({
+-        at: ballingAt,
+-        title: homeCopy?.ballingTitle ?? copy.ballsTitle,
+-        desc: fillPlannerCopy(homeCopy?.ballingFridge ?? copy.coldDesc, values),
+-      });
++      const fridgeAt = homeSchedule!.fridgeAt;
++      if (fridgeAt && fridgeAt.getTime() > ballingAt.getTime() && homeCopy?.balling && homeCopy.fridgeIn) {
++        steps.push({
++          at: ballingAt,
++          title: homeCopy.ballingTitle ?? copy.ballsTitle,
++          desc: fillPlannerCopy(homeCopy.balling, values),
++        });
++        steps.push({
++          at: fridgeAt,
++          title: homeCopy.fridgeInTitle ?? copy.coldTitle,
++          desc: fillPlannerCopy(homeCopy.fridgeIn, values),
++        });
++      } else {
++        steps.push({
++          at: ballingAt,
++          title: homeCopy?.ballingTitle ?? copy.ballsTitle,
++          desc: fillPlannerCopy(homeCopy?.ballingFridge ?? copy.coldDesc, values),
++        });
++      }
+     } else {
+       steps.push({ at: ballingAt, title: homeCopy?.roomOnlyTitle ?? copy.ballsTitle, desc: fillPlannerCopy(homeCopy?.roomOnlyBalling ?? copy.ballsDesc, values) });
+     }
+diff --git a/frontend/src/experienceLevel.ts b/frontend/src/experienceLevel.ts
+index d59482a..78ceab8 100644
+--- a/frontend/src/experienceLevel.ts
++++ b/frontend/src/experienceLevel.ts
+@@ -14,6 +14,11 @@ function isValidLevel(value: unknown): value is UserExperienceLevel {
+ let cachedLevel: UserExperienceLevel | null | undefined;
+ const listeners = new Set<() => void>();
+ 
++export function applyLoadedExperienceLevel(level: UserExperienceLevel | null): void {
++  cachedLevel = level;
++  listeners.forEach((listener) => listener());
++}
++
+ export function getCachedExperienceLevel(): UserExperienceLevel | null | undefined {
+   return cachedLevel;
+ }
+@@ -25,9 +30,9 @@ export function subscribeExperienceLevel(listener: () => void): () => void {
+ 
+ export async function loadExperienceLevel(): Promise<UserExperienceLevel | null> {
+   const raw = await storage.getItem<string | null>(EXPERIENCE_LEVEL_KEY, null);
+-  cachedLevel = isValidLevel(raw) ? raw : null;
+-  listeners.forEach((listener) => listener());
+-  return cachedLevel;
++  const loadedLevel = isValidLevel(raw) ? raw : null;
++  applyLoadedExperienceLevel(loadedLevel);
++  return loadedLevel;
+ }
+ 
+ export async function setExperienceLevel(level: UserExperienceLevel): Promise<boolean> {
+diff --git a/frontend/src/i18n/translations.ts b/frontend/src/i18n/translations.ts
+index 6f68f31..09b3aa6 100644
+--- a/frontend/src/i18n/translations.ts
++++ b/frontend/src/i18n/translations.ts
+@@ -71,12 +71,12 @@ export const translations = {
+     },
+     beginnerCalc: {
+       stepStyle: 'Kakvu pizzu želiš napraviti?', romanaQuestion: 'Koju Romanu želiš?', recommendedFlour: 'Preporučeno', stepPizzas: 'Koliko pizza?', stepBall: 'Veličina loptice',
+-      stepMethod: 'Kako ćeš zamijesiti tijesto?', stepFlour: 'Odaberi brašno', stepHydration: 'Hidracija', hydrationIdeal: 'Idealna', hydrationIdealState: 'Idealno',
++      stepMethod: 'Kako ćeš zamijesiti tijesto?', stepFlour: 'Odaberi brašno', stepHydration: 'Hidratacija', hydrationIdeal: 'Idealna', hydrationIdealState: 'Idealno',
+       stepOven: 'Koju pećnicu koristiš?', stepBake: 'Kada želiš pizzu peći?', stepConditions: 'Uvjeti kod kuće',
+       setBakeTime: 'Odaberi datum i vrijeme pečenja', bakeTime: 'Pečenje', homePlan: 'Tvoj plan za pizzu',
+       guidedProgress: 'Tvoj napredak', guidedNext: 'Sljedeći korak', guidedComplete: '✓ Gotovo', guidedCompleted: 'Gotovo',
+       guidedProgressCount: '{DONE}/{TOTAL} koraka', guidedNotifications: 'Obavijesti', guidedNotificationsOn: 'Uključene', guidedNotificationsOff: 'Isključene',
+-      guidedPermissionTitle: 'Obavijesti za tvoj recept', guidedPermissionBody: 'PizzaBook vas može obavijestiti kada je vrijeme za sljedeći korak.',
++      guidedPermissionTitle: 'Obavijesti za tvoj recept', guidedPermissionBody: 'PizzaBook te može obavijestiti kada je vrijeme za sljedeći korak.',
+       guidedAllow: 'Dopusti', guidedNotNow: 'Ne sada', guidedPermissionDenied: 'Obavijesti nisu dopuštene. Recept i odbrojavanje i dalje rade.',
+       guidedNotificationsUnavailable: 'Obavijesti nisu dostupne na ovom uređaju.', guidedNotificationError: 'Obavijesti se nisu mogle zakazati.',
+       guidedToday: 'Danas', guidedTomorrow: 'Sutra', guidedDue: 'Vrijeme je za ovaj korak.',
+@@ -89,7 +89,7 @@ export const translations = {
+         fold2Gentle: { title: 'Vrijeme je za drugi nježni Stretch & Fold', body: 'Napravite drugi nježni Stretch & Fold prema receptu.' },
+         fridgeIn: { title: 'Vrijeme je za hladnjak', body: 'Stavite pokriveno tijesto u hladnjak prema receptu.' },
+         fridgeInCombined: { title: 'Vrijeme je za dijeljenje, oblikovanje i hladnjak', body: 'Podijelite tijesto, oblikujte kuglice i stavite ih u hladnjak prema receptu.' },
+-        balling: { title: 'Vrijeme je za kuglanje 🍕', body: 'Podijelite i oblikujte tijesto prema receptu.' },
++        balling: { title: 'Vrijeme je za podjelu i oblikovanje kuglica 🍕', body: 'Podijelite i oblikujte tijesto prema receptu.' },
+         portioning: { title: 'Prva fermentacija je gotova', body: 'Pripremite bezglutenske porcije i stavite ih u hladnjak prema rasporedu.' },
+         trayPrepare: { title: 'Prva fermentacija je gotova', body: 'Pripremite tijesto kao jednu masu prema receptu.' },
+         doughRest: { title: 'Vrijeme je za odmor tijesta', body: 'Ostavite pokriveno tijesto da odmara prema receptu.' },
+@@ -195,7 +195,7 @@ export const translations = {
+       coldLong: 'Duga hladna (24-48h)',
+       results: 'Rezultati',
+       totalFlour: 'Ukupno brašno',
+-      totalWater: 'Ukupno voda',
++      totalWater: 'Ukupna voda',
+       waterTemp: 'Temp. vode',
+       yeastAmount: 'Kvasac',
+       saltAmount: 'Sol',
+@@ -251,7 +251,7 @@ export const translations = {
+           ],
+         },
+         C: {
+-          title: 'Faza C: Podjela i oblikovanje loptica (Bulice)',
++          title: 'Faza C: Podjela i oblikovanje kuglica',
+           steps: [
+             'Izrežite tijesto i precizno izmjerite komade željene gramaže iz kalkulatora.',
+             'Oblikujte čvrste, glatke loptice (bulice) i posložite ih u kutiju za tijesto.',
+@@ -259,7 +259,7 @@ export const translations = {
+           ],
+         },
+         D: {
+-          title: 'Faza D: Priprema, razvlačenje i nadijevanje',
++          title: 'Faza D: Oblikovanje i dodavanje nadjeva',
+           steps: [
+             'Izvadite loptice iz hladnjaka 15–20 minuta prije razvlačenja da malo omekšaju. Ako se približno udvostruče ranije, izvadite ih tada i pazite da ne predignu. Radnu površinu temeljito pospite semolom.',
+             'Prstima potiskujte zrak od središta prema rubovima, ostavljajući nedirnut rub širine cca 1 cm.',
+@@ -391,13 +391,17 @@ export const translations = {
+           preheat: 'Zagrij odabranu pećnicu/kamen uz ovaj alarm; lansiraj pizzu u planirano vrijeme pečenja.',
+           bake: 'Lansiraj pizzu točno u planirano vrijeme pečenja.',
+         },
+-        poolishMixTitle: 'Zamijesi Poolish',
++        poolishMixTitle: 'Pripremi poolish',
+         poolishMixDesc: '35% brašna, 100% hidratacija, 0,1% kvasca. Ostavi 12-14 sati na sobnoj temperaturi.',
+         directTitle: 'Zamijesi tijesto',
+         directDesc: 'Direktna metoda za Napolitanu: zamijesi sve sastojke i stavi tijesto na fermentaciju.',
+         directHomeCopy: {
+-          start: 'Započni direktno miješanje prema izračunatim količinama; bulk na {ROOM_TEMP} traje do planiranog alarma za kuglanje.',
++          start: 'Započni direktni zamjes prema izračunatim količinama; prva fermentacija na {ROOM_TEMP} traje do planiranog podsjetnika za oblikovanje kuglica.',
+           ballingFridge: 'Sada podijeli tijesto na kuglice od {WEIGHT} g, oblikuj ih i odmah stavi u hladnjak na {HOURS} pri {FRIDGE_TEMP}.',
++          ballingTitle: 'Oblikuj kuglice',
++          balling: 'Podijeli tijesto na kuglice od {WEIGHT} g i oblikuj ih.',
++          fridgeInTitle: 'Stavi kuglice u hladnjak',
++          fridgeIn: 'Stavi oblikovane kuglice u hladnjak na {HOURS} pri {FRIDGE_TEMP}.',
+           roomOnlyBalling: 'Sada podijeli tijesto na kuglice od {WEIGHT} g i oblikuj ih; do pečenja ih ostavi pokrivene na {ROOM_TEMP} ukupno {ROOM_AFTER}, uključujući završnu pripremu.',
+           finalRoom: 'Izvadi kuglice iz hladnjaka i ostavi ih {ROOM_AFTER} na sobnoj temperaturi; oblikuj i nadjeni u zadnjih 15 minuta te lansiraj u planirano vrijeme.',
+           preheat: 'U {PREHEAT_TIME} uključi pećnicu/kamen i zagrij ga na najvišu temperaturu; predgrijavanje traje {PREHEAT_MINUTES} minuta.',
+@@ -410,6 +414,8 @@ export const translations = {
+           start: 'Zamijesi tijesto prema izračunatim količinama; ostavi ga kao jednu masu za tepsiju.',
+           ballingFridge: 'Prebaci tijesto kao jednu masu u pokrivenu posudu i stavi ga u hladnjak na {HOURS} pri {FRIDGE_TEMP}.',
+           ballingTitle: 'Stavi masu tijesta u hladnjak',
++          fridgeInTitle: 'Stavi masu tijesta u hladnjak',
++          fridgeIn: 'Stavi pokrivenu masu tijesta u hladnjak na {HOURS} pri {FRIDGE_TEMP}.',
+           roomOnlyBalling: 'Do pečenja ostavi tijesto kao jednu pokrivenu masu na {ROOM_TEMP} ukupno {ROOM_AFTER}, uključujući završnu pripremu.',
+           roomOnlyTitle: 'Ostavi masu tijesta da odmori',
+           finalRoom: 'Izvadi masu tijesta iz hladnjaka i ostavi je {ROOM_AFTER} na sobnoj temperaturi prije utiskivanja u tepsiju.',
+@@ -493,7 +499,7 @@ export const translations = {
+       report: { violationReason: 'Kršenje pravila zajednice', error: 'Slanje prijave nije uspjelo.' },
+     },
+     school: {
+-      title: 'Škola pizze - Zlatna pravila',
++      title: 'Škola pizze – zlatna pravila',
+       subtitle: 'Kratka pravila za bolje tijesto, umak i pečenje.',
+       rules: [
+         {
+@@ -578,8 +584,8 @@ export const translations = {
+       extrasList: [
+         'Sol (morska, krupna)',
+         'Ekstra djevičansko maslinovo ulje',
+-        'Fior di Latte / mozzarella (80-100g po pizzi)',
+-        'San Marzano pelati (80-90g po pizzi)',
++        'Fior di Latte / mozzarella (80–100 g po pizzi)',
++        'San Marzano pelati (80–90 g po pizzi)',
+         'Bosiljak (svjež)',
+       ],
+     },
+@@ -593,9 +599,9 @@ export const translations = {
+       blendIdealHint: 'Idealna hidracija mješavine: {N}%',
+     },
+     ballWeight: {
+-      label: 'Gramaža lopte',
+-      autoHint: 'Auto po promjeru: {N}g',
+-      manualHint: 'Ručno · zadano {N}g',
++      label: 'Težina kuglice tijesta',
++      autoHint: 'Automatski prema promjeru: {N} g',
++      manualHint: 'Ručno · zadano {N} g',
+       reset: 'Vrati automatski izračun',
+     },
+     pizzaPreview: { hint: 'Prava proporcija (referenca: 40 cm)' },
+@@ -681,7 +687,7 @@ export const translations = {
+         fold2Gentle: { title: 'Time for the second gentle Stretch & Fold', body: 'Perform the second gentle Stretch & Fold as described in your recipe.' },
+         fridgeIn: { title: 'Time to refrigerate the dough', body: 'Cover the dough and put it in the refrigerator as directed.' },
+         fridgeInCombined: { title: 'Time to divide, shape, and refrigerate', body: 'Divide the dough, shape the dough balls, and put them in the refrigerator as directed.' },
+-        balling: { title: 'Time to divide and ball the dough 🍕', body: 'Divide and shape the dough as described in your recipe.' },
++        balling: { title: 'Time to divide and shape the dough balls 🍕', body: 'Divide and shape the dough as described in your recipe.' },
+         portioning: { title: 'First fermentation is complete', body: 'Prepare the gluten-free portions and refrigerate them according to the schedule.' },
+         trayPrepare: { title: 'First fermentation is complete', body: 'Handle the dough as one mass as directed.' },
+         doughRest: { title: 'Time to rest the dough', body: 'Leave the covered dough to rest as directed.' },
+@@ -839,7 +845,7 @@ export const translations = {
+           ],
+         },
+         C: {
+-          title: 'Phase C: Divide & ball',
++          title: 'Phase C: Dividing and shaping dough balls',
+           steps: [
+             'Cut and precisely weigh pieces to the target ball weight from the calculator.',
+             'Shape tight, smooth balls and place them in a dough tray.',
+@@ -847,7 +853,7 @@ export const translations = {
+           ],
+         },
+         D: {
+-          title: 'Phase D: Stretch & top',
++          title: 'Phase D: Shaping and adding toppings',
+           steps: [
+             'Take the balls out 1 hour 15 minutes before baking or when they roughly double in size, but do not let them overproof. Dust the surface with semolina.',
+             'Press air from center outward, leaving a ~1 cm rim untouched.',
+@@ -979,13 +985,17 @@ export const translations = {
+           preheat: 'Preheat the selected oven/stone with this alert; launch the pizza at the scheduled bake time.',
+           bake: 'Launch the pizza exactly at the scheduled bake time.',
+         },
+-        poolishMixTitle: 'Make the poolish',
++        poolishMixTitle: 'Prepare the poolish',
+         poolishMixDesc: '35% flour, 100% hydration, 0.1% yeast. Leave for 12-14 hours at room temperature.',
+         directTitle: 'Knead the dough',
+         directDesc: 'Direct method for Neapolitan pizza: knead all ingredients and start fermentation.',
+         directHomeCopy: {
+-          start: 'Start mixing the Direct dough using the calculated ingredient amounts; bulk at {ROOM_TEMP} continues until the scheduled Balling alarm.',
++          start: 'Start mixing the direct dough using the calculated ingredient amounts. The first fermentation at {ROOM_TEMP} continues until the scheduled reminder to shape the dough balls.',
+           ballingFridge: 'Divide and shape {WEIGHT} g dough balls now, then refrigerate them for {HOURS} at {FRIDGE_TEMP}.',
++          ballingTitle: 'Shape dough balls',
++          balling: 'Divide the dough into {WEIGHT} g portions and shape them into balls.',
++          fridgeInTitle: 'Refrigerate the dough balls',
++          fridgeIn: 'Put the shaped dough balls in the refrigerator for {HOURS} at {FRIDGE_TEMP}.',
+           roomOnlyBalling: 'Divide and shape {WEIGHT} g dough balls now; keep them covered at {ROOM_TEMP} for {ROOM_AFTER} in total until baking, including final preparation.',
+           finalRoom: 'Take the dough balls out of the fridge for {ROOM_AFTER} at room temperature; shape and top in the final 15 minutes, then launch at the scheduled time.',
+           preheat: 'At {PREHEAT_TIME}, turn on the selected oven/stone and preheat it; the scheduled duration is {PREHEAT_MINUTES} minutes.',
+@@ -998,6 +1008,8 @@ export const translations = {
+           start: 'Mix the dough using the calculated amounts; keep it as one mass for the tray.',
+           ballingFridge: 'Transfer the dough as one mass to a covered container and refrigerate for {HOURS} at {FRIDGE_TEMP}.',
+           ballingTitle: 'Refrigerate the dough mass',
++          fridgeInTitle: 'Refrigerate the dough mass',
++          fridgeIn: 'Put the covered dough mass in the refrigerator for {HOURS} at {FRIDGE_TEMP}.',
+           roomOnlyBalling: 'Keep the dough as one covered mass at {ROOM_TEMP} for {ROOM_AFTER} in total until baking, including final preparation.',
+           roomOnlyTitle: 'Rest the dough mass',
+           finalRoom: 'Take the dough mass out of the refrigerator and leave it at room temperature for {ROOM_AFTER} before pressing it into the tray.',
+@@ -1081,7 +1093,7 @@ export const translations = {
+       report: { violationReason: 'Community guidelines violation', error: 'Report submission failed.' },
+     },
+     school: {
+-      title: 'Pizza School - Golden Rules',
++      title: 'Pizza School – Golden Rules',
+       subtitle: 'Simple rules for better dough, sauce, and baking.',
+       rules: [
+         { title: 'Cheese (Fior di Latte)', body: 'Cut into thicker pieces/sticks, not fine. Fine cutting releases too much water and fat, burns easily.' },
+@@ -1127,8 +1139,8 @@ export const translations = {
+       extrasList: [
+         'Salt (sea, coarse)',
+         'Extra virgin olive oil',
+-        'Fior di Latte / mozzarella (80-100g per pizza)',
+-        'San Marzano peeled tomatoes (80-90g per pizza)',
++        'Fior di Latte / mozzarella (80–100 g per pizza)',
++        'San Marzano peeled tomatoes (80–90 g per pizza)',
+         'Fresh basil',
+       ],
+     },
+@@ -1143,8 +1155,8 @@ export const translations = {
+     },
+     ballWeight: {
+       label: 'Dough ball weight',
+-      autoHint: 'Auto by diameter: {N}g',
+-      manualHint: 'Manual · default {N}g',
++      autoHint: 'Automatically by diameter: {N} g',
++      manualHint: 'Manual · default {N} g',
+       reset: 'Reset automatic calculation',
+     },
+     pizzaPreview: { hint: 'True scale (reference: 40 cm)' },
+@@ -1224,19 +1236,19 @@ export const translations = {
+       guidedCountdown: 'in {DURATION}', guidedOverdue: '{DURATION} überfällig', guidedNoNext: 'Alle geplanten Schritte sind erledigt.',
+       guidedNotificationCopy: {
+         mix: { title: 'Zeit für den Teig 🍕', body: 'Mische und knete den Teig nach deinem Rezept.' },
+-        fold1: { title: 'Zeit für das erste Stretch & Fold', body: 'Führen Sie das erste Stretch & Fold wie im Rezept beschrieben durch.' },
+-        fold1Gentle: { title: 'Zeit für das erste sanfte Stretch & Fold', body: 'Führen Sie das erste sanfte Stretch & Fold wie im Rezept beschrieben durch.' },
+-        fold2: { title: 'Zeit für das zweite Stretch & Fold', body: 'Führen Sie das zweite Stretch & Fold wie im Rezept beschrieben durch.' },
+-        fold2Gentle: { title: 'Zeit für das zweite sanfte Stretch & Fold', body: 'Führen Sie das zweite sanfte Stretch & Fold wie im Rezept beschrieben durch.' },
++        fold1: { title: 'Zeit für das erste Stretch & Fold', body: 'Führe den ersten Stretch & Fold wie im Rezept beschrieben durch.' },
++        fold1Gentle: { title: 'Zeit für das erste sanfte Stretch & Fold', body: 'Führe den ersten sanften Stretch & Fold wie im Rezept beschrieben durch.' },
++        fold2: { title: 'Zeit für das zweite Stretch & Fold', body: 'Führe den zweiten Stretch & Fold wie im Rezept beschrieben durch.' },
++        fold2Gentle: { title: 'Zeit für das zweite sanfte Stretch & Fold', body: 'Führe den zweiten sanften Stretch & Fold wie im Rezept beschrieben durch.' },
+         fridgeIn: { title: 'Zeit für den Kühlschrank', body: 'Decke den Teig ab und stelle ihn wie im Rezept beschrieben kalt.' },
+-        fridgeInCombined: { title: 'Zeit zum Teilen, Formen und Kühlen', body: 'Teilen Sie den Teig, formen Sie die Teiglinge und stellen Sie sie wie im Rezept beschrieben in den Kühlschrank.' },
+-        balling: { title: 'Zeit zum Teilen und Formen 🍕', body: 'Teile und forme den Teig wie im Rezept beschrieben.' },
+-        portioning: { title: 'Die erste Fermentation ist abgeschlossen', body: 'Bereiten Sie die glutenfreien Portionen vor und stellen Sie sie nach Plan in den Kühlschrank.' },
+-        trayPrepare: { title: 'Die erste Fermentation ist abgeschlossen', body: 'Behandeln Sie den Teig als eine Masse wie beschrieben.' },
++        fridgeInCombined: { title: 'Zeit zum Teilen, Formen und Kühlen', body: 'Teile den Teig, forme die Teiglinge und stelle sie wie im Rezept beschrieben in den Kühlschrank.' },
++        balling: { title: 'Zeit zum Teilen und Formen der Teigkugeln 🍕', body: 'Teile und forme den Teig wie im Rezept beschrieben.' },
++        portioning: { title: 'Die erste Fermentation ist abgeschlossen', body: 'Bereite die glutenfreien Portionen vor und stelle sie nach Plan in den Kühlschrank.' },
++        trayPrepare: { title: 'Die erste Fermentation ist abgeschlossen', body: 'Behandle den Teig wie beschrieben als eine Masse.' },
+         doughRest: { title: 'Zeit für die Teigruhe', body: 'Lass den abgedeckten Teig wie beschrieben ruhen.' },
+         fridgeOut: { title: 'Nimm den Teig aus dem Kühlschrank', body: 'Lass den Teig wie im Rezept beschrieben temperieren.' },
+         roomFermentationEndPreheat: { title: 'Ende der Raumtemperatur-Fermentation und Ofen vorheizen', body: 'Die Fermentation bei Raumtemperatur ist abgeschlossen. Es ist Zeit, den Ofen vorzuheizen.' },
+-        roomFermentationEnd: { title: 'Ende der Fermentation bei Raumtemperatur', body: 'Die Fermentation bei Raumtemperatur ist abgeschlossen. Fahren Sie mit der finalen Pizzavorbereitung fort.' },
++        roomFermentationEnd: { title: 'Ende der Fermentation bei Raumtemperatur', body: 'Die Fermentation bei Raumtemperatur ist abgeschlossen. Fahre mit der finalen Pizzavorbereitung fort.' },
+         preheat: { title: 'Zeit zum Vorheizen', body: 'Beginne wie geplant mit dem Vorheizen.' },
+         shape: { title: 'Zeit, die Pizza zu formen', body: 'Forme und belege die Pizza nach deinem Rezept.' },
+         bake: { title: 'Zeit für Pizza 🍕', body: 'Backe die Pizza nach deinem Rezept.' },
+@@ -1334,7 +1346,7 @@ export const translations = {
+       coldLong: 'Kalt lang (24-48h)',
+       results: 'Ergebnisse',
+       totalFlour: 'Gesamt Mehl',
+-      totalWater: 'Gesamt Wasser',
++      totalWater: 'Wassermenge gesamt',
+       waterTemp: 'Wassertemp.',
+       yeastAmount: 'Hefe',
+       saltAmount: 'Salz',
+@@ -1388,7 +1400,7 @@ export const translations = {
+           ],
+         },
+         C: {
+-          title: 'Phase C: Teilen & Wirken',
++          title: 'Phase C: Teilen und Formen der Teigkugeln',
+           steps: [
+             'Teig präzise auf Zielgewicht abstechen.',
+             'Feste, glatte Kugeln formen und in die Teigwanne setzen.',
+@@ -1396,7 +1408,7 @@ export const translations = {
+           ],
+         },
+         D: {
+-          title: 'Phase D: Ausformen & Belegen',
++          title: 'Phase D: Formen und Belegen',
+           steps: [
+             'Die Kugeln 1 Stunde 15 Minuten vor dem Backen herausnehmen oder wenn sie sich etwa verdoppeln, aber nicht überfermentieren lassen. Fläche mit Semola bestäuben.',
+             'Luft von der Mitte nach außen drücken, 1 cm Rand unberührt lassen.',
+@@ -1528,13 +1540,17 @@ export const translations = {
+           preheat: 'Heizen Sie den ausgewählten Ofen/Stein mit diesem Alarm vor; schieben Sie die Pizza zur geplanten Backzeit hinein.',
+           bake: 'Schieben Sie die Pizza genau zur geplanten Backzeit in den Ofen.',
+         },
+-        poolishMixTitle: 'Poolish kneten',
++        poolishMixTitle: 'Poolish anrühren',
+         poolishMixDesc: '35% Mehl, 100% Hydration, 0,1% Hefe. 12-14 Stunden bei Raumtemperatur stehen lassen.',
+         directTitle: 'Teig kneten',
+         directDesc: 'Direkte Methode für neapolitanische Pizza: alle Zutaten verkneten und die Fermentation starten.',
+         directHomeCopy: {
+-          start: 'Beginnen Sie den direkten Hauptteig mit den berechneten Zutaten; die Stockgare bei {ROOM_TEMP} läuft bis zum geplanten Ball-Alarm.',
++          start: 'Beginne mit dem direkten Teig nach den berechneten Zutatenmengen. Die erste Teiggare bei {ROOM_TEMP} dauert bis zur geplanten Erinnerung zum Formen der Teigkugeln.',
+           ballingFridge: 'Teilen und formen Sie jetzt Teiglinge zu {WEIGHT} g und stellen Sie sie anschließend für {HOURS} bei {FRIDGE_TEMP} in den Kühlschrank.',
++          ballingTitle: 'Teiglinge formen',
++          balling: 'Teilen Sie den Teig in {WEIGHT} g schwere Stücke und formen Sie daraus Kugeln.',
++          fridgeInTitle: 'Teiglinge in den Kühlschrank stellen',
++          fridgeIn: 'Stellen Sie die geformten Teiglinge für {HOURS} bei {FRIDGE_TEMP} in den Kühlschrank.',
+           roomOnlyBalling: 'Teilen und formen Sie jetzt Teiglinge zu {WEIGHT} g; lassen Sie sie bis zum Backen insgesamt {ROOM_AFTER} bei {ROOM_TEMP} abgedeckt ruhen, einschließlich der Endvorbereitung.',
+           finalRoom: 'Nehmen Sie die Teiglinge für {ROOM_AFTER} bei Raumtemperatur aus dem Kühlschrank; formen und belegen Sie sie in den letzten 15 Minuten und backen Sie zur geplanten Zeit.',
+           preheat: 'Schalten Sie um {PREHEAT_TIME} den ausgewählten Ofen/Stein ein und heizen Sie ihn vor; die geplante Dauer beträgt {PREHEAT_MINUTES} Minuten.',
+@@ -1547,6 +1563,8 @@ export const translations = {
+           start: 'Kneten Sie den Teig mit den berechneten Mengen; lassen Sie ihn als eine Masse für das Blech.',
+           ballingFridge: 'Geben Sie die Teigmasse in einen abgedeckten Behälter und stellen Sie sie für {HOURS} bei {FRIDGE_TEMP} in den Kühlschrank.',
+           ballingTitle: 'Teigmasse in den Kühlschrank stellen',
++          fridgeInTitle: 'Teigmasse in den Kühlschrank stellen',
++          fridgeIn: 'Stellen Sie die abgedeckte Teigmasse für {HOURS} bei {FRIDGE_TEMP} in den Kühlschrank.',
+           roomOnlyBalling: 'Lassen Sie den Teig als eine abgedeckte Masse bis zum Backen insgesamt {ROOM_AFTER} bei {ROOM_TEMP} ruhen, einschließlich der Endvorbereitung.',
+           roomOnlyTitle: 'Teigmasse ruhen lassen',
+           finalRoom: 'Nehmen Sie die Teigmasse aus dem Kühlschrank und lassen Sie sie vor dem Drücken in das Blech {ROOM_AFTER} bei Raumtemperatur ruhen.',
+@@ -1630,7 +1648,7 @@ export const translations = {
+       report: { violationReason: 'Verstoß gegen die Community-Regeln', error: 'Die Meldung konnte nicht gesendet werden.' },
+     },
+     school: {
+-      title: 'Pizza-Schule - Goldene Regeln',
++      title: 'Pizzaschule – goldene Regeln',
+       subtitle: 'Einfache Regeln für besseren Teig, Sauce und Backen.',
+       rules: [
+         { title: 'Käse (Fior di Latte)', body: 'In dicke Stücke/Stäbchen schneiden, nicht fein. Fein geschnitten gibt zu viel Wasser und Fett ab, verbrennt leicht.' },
+@@ -1676,8 +1694,8 @@ export const translations = {
+       extrasList: [
+         'Salz (Meersalz, grob)',
+         'Olivenöl extra vergine',
+-        'Fior di Latte / Mozzarella (80-100g pro Pizza)',
+-        'San Marzano Pelati (80-90g pro Pizza)',
++        'Fior di Latte / Mozzarella (80–100 g pro Pizza)',
++        'San-Marzano-Tomaten, geschält (80–90 g pro Pizza)',
+         'Frisches Basilikum',
+       ],
+     },
+@@ -1691,9 +1709,9 @@ export const translations = {
+       blendIdealHint: 'Ideale Hydratisierung der Mischung: {N}%',
+     },
+     ballWeight: {
+-      label: 'Teigkugel-Gewicht',
+-      autoHint: 'Auto nach Durchmesser: {N}g',
+-      manualHint: 'Manuell · Standard {N}g',
++      label: 'Gewicht der Teigkugel',
++      autoHint: 'Automatisch nach Durchmesser: {N} g',
++      manualHint: 'Manuell · Standardwert {N} g',
+       reset: 'Automatische Berechnung zurücksetzen',
+     },
+     pizzaPreview: { hint: 'Echte Proportion (Referenz: 40 cm)' },
+@@ -1773,19 +1791,19 @@ export const translations = {
+       guidedCountdown: 'čez {DURATION}', guidedOverdue: 'Zamuja {DURATION}', guidedNoNext: 'Vsi načrtovani koraki so končani.',
+       guidedNotificationCopy: {
+         mix: { title: 'Čas je za testo 🍕', body: 'Zamesi testo po receptu.' },
+-        fold1: { title: 'Čas za prvi Stretch & Fold', body: 'Naredite prvi Stretch & Fold po navodilih recepta.' },
+-        fold1Gentle: { title: 'Čas za prvi nežni Stretch & Fold', body: 'Naredite prvi nežni Stretch & Fold po navodilih recepta.' },
+-        fold2: { title: 'Čas za drugi Stretch & Fold', body: 'Naredite drugi Stretch & Fold po navodilih recepta.' },
+-        fold2Gentle: { title: 'Čas za drugi nežni Stretch & Fold', body: 'Naredite drugi nežni Stretch & Fold po navodilih recepta.' },
++        fold1: { title: 'Čas za prvi Stretch & Fold', body: 'Naredi prvi Stretch & Fold po navodilih recepta.' },
++        fold1Gentle: { title: 'Čas za prvi nežni Stretch & Fold', body: 'Naredi prvi nežni Stretch & Fold po navodilih recepta.' },
++        fold2: { title: 'Čas za drugi Stretch & Fold', body: 'Naredi drugi Stretch & Fold po navodilih recepta.' },
++        fold2Gentle: { title: 'Čas za drugi nežni Stretch & Fold', body: 'Naredi drugi nežni Stretch & Fold po navodilih recepta.' },
+         fridgeIn: { title: 'Čas je za hladilnik', body: 'Pokrito testo postavi v hladilnik po navodilih recepta.' },
+         fridgeInCombined: { title: 'Čas za deljenje, oblikovanje in hladilnik', body: 'Testo razdeli, oblikuj kroglice in jih postavi v hladilnik po navodilih recepta.' },
+-        balling: { title: 'Čas je za deljenje in oblikovanje 🍕', body: 'Testo razdeli in oblikuj po receptu.' },
++        balling: { title: 'Čas za delitev in oblikovanje kroglic testa 🍕', body: 'Testo razdeli in oblikuj po receptu.' },
+         portioning: { title: 'Prva fermentacija je končana', body: 'Pripravi brezglutenske porcije in jih po načrtu postavi v hladilnik.' },
+         trayPrepare: { title: 'Prva fermentacija je končana', body: 'Testo obdelaj kot eno maso po navodilih.' },
+         doughRest: { title: 'Čas za počitek testa', body: 'Pokrito testo pusti počivati po navodilih.' },
+         fridgeOut: { title: 'Vzemi testo iz hladilnika', body: 'Testo temperiraj po navodilih recepta.' },
+         roomFermentationEndPreheat: { title: 'Konec fermentacije pri sobni temperaturi in segrevanje pečice', body: 'Fermentacija pri sobni temperaturi je končana. Čas je za segrevanje pečice.' },
+-        roomFermentationEnd: { title: 'Konec fermentacije pri sobni temperaturi', body: 'Fermentacija pri sobni temperaturi je končana. Nadaljujte z zaključno pripravo pice.' },
++        roomFermentationEnd: { title: 'Konec fermentacije pri sobni temperaturi', body: 'Fermentacija pri sobni temperaturi je končana. Nadaljuj z zaključno pripravo pice.' },
+         preheat: { title: 'Čas je za segrevanje pečice', body: 'Začni segrevati pečico po načrtu.' },
+         shape: { title: 'Čas je za oblikovanje pice', body: 'Pico oblikuj in obloži po receptu.' },
+         bake: { title: 'Čas je za pico 🍕', body: 'Pico speci po receptu.' },
+@@ -1883,7 +1901,7 @@ export const translations = {
+       coldLong: 'Hladno dolgo (24-48h)',
+       results: 'Rezultati',
+       totalFlour: 'Skupna moka',
+-      totalWater: 'Skupna voda',
++      totalWater: 'Skupna količina vode',
+       waterTemp: 'Temp. vode',
+       yeastAmount: 'Kvas',
+       saltAmount: 'Sol',
+@@ -1937,15 +1955,15 @@ export const translations = {
+           ],
+         },
+         C: {
+-          title: 'Faza C: Delitev in oblikovanje kepic',
++          title: 'Faza C: Delitev in oblikovanje kroglic testa',
+           steps: [
+             'Razreži in natančno stehtaj kose želene teže iz kalkulatorja.',
+             'Oblikuj čvrste, gladke kepice in jih zloži v posodo za testo.',
+-            'Kepice daj v hladilnik za izbrano časovno obdobje pri 4–6 °C. Vzemi jih 1 uro 15 minut pred peko ali ko se približno podvojijo, a pazite, da ne predignete.',
++            'Kepice daj v hladilnik za izbrano časovno obdobje pri 4–6 °C. Vzemi jih 1 uro 15 minut pred peko ali ko se približno podvojijo, a pazi, da jih ne predigneš.',
+           ],
+         },
+         D: {
+-          title: 'Faza D: Priprava, raztezanje in oblikovanje',
++          title: 'Faza D: Oblikovanje in dodajanje nadeva',
+           steps: [
+             'Vzemi kepice 1 uro 15 minut pred peko ali ko se približno podvojijo, a ne dovoli, da preveč fermentirajo. Površino posuj z zdrobom.',
+             'S prsti potiskaj zrak od sredine proti robovom in pusti rob širine ca. 1 cm.',
+@@ -1983,7 +2001,7 @@ export const translations = {
+           steps: [
+             'Odreži in stehtaj kose na ciljno težo kepice.',
+             'Oblikuj čvrste, gladke kepice v posodi za testo.',
+-            'Kepice daj v hladilnik za izbrano časovno obdobje pri 4–6°C. Vzemi jih 1 uro 15 minut pred peko ali ko se približno podvojijo, a pazite, da ne predignete.',
++            'Kepice daj v hladilnik za izbrano časovno obdobje pri 4–6°C. Vzemi jih 1 uro 15 minut pred peko ali ko se približno podvojijo, a pazi, da jih ne predigneš.',
+           ],
+         },
+         D: {
+@@ -2077,13 +2095,17 @@ export const translations = {
+           preheat: 'Ob tem alarmu segrejte izbrano pečico/kamen; pico vstavite ob načrtovanem času peke.',
+           bake: 'Pico vstavite točno ob načrtovanem času peke.',
+         },
+-        poolishMixTitle: 'Zamesi poolish',
++        poolishMixTitle: 'Pripravi poolish',
+         poolishMixDesc: '35% moke, 100% hidracije, 0,1% kvasa. Pusti 12-14 ur pri sobni temperaturi.',
+         directTitle: 'Zamesi testo',
+         directDesc: 'Neposredna metoda za napolitansko pico: zamesi vse sestavine in začni fermentacijo.',
+         directHomeCopy: {
+-          start: 'Začni neposredno mešanje po izračunanih količinah; prva fermentacija pri {ROOM_TEMP} traja do načrtovanega alarma za oblikovanje kroglic.',
++          start: 'Začni neposredno pripravo testa po izračunanih količinah. Prva fermentacija pri {ROOM_TEMP} traja do načrtovanega opomnika za oblikovanje kroglic testa.',
+           ballingFridge: 'Testo zdaj razdeli na kroglice po {WEIGHT} g, jih oblikuj in prestavi v hladilnik za {HOURS} pri {FRIDGE_TEMP}.',
++          ballingTitle: 'Oblikuj kroglice',
++          balling: 'Testo razdeli na kose po {WEIGHT} g in jih oblikuj v kroglice.',
++          fridgeInTitle: 'Kroglice postavi v hladilnik',
++          fridgeIn: 'Oblikovane kroglice postavi v hladilnik za {HOURS} pri {FRIDGE_TEMP}.',
+           roomOnlyBalling: 'Testo zdaj razdeli na kroglice po {WEIGHT} g in jih oblikuj; do peke naj počivajo pokrite skupaj {ROOM_AFTER} pri {ROOM_TEMP}, vključno z zaključno pripravo.',
+           finalRoom: 'Kroglice vzemi iz hladilnika in jih pusti {ROOM_AFTER} na sobni temperaturi; oblikuj in obloži jih v zadnjih 15 minutah ter pico vstavi ob načrtovanem času.',
+           preheat: 'Ob {PREHEAT_TIME} vklopi izbrano pečico/kamen in ga segrej; predgretje traja {PREHEAT_MINUTES} minut.',
+@@ -2096,6 +2118,8 @@ export const translations = {
+           start: 'Testo zamesi po izračunanih količinah; za pekač naj ostane ena masa.',
+           ballingFridge: 'Testo kot eno maso prestavi v pokrito posodo in ga hladi {HOURS} pri {FRIDGE_TEMP}.',
+           ballingTitle: 'Testno maso postavi v hladilnik',
++          fridgeInTitle: 'Testno maso postavi v hladilnik',
++          fridgeIn: 'Pokrito testno maso postavi v hladilnik za {HOURS} pri {FRIDGE_TEMP}.',
+           roomOnlyBalling: 'Pokrito maso testa pusti do peke skupaj {ROOM_AFTER} pri {ROOM_TEMP}, vključno z zaključno pripravo.',
+           roomOnlyTitle: 'Pusti testno maso počivati',
+           finalRoom: 'Testno maso vzemi iz hladilnika in jo pred vtiskanjem v pekač pusti {ROOM_AFTER} na sobni temperaturi.',
+@@ -2179,7 +2203,7 @@ export const translations = {
+       report: { violationReason: 'Kršitev pravil skupnosti', error: 'Pošiljanje prijave ni uspelo.' },
+     },
+     school: {
+-      title: 'Šola pizze - Zlata pravila',
++      title: 'Šola pice – zlata pravila',
+       subtitle: 'Preprosta pravila za boljše testo, omako in peko.',
+       rules: [
+         { title: 'Sir (Fior di Latte)', body: 'Reži na debelejše kose/paličice, ne drobno. Drobno rezano spusti preveč vode in maščobe ter zgori.' },
+@@ -2225,8 +2249,8 @@ export const translations = {
+       extrasList: [
+         'Sol (morska, groba)',
+         'Ekstra deviško oljčno olje',
+-        'Fior di Latte / mocarela (80-100g na pizzo)',
+-        'San Marzano pelati (80-90g na pizzo)',
++        'Fior di Latte / mocarela (80–100 g na pico)',
++        'Pelati San Marzano (80–90 g na pico)',
+         'Sveži bazilika',
+       ],
+     },
+@@ -2240,9 +2264,9 @@ export const translations = {
+       blendIdealHint: 'Idealna hidracija mešanice: {N}%',
+     },
+     ballWeight: {
+-      label: 'Teža kroglice',
+-      autoHint: 'Samodejno po premeru: {N}g',
+-      manualHint: 'Ročno · privzeto {N}g',
++      label: 'Teža kroglice testa',
++      autoHint: 'Samodejno glede na premer: {N} g',
++      manualHint: 'Ročno · privzeto {N} g',
+       reset: 'Ponastavi samodejni izračun',
+     },
+     pizzaPreview: { hint: 'Pravo razmerje (referenca: 40 cm)' },
+diff --git a/frontend/src/preferences.ts b/frontend/src/preferences.ts
+index a9d9668..8529f1e 100644
+--- a/frontend/src/preferences.ts
++++ b/frontend/src/preferences.ts
+@@ -6,6 +6,12 @@ export type TemperatureUnit = 'celsius' | 'fahrenheit';
+ export type MeasurementSystem = 'metric' | 'us';
+ export type PreferredYeastType = 'fresh' | 'dry';
+ 
++export type LoadedCalculatorPreferences = {
++  temperatureUnit: TemperatureUnit;
++  measurementSystem: MeasurementSystem;
++  preferredYeastType: PreferredYeastType;
++};
++
+ function createPreference<T extends string>(key: string, validValues: readonly T[], defaultValue: T) {
+   let cached: T | undefined;
+   const listeners = new Set<() => void>();
+@@ -23,6 +29,10 @@ function createPreference<T extends string>(key: string, validValues: readonly T
+       listeners.forEach((listener) => listener());
+       return cached;
+     },
++    apply: (value: T): void => {
++      cached = value;
++      listeners.forEach((listener) => listener());
++    },
+     set: async (value: T): Promise<boolean> => {
+       cached = value;
+       listeners.forEach((listener) => listener());
+@@ -49,3 +59,9 @@ export const getCachedPreferredYeastType = preferredYeastTypePref.getCached;
+ export const subscribePreferredYeastType = preferredYeastTypePref.subscribe;
+ export const loadPreferredYeastType = preferredYeastTypePref.load;
+ export const setPreferredYeastType = preferredYeastTypePref.set;
++
++export function applyLoadedCalculatorPreferences(preferences: LoadedCalculatorPreferences): void {
++  temperatureUnitPref.apply(preferences.temperatureUnit);
++  measurementSystemPref.apply(preferences.measurementSystem);
++  preferredYeastTypePref.apply(preferences.preferredYeastType);
++}
+diff --git a/B1_REVIEW_NOTES.md b/B1_REVIEW_NOTES.md
+new file mode 100644
+index 0000000..8aec75f
+--- /dev/null
++++ b/B1_REVIEW_NOTES.md
+@@ -0,0 +1,205 @@
++# PizzaBook B1 Final Review Notes
++
++## Status
++
++B1 potvrđen nakon popravka i stvarnog web reloada. B2 je potvrđen za raniji
++ciljani javni fridge-out test i dodatnu lokalnu coverage provjeru. Opseg,
++ograničenja i matrica slučajeva nalaze se u `B2_COVERAGE_REVIEW.md`; tri nova
++slučaja nisu potvrđena u javnom previewu.
++
++## Baseline
++
++- Base/current repository commit: `98c348517f54e5d12ee7dd2fd6c15ab1af8ba948`
++- Commit subject: `Preserve Teglia format in Beginner planner`
++- B1 promjene nisu commitane; aktualni preview je pokrenut iz ovog worktreeja.
++- Local preview URL: `http://localhost:3000`
++- Public B2 preview URL: `https://pizzabook--b2-fridgeout-20261011.expo.app`
++- EAS B2 deployment: `aw0tig81p0`; alias `b2-fridgeout-20261011`.
++- B2 URL was generated from a fresh `expo export --platform web` directory.
++- Build/source identitet: `local-web-b1-2026-10-10`, Expo `1.0.4`, Android
++  versionCode `5`, base commit gore plus aktualni B1 worktree patch.
++- Nema udaljenog objavljenog commit-a ili EAS native builda; javni web preview
++	je EAS Hosting deployment iz aktualnog uncommitted worktreeja. Postojeći
++	`update.json` APK URL nije korišten kao B1 preview.
++
++## B1 implementation files
++
++- `frontend/app/(tabs)/index.tsx`
++- `frontend/src/beginnerPlanPersistence.ts`
++- `frontend/src/beginnerPlanRestoreCoordinator.ts`
++- `frontend/src/experienceLevel.ts`
++- `frontend/src/preferences.ts`
++- `frontend/src/i18n/translations.ts`
++- `frontend/app/(tabs)/planner.tsx`
++- `frontend/package.json`
++- `frontend/scripts/verify-beginner-plan-persistence.js`
++
++`frontend/B1.diff` uključuje sve navedene B1 izmjene i nove untracked datoteke.
++`frontend/B2.diff` je stvarni Git diff iz baze
++`98c348517f54e5d12ee7dd2fd6c15ab1af8ba948`, uključujući aktualne
++`planner.tsx`, `translations.ts`, B1 module i B2 regresiju.
++`experienceLevel.ts` i `preferences.ts` sadrže generation-safe in-memory commit
++API-je potrebne nakon koordiniranog čitanja.
++
++## Root cause and fix
++
++`guidedPlanId` je prije sadržavao `directHomeSchedule.startAt` i izvedene sate.
++Ti podaci ovise o trenutku izračuna, pa je pravi reload mogao napraviti novi ID
++za isti korisnički plan i učitati prazan progress zapis. Popravak veže ID uz
++production builder `createBeginnerPlanInputKeyFromState()` i postojeći stabilni
++`beginnerPlanInputKey`. Builder uključuje stvarne plan-inpute, uključujući
++promjer za okrugle pizze i `30x40`/`20x60` dimenzije samo za Tegliu. Roman
++format je dio ključa samo za stil Romana. Stvarna
++promjena termina, stila, brašna, zamjesa, kvasca, promjera ili Teglia dimenzija
++i dalje stvara novi ID.
++
++## Packaged support files
++
++Pomoćni produkcijski i testni izvori potrebni za pokretanje provjera:
++
++- `frontend/src/calculator.ts`
++- `frontend/src/guidedRecipe.ts`
++- `frontend/src/notifications.ts`
++- `frontend/src/components/GuidedRecipePanel.tsx`
++- `frontend/src/utils/storage/index.ts`
++- `frontend/src/utils/storage/index.web.ts`
++- `frontend/src/utils/storage/storage-base.ts`
++- `frontend/tsconfig.json`
++- `frontend/scripts/verify-beginner-direct-v1.js`
++- `frontend/scripts/verify-beginner-direct-schedule.js`
++- `frontend/scripts/verify-guided-recipe.js`
++- `frontend/scripts/verify-beginner-notifications.js`
++- `frontend/scripts/verify-home-pizza-plan.js`
++
++Review documents included:
++
++- `B1_REVIEW_NOTES.md`
++- `B1_VERIFICATION_REPORT.md`
++
++## Unrelated worktree changes
++
++These existing user changes are intentionally excluded from the B1 diff and
++ZIP and were not modified:
++
++- `BEGINNER_FINAL_3_ISSUES.md`
++- `BEGINNER_REMAINING_TEXT_AUDIT.md`
++- `QA_HANDOFF.md`
++- `frontend/app.json.backup`
++- `pizzabook_beginner_text_export/`
++
++The final B1 diff contains only the two tracked B1 source changes, the two
++tracked support-module changes, and the three B1 untracked production/test files:
++`index.tsx`, `package.json`, `experienceLevel.ts`, `preferences.ts`,
++`beginnerPlanPersistence.ts`, `beginnerPlanRestoreCoordinator.ts`, and
++`verify-beginner-plan-persistence.js`.
++
++## Verification completed
++
++No checks were rerun for packaging. The latest completed results were:
++
++- `npx tsc --noEmit --pretty false`: passed.
++- `npm run check:beginner-plan-persistence`: passed.
++- `npm run check:beginner-direct-v1`: passed.
++- `npm run check:beginner-direct-schedule`: passed.
++- `npm run check:guided-recipe`: passed.
++- `npm run check:beginner-notifications`: passed.
++- Editor diagnostics for touched TypeScript/JavaScript files: no errors.
++- Proširena identity matrica: svi Beginner stilovi, room-only/fridge-room,
++	hand/mixer, fresh/dry yeast i caputo00/manitoba/spelt/wholeWheat/glutenFree/
++	custom flour putovi.
++- Stvarni UI tok na lokalnom previewu: `1/8` nakon prvog koraka, `1/8` nakon
++	Profil -> Kalkulator, `1/8` nakon punog reload-a. Dokazi su u
++	`frontend/ui_evidence/18-b1-after-reload-progress-visible.png` i ranijim
++	screenshotovima u istom direktoriju. Javni preview je otvoren i prikazuje
++	aktualni Beginner intro.
++- Novi ZIP, checksum i sadržaj paketa provjereni nakon regeneracije.
++
++## Resolver assumption and limitation
++
++`resolveBeginnerRestoreBakeAt` treats a valid `beginnerBakeAt` legacy value that
++differs from an older snapshot bake time as the current Planner selection. This
++matches the application contract: Planner writes that legacy key when the user
++chooses a new date, and the new date must invalidate/supersede the old snapshot.
++
++A different timestamp alone does not prove that the legacy record was written
++later. Storage has no write-generation or timestamp metadata in this B1 format,
++so an out-of-order or stale legacy write cannot be distinguished from a current
++Planner selection. The automated regression verifies the intended policy and
++explicitly documents this provenance limitation; it does not claim chronological
++proof from the date values.
++
++## Automated versus UI verification
++
++Kodne provjere izvršavaju produkcijske persistence, restore-coordinator,
++calculator i guided-recipe funkcije; identity matrica i source contract izravno
++provjeravaju novi ključ. To nisu zamjena za mount aplikacije.
++
++UI provjera je izvršena u stvarnom Expo web previewu s AsyncStorageom: generiran
++je plan za 11.10.2026. u 19:00, zatim je označen prvi korak, posjećena je Profil
++kartica, vraćeno se na Kalkulator i napravljen browser reload. Rezultat je
++uspješno ostao `1/8`.
++
++## B2 fridge-out finding and fix
++
++Za isti raspored (`bakeAt=19:00`, `roomBeforeFridgeHours=115/60 h`,
++`fridgeHours=8 h`, Phase A/B/C `20/90/5 min`, `roomAfterFridgeHours=2 h`):
++
++- `ballingAt = 08:55`, `fridgeAt = 09:00`; `fridgeAt - ballingAt = Phase C = 5 min`.
++- Beginner i detaljne upute koriste `startAt + (roomBeforeFridgeHours + fridgeHours)`:
++	`07:05 + 1:55 + 8:00 = 17:00`.
++- Stari Planner je koristio `ballingAt + fridgeHours`: `08:55 + 8:00 = 16:55`.
++- Popravak u `reversePlan` koristi `fridgeAt + fridgeHours`: `09:00 + 8:00 = 17:00`.
++
++Time je potvrđeno da je `ballingAt` uzrok razlike samo zato što ga je Planner
++pogrešno koristio kao početak hladne faze. Formula `ballingAt` nije mijenjana;
++Planner sada izvodi vađenje iz `fridgeAt`, kao Beginner i detaljne upute.
++
++## B2 public end-to-end verification
++
++Javni B2 UI test izvršen je na `https://pizzabook--b2-fridgeout-20261011.expo.app`.
++Beginner i detaljne upute prikazali su vađenje u `17:00`; Planner je prikazao
++`16:55` za podjelu/kuglice i `17:00` za stvarni korak vađenja. Nakon označavanja
++prvog koraka, odlaska na Profil, povratka na Calculator i punog reloada ostali
++su `1/8`, `17:00` i isti plan. Dokazi su u
++`frontend/ui_evidence/19-b2-public-planner-fridgeout.png` i
++`frontend/ui_evidence/20-b2-public-beginner-after-reload.png`.
++
++## B2 representative coverage follow-up
++
++Proširena lokalna UI provjera izvršena je za Romana Tonda/mikser/suhi kvasac/
++Manitoba, Romana Teglia/ručni zamjes/svježi kvasac/integralno i New York/
++mikser/svježi kvasac/bezglutensko brašno. Beginner, detaljne upute i Planner
++uspoređeni su za svaki slučaj; nakon stvarnog reloada napredak je ostao `1/8`,
++`1/8` i `1/6`. Provjera je otkrila i popravila zastarjeli Roman format u
++identitetu New York plana. Detaljna matrica i granice provjere nalaze se u
++`B2_COVERAGE_REVIEW.md` i `B2_VERIFICATION_REPORT.md`.
++
++Room-only rezultat iz ranije provjere klasificiran je samo kao lokalni UI test.
++Nije potvrđen javnim previewem ni reloadom. Room-only rasporedni kod nije
++mijenjan. Tri nove kombinacije nisu ponovljene u javnom previewu. B3 nije
++započet.
++
++## Naknadna objava B2 identity popravka
++
++Aktualni kod s popravkom identiteta plana objavljen je na
++`https://pizzabook--fi76aijhtf.expo.app`, EAS deployment ID `fi76aijhtf`,
++alias `b2-identityfix-20261011`. Javni landing page učitao se, a SHA-256
++objavljenog JavaScript bundlea poklapa se s lokalnim exportom:
++`07ce27d3c1f021ff439672695d332941db4cc5b10b61951e27d2f47f0603e5b0`.
++To potvrđuje identitet builda, ne ponavljanje B2 slučajeva na javnom UI-ju.
++Room-only reload/javna provjera, miješano brašno, jezik/jedinice, Neapolitan
++cross-surface i preostale kombinacije ostaju otvoreni.
++
++## Završne B2 provjere nakon ovog deploymenta
++
++Naknadno su na `fi76aijhtf` javno provjereni room-only plan i Romana Tonda
++hladni plan s mješavinom brašna 70% Tipo 0/00 + 30% integralno. Room-only
++raspored i `1/7` napredak preživjeli su Profil → Kalkulator i stvarni reload.
++Custom plan je ostao `1/8` nakon HR → DE i metričkih → US jedinica; promjena
++sastojka B iz integralnog u pir pokazala je reset na `0/8`.
++
++Usporedba je otkrila da je Beginner/Planner prikazivao kuglice i ulazak u
++hladnjak u `16:55`, dok su detaljne upute pokazivale `17:00`. Popravak sada
++razdvaja `ballingAt` i `fridgeAt`; potvrđen je javno na
++`https://pizzabook--m3gh4gw90j.expo.app` (`m3gh4gw90j`) uz reload i `1/9`.
++Prethodno potvrđene Napolitana i New York hladne slučajeve nismo ponavljali.
+diff --git a/B1_VERIFICATION_REPORT.md b/B1_VERIFICATION_REPORT.md
+new file mode 100644
+index 0000000..4c7db4d
+--- /dev/null
++++ b/B1_VERIFICATION_REPORT.md
+@@ -0,0 +1,292 @@
++# B1 Verification Report
++
++## Status
++
++B1 je potvrđen ranijim testom. Ciljani B2 fridge-out slučaj je zasebno ranije
++potvrđen u javnom UI-ju; dodatna reprezentativna coverage provjera za tri
++kombinacije provedena je lokalno. Ne tvrdi se da su te tri kombinacije
++provjerene u javnom previewu. Njihovi rezultati i ograničenja nalaze se u
++`B2_VERIFICATION_REPORT.md`.
++
++## Baseline
++
++- B1 nije commit-an; paket prikazuje aktualne uncommitted datoteke.
++- Local preview URL: `http://localhost:3000`
++- Public B2 preview URL: `https://pizzabook--b2-fridgeout-20261011.expo.app`
++- EAS Hosting B2 deployment: `aw0tig81p0`, alias `b2-fridgeout-20261011`.
++- Build/source: `local-web-b1-2026-10-10`, Expo `1.0.4`, Android versionCode `5`,
++  base commit `98c348517f54e5d12ee7dd2fd6c15ab1af8ba948` plus B1 worktree patch.
++- Nema udaljenog objavljenog commit-a ili EAS native builda; javni web preview
++	je objavljen iz svježeg `expo export --platform web` direktorija. `update.json`
++	APK nije dokaz aktualnog B1 previewa.
++
++## Exact B1 implementation files
++
++- `frontend/app/(tabs)/index.tsx`
++- `frontend/src/beginnerPlanPersistence.ts`
++- `frontend/src/beginnerPlanRestoreCoordinator.ts`
++- `frontend/src/experienceLevel.ts`
++- `frontend/src/preferences.ts`
++- `frontend/package.json`
++- `frontend/scripts/verify-beginner-plan-persistence.js`
++
++B1 review artifacts:
++
++- `frontend/B1.diff`
++- `B1_REVIEW_NOTES.md`
++- `B1_VERIFICATION_REPORT.md`
++- `frontend/B2.diff`
++- `frontend/ui_evidence/19-b2-public-planner-fridgeout.png`
++- `frontend/ui_evidence/20-b2-public-beginner-after-reload.png`
++
++Known pre-existing unrelated worktree changes were not modified or packaged:
++
++- `BEGINNER_FINAL_3_ISSUES.md`
++- `BEGINNER_REMAINING_TEXT_AUDIT.md`
++- `QA_HANDOFF.md`
++- `frontend/app.json.backup`
++- `pizzabook_beginner_text_export/`
++
++## Production implementation
++
++`frontend/app/(tabs)/index.tsx` uses the shared persistence module and the shared
++async restore coordinator. `frontend/src/beginnerPlanPersistence.ts` owns the
++versioned snapshot shape, schedule date serialization and validation, tolerant
++JSON parsing, active-plan expiry, and stable input-key creation.
++
++`frontend/src/beginnerPlanRestoreCoordinator.ts` reads the actual AsyncStorage
++path and keys for experience level, temperature unit, measurement system,
++preferred yeast, calculator settings, legacy bake date, and the versioned
++Beginner snapshot. It returns no restore result until every read completes.
++Scalar preference and experience values are decoded from their JSON-stringified
++storage form. Calculator settings and the snapshot retain their own JSON
++payloads, while the Planner legacy date remains its separate ISO-string record.
++Generation and mounted guards discard an older response after a mode change, a
++new load, or unmount. `activate()` makes the same coordinator reusable for
++React Strict Mode setup-cleanup-setup.
++
++The app applies loaded experience and preference caches only after the
++coordinator confirms the generation is current. This prevents temporary `fresh`
++from entering the snapshot input key. It preserves the existing shared bake date
++while reading. Only a current successful Beginner restore or valid Planner
++legacy date changes it; Pro, rejected, stale, and unmounted restores preserve
++the date. Saving the snapshot and guided notification synchronization remain
++gated by completed settings hydration.
++
++The restored schedule remains authoritative for displayed schedule terms, while
++`homePlan` is calculated with the stored `calculationNow`, preserving candidate
++evaluations and flour guidance.
++
++### Reload identity fix
++
++The previous `guidedPlanId` included `directHomeSchedule.startAt` and derived
++durations. Those values can move when `calculationNow` changes during reload,
++which orphaned the saved progress for the same plan. The targeted fix now calls
++`createGuidedPlanId([beginnerPlanInputKey])`, where the app constructs that key
++through production `createBeginnerPlanInputKeyFromState()`. It includes actual
++plan choices, round diameter, and conditional Teglia tray dimensions, while
++excluding language/unit display preferences. Roman format is included only
++when `pizzaStyle === 'romana'`; stale Roman settings do not affect New York or
++Neapolitan plan identity.
++
++## Planner-date resolver limitation
++
++`resolveBeginnerRestoreBakeAt` gives a valid Planner legacy date precedence when
++it differs from the stored snapshot date. This is the intended application
++policy because Planner writes `beginnerBakeAt` when the user selects a new date,
++and the new selection must supersede the older active snapshot.
++
++A different date alone is not evidence that the legacy record was written later.
++The B1 storage format has no write-generation or provenance metadata, so an
++out-of-order or stale legacy write cannot be distinguished from a current
++Planner selection. The automated test verifies the policy, not chronological
++proof from timestamps. Adding provenance would be a separate storage-format
++change and is outside this B1 package.
++
++## Commands already executed and results
++
++The following commands were completed successfully on the latest application
++state before this packaging-only task:
++
++```text
++npx tsc --noEmit --pretty false
++npm run check:beginner-plan-persistence
++npm run check:beginner-direct-v1
++npm run check:beginner-direct-schedule
++npm run check:guided-recipe
++npm run check:beginner-notifications
++```
++
++Results:
++
++- TypeScript: passed with no output/errors.
++- B1 persistence and async restore: passed using production persistence, calculator, guided-plan, and restore-coordinator functions.
++- Beginner Direct V1: passed.
++- Beginner Direct schedule: passed.
++- Guided recipe: passed for grouping, event order, progress, countdown, and plan identity.
++- Beginner notifications: passed for notification completeness and workflow exclusions.
++- Editor diagnostics for touched TypeScript/JavaScript files: no errors.
++- The preceding package build passed ZIP integrity, required-module, exclusion, and report-consistency checks.
++- `yarn check:beginner-phase-sequence`, `phase-a`, `phase-b`, `recipe-gate`,
++	`final-fixes`, `water-temp`: passed.
++- Teglia Tipo 00, custom, spelt, whole-wheat and gluten-free Phase A checks:
++	passed.
++- Expanded identity matrix: passed for all requested style, schedule, mixing,
++	yeast and flour paths.
++
++## What is tested from production
++
++`verify-beginner-plan-persistence.js` transpiles and executes the actual:
++
++- `src/beginnerPlanPersistence.ts` parser, serializer, active check, and key function;
++- `src/calculator.ts` schedule validator;
++- `src/guidedRecipe.ts` `createGuidedPlanId`;
++- `src/beginnerPlanRestoreCoordinator.ts` storage-key loaders, date resolver, and generation coordinator;
++- current `app/(tabs)/index.tsx` coordinator wiring.
++
++The fixtures cover room-only and fridge-room snapshots, a restore 30 minutes
++before baking, moved controlled time, saved `calculationNow`, exact schedule
++round-trip, guided plan identity and separate progress record, invalid JSON,
++structurally invalid data, expiry, new-date/input identity, display-setting
++invariance, Pro isolation, and hydration/error gates.
++
++The async restore fixtures use controlled promises and mock storage to verify the
++actual storage key path, JSON-stringified `pro`, `dry`, `us`, and `fahrenheit`
++values, delayed saved `dry` yeast, dry-plan restoration, no temporary save/alarm
++side effects, reverse completion of two loads, Beginner-to-Pro mode change while
++reading, unmount cancellation, Pro/error/stale/Planner shared-date behavior, and
++React Strict Mode setup-cleanup-setup reuse. Stale responses resolve but return
++`null` from the same coordinator used by the app. These are executable
++production-function checks, not a duplicated lifecycle model.
++
++## Automated versus UI verification
++
++Automated and completed:
++
++- production persistence and async restore functions;
++- TypeScript compilation;
++- Beginner Direct, guided recipe, and notification regressions;
++- editor diagnostics for touched files;
++- final archive integrity and package-content comparison.
++
++Executed in the actual Expo web preview:
++
++- Beginner, Neapolitan, Direct, hand mixing, Tipo 0/00, 4 x 250 g, stone oven,
++	300 C, bake time 11.10.2026 19:00.
++- First guided step marked: `1/8`.
++- Profile -> Calculator: `1/8` retained.
++- Full browser reload: `1/8` retained.
++- Evidence: `frontend/ui_evidence/18-b1-after-reload-progress-visible.png` plus
++	the preceding evidence files.
++
++The welcome intro was closed persistently before the final local reload check;
++the resulting screenshot clearly shows `1/8` after reload. The public EAS
++preview was then opened separately and confirmed to load the current Beginner
++intro.
++
++The code checks and UI checks are reported separately: code checks exercise
++production modules and source wiring; the UI check mounts the real app and uses
++the browser's actual AsyncStorage lifecycle.
++
++## B2 verification: fridge-out timestamp
++
++For one identical schedule, the production formulas and values are:
++
++```text
++bakeAt = 19:00
++Phase A/B/C = 20/90/5 minutes
++roomBeforeFridgeHours = (20 + 90 + 5) / 60 = 115/60 h
++fridgeHours = 8 h
++startAt = 07:05
++ballingAt = startAt + (Phase A + Phase B) = 08:55
++fridgeAt = ballingAt + Phase C = 09:00
++```
++
++Beginner and detailed instructions compute `fridgeOutAt` as
++`startAt + (roomBeforeFridgeHours + fridgeHours)`, producing `17:00`.
++The old Planner formula was `ballingAt + fridgeHours`, producing `16:55`.
++The corrected Planner formula is `(fridgeAt ?? ballingAt) + fridgeHours`,
++producing `17:00`. The fallback preserves schedules without `fridgeAt`.
++
++The targeted `check:home-pizza-plan` regression verifies all three values,
++the five-minute `fridgeAt - ballingAt` Phase C boundary, and the corrected
++Planner milestone. `ballingAt` itself was not changed.
++
++## B2 production and public UI coverage
++
++The regression creates the Beginner schedule through
++`createDirectHomePizzaPlan`, then feeds that production schedule to
++`reversePlan`. It covers the generated `fridgeRoom` plan, the normal schedule,
++and a generated plan crossing local midnight in `Europe/Vienna`. It compares
++timestamps, not only formatted clock strings.
++
++The Beginner/detailed-instructions surface is separately verified through the
++production `getBeginnerFridgeOutAt` source contract and its callers; it is not
++claimed as an executed UI function by the Node test. The Planner surface is
++executed through production `reversePlan` and then mounted in the public UI.
++
++Public B2 UI verification completed at the deployment above:
++
++- Beginner schedule: fridge entry `17:00`, fridge removal `17:00`.
++- Detailed instructions: cold phase ends and final room phase begins at `17:00`.
++- Planner: `16:55` is the balling/portioning milestone; “Izvadi loptice iz
++	hladnjaka” is `17:00`.
++- After first-step completion, Profile -> Calculator, and full browser reload:
++	progress remained `1/8` and the `17:00` terms remained unchanged.
++- Evidence: `frontend/ui_evidence/19-b2-public-planner-fridgeout.png` and
++	`frontend/ui_evidence/20-b2-public-beginner-after-reload.png`.
++
++No B3 work was started.
++
++## B2 representative local UI coverage update
++
++See `B2_VERIFICATION_REPORT.md` for the executed/not-executed case matrix,
++per-surface comparison, progress values after actual reloads, and local-only
++room-only boundary. During the New York/gluten-free case, a stale Roman format
++in saved calculator settings changed the guided plan identity after a reload.
++`createBeginnerPlanInputKeyFromState` was corrected to omit Roman format for
++non-Romana styles, and the persistence test now asserts that invariant. The
++targeted persistence check and TypeScript check pass after the fix.
++
++This did not change room-only schedule generation. At the time of the local UI
++pass, no new public preview was created and the three cases remained local.
++B3 was not started.
++
++## Naknadna objava B2 identity popravka
++
++The final identity-fix code was later deployed to
++`https://pizzabook--fi76aijhtf.expo.app` (EAS deployment `fi76aijhtf`,
++alias `b2-identityfix-20261011`). The public landing page loaded and the served
++JavaScript bundle SHA-256 matched the fresh local export:
++`07ce27d3c1f021ff439672695d332941db4cc5b10b61951e27d2f47f0603e5b0`.
++This is deployment/build identity verification only; the representative B2
++cases were not re-run on the public preview. Room-only reload/public UI,
++mixed-flour, language/units, Neapolitan cross-surface, and remaining
++combinations stay open. B3 was not started.
++
++## Final B2 public checks and fix
++
++The later B2 follow-up tested a supported room-only plan on
++`https://pizzabook--fi76aijhtf.expo.app`: mix 13:05, folds 13:45/14:15,
++shape 14:55, room fermentation end and preheat 16:00, bake 17:00, with no
++fridge events. Beginner, detailed instructions and Planner were compared.
++After marking one step, visiting Profile, returning to Calculator and fully
++reloading, all schedule terms and progress `1/7` remained.
++
++A Romana Tonda custom-blend cold plan (70% Tipo 0/00 + 30% whole wheat) exposed
++that Beginner and Planner combined shaping and fridge entry at 16:55, while
++detailed instructions correctly placed the dough in the refrigerator at
++17:00. The fix separates shaping at `ballingAt` from fridge entry at
++`fridgeAt`, with a focused regression. Corrected public deployment
++`https://pizzabook--m3gh4gw90j.expo.app` (`m3gh4gw90j`) showed matching 16:55
++and 17:00 events across surfaces and retained `1/9` after Profile navigation
++and a real reload.
++
++On `fi76aijhtf`, switching the saved custom plan HR → DE and metric → US kept
++the bake/event times and `1/8` progress across a real reload. Flour, water,
++oil, dough, sauce and cheese quantities converted to oz/lb; precision-sensitive
++salt and yeast remain in grams by design. Changing blend component B from
++whole wheat to spelt changed the plan input and reset progress to `0/8`, which
++remained after reload. Other blend ratios, language/unit combinations,
++Neapolitan cross-surface checks and remaining style/mixing/yeast/flour cases
++remain open. B3 was not started.
+diff --git a/B2_COVERAGE_REVIEW.md b/B2_COVERAGE_REVIEW.md
+new file mode 100644
+index 0000000..83d6269
+--- /dev/null
++++ b/B2_COVERAGE_REVIEW.md
+@@ -0,0 +1,126 @@
++# PizzaBook B2 Coverage Review
++
++## Outcome
++
++Three representative Beginner combinations were exercised in the local Expo
++web UI across the Beginner plan, detailed recipe instructions, Planner, and a
++real browser reload. All three preserved the completed first guided step after
++reload and retained the bake time of 12 October 2026 at 19:00.
++
++The coverage run found one progress-identity defect affecting New York Style:
++the saved Roman format could remain in settings after switching styles and was
++included in the New York plan key. That made an unchanged plan appear to have a
++new identity on reload. `createBeginnerPlanInputKeyFromState` now includes the
++Roman format only for Romana plans. The production persistence test and the
++real New York/gluten-free/mixer UI reload both pass with the corrected key.
++
++The final open checks below were run on public preview `fi76aijhtf`. The
++custom-blend comparison exposed a 5-minute cold-entry mismatch between the
++combined Beginner/Planner event at 16:55 and detailed instructions at 17:00.
++After the minimal event-splitting fix, the same case was verified on a fresh
++public deployment. The latest corrected build is at
++`https://pizzabook--m3gh4gw90j.expo.app` (deployment `m3gh4gw90j`, alias
++`b2-fridgein-fix-20261011`); its served bundle matches the export byte-for-byte.
++
++## Executed case matrix
++
++| Case | Style | Mixing | Yeast | Flour | Beginner / detailed / Planner comparison | Reload and progress | Result |
++|---|---|---|---|---|---|---|---|
++| B2-UI-1 | Romana Tonda | Mixer | Dry | Manitoba | Compared all three surfaces. Beginner and details showed mixer-specific instructions and dry yeast. Shared schedule: mix 15:05, folds 15:45/16:15, balling 16:55, fridge out 17:00, preheat 18:00, bake 19:00. Planner's balling event at 16:55 is distinct from fridge-out at 17:00. | Real reload; `1/8` retained. | PASS |
++| B2-UI-2 | Romana Teglia | Hand | Fresh | Whole wheat | Compared all three surfaces. Beginner and details kept dough as one tray mass, used gentle hand-mixing instructions, and agreed on fridge-out 17:00, preheat 18:40 (20 min at 250°C), bake 19:00. Beginner adds a 18:45 tray/topping milestone; Planner does not create a separate 18:45 event. | Real reload; `1/8` retained. | PASS |
++| B2-UI-3 | New York Style | Mixer | Fresh | Gluten-free | Compared all three surfaces. Details specified a psyllium-bound cohesive mass, no gluten-development kneading, and mixer instructions. Shared schedule: mix 15:05, gluten-free portioning 16:55, fridge out 17:00, preheat 18:00, bake 19:00. Planner uses a general balling label for the 16:55 portioning event; the detailed and Beginner recipes preserve gluten-free handling. | First attempt exposed stale Roman-format identity. After the identity fix, real reload retained `1/6`. | PASS after fix |
++| B2-UI-4 | Neapolitan / direct / hand / Tipo 0/00, room-only | Hand | Fresh | Tipo 0/00 | Public Beginner, detailed instructions and Planner checked. Mix 13:05, folds 13:45/14:15, shape 14:55, room fermentation end and preheat 16:00, bake 17:00. No fridge-in/out events. Planner includes the 2 h room rest in its 14:55 shaping guidance and preheat at 16:00, without a separately named room-end appointment. | Marked first action; Profile → Calculator → full reload retained `1/7` and all dates/times. | PASS on `fi76aijhtf` |
++| B2-UI-5 | Romana Tonda / direct / hand / custom blend, fridge-room | Hand | Fresh | Tipo 0/00 70% + whole wheat 30% | Public Beginner, detailed instructions and Planner checked. Before fix, Beginner/Planner combined shaping and fridge-in at 16:55 while detailed instructions placed dough in fridge at 17:00. On corrected build, shaping is 16:55 and fridge-in 17:00 across Beginner and Planner, matching detailed instructions. | Original saved plan retained `1/8` after DE/US and a real reload; changed B flour from whole wheat to spelt and confirmed `0/8` after reload. Corrected build marked one action and retained `1/9` after Profile return and real reload. | PASS after fix |
++| B2-UI-6 | Same custom-blend plan / DE and US units | Hand | Fresh | Tipo 0/00 70% + whole wheat 30% | German labels and US display verified. Flour, water, oil, dough, sauce, cheese and temperature values converted; salt (`14.2 g`) and yeast (`0.34 g`) intentionally remain in grams as precision-sensitive weights. Event times were unchanged. | `1/8` retained through a real reload before the plan-input reset. | PASS on `fi76aijhtf` |
++
++For all executed cases, the 19:00 bake timestamp matched across Beginner,
++detailed instructions, and Planner. The detailed recipe provides procedural
++steps rather than a separately timed Planner event for every shaping/topping
++action, so the intermediate shaping milestones shown by Beginner are not
++expected to appear as additional Planner appointments.
++
++## Other known checks and scope limits
++
++| Case / surface | Status | Evidence boundary |
++|---|---|---|
++| Room-only mode, same bake time | Public UI comparison completed; see B2-UI-4. | Public preview and real reload verified; no fridge events. |
++| Neapolitan cold / hand / fresh / Tipo 0/00 | Earlier B1 local UI baseline checked progress restoration separately. | Cold-plan comparison was not repeated across all three surfaces in this B2 pass; room-only is the separate executed B2-UI-4 case. |
++| Spelt flour | Not run as a full Beginner/details/Planner/reload UI case in this pass. | Automated identity matrix is not a UI substitute. |
++| Custom flour blend | Public UI comparison completed; see B2-UI-5/6. | One 70/30 Tipo 0/00 + whole-wheat blend checked; other blend ratios/flours remain open. |
++| All remaining Cartesian combinations | Not run interactively. | The executed cases above are representative, not exhaustive UI coverage. |
++| Room-only after reload / public preview | Executed on the public preview; see B2-UI-4. | Verified on deployment `fi76aijhtf`; not repeated on the later cold-entry-only fix deployment. |
++| Public B2 fridge-out preview | Previously completed as a separate targeted check and documented in the B1 reports. | Not repeated for this coverage pass. |
++| Public preview of the three earlier representative B2 combinations | Not repeated; confirmed Napolitana and New York cold cases were intentionally not replayed. | Their prior local results stand; no new public claim. |
++| Language and unit preferences | HR → DE and metric → US checked on the saved custom-blend plan. | One combination verified; other languages/units and styles remain open. |
++| Mixed-flour combinations | One custom blend checked across all three surfaces and reloads. | Other flour pairs, ratios, and combinations remain open. |
++| Neapolitan cold-plan cross-surface comparison | Not run in this B2 pass. | Open; earlier B1 progress coverage is not a substitute. |
++| Remaining style/mixing/yeast/flour combinations | Not run interactively. | Open; three representative combinations are not exhaustive coverage. |
++
++## Code change
++
++- `frontend/src/beginnerPlanPersistence.ts`: exclude the irrelevant stored Roman
++  subtype for non-Romana plans when building the plan identity.
++- `frontend/scripts/verify-beginner-plan-persistence.js`: assert that switching
++  the stale Roman subtype cannot change a New York plan identity.
++- `frontend/app/(tabs)/index.tsx`, `frontend/src/calculator.ts`, and
++  `frontend/src/i18n/translations.ts`: split shaping (`ballingAt`) from fridge
++  entry (`fridgeAt`) when those timestamps differ.
++- `frontend/scripts/verify-home-pizza-plan.js`: regression checks that Beginner
++  and Planner expose separate events at the production schedule timestamps.
++- `frontend/B2-coverage-identity-fix.diff`: exact follow-up patch for the
++  production identity rule and its regression assertion.
++
++No fermentation schedule-generation formula was changed. The latest build and
++the earlier test deployment are detailed below. B3 was not started.
++
++## Evidence
++
++The local and public UI screenshots are included in the B2 coverage archive:
++
++- `frontend/ui_evidence/b2-case1-romana-tonda-mixer-dry-manitoba-beginner.png`
++- `frontend/ui_evidence/b2-case1-romana-tonda-mixer-dry-manitoba-detailed.png`
++- `frontend/ui_evidence/b2-case1-romana-tonda-mixer-dry-manitoba-planner-timeline-after-reload.png`
++- `frontend/ui_evidence/b2-case1-romana-tonda-mixer-dry-manitoba-after-reload.png`
++- `frontend/ui_evidence/b2-case2-romana-teglia-hand-fresh-wholewheat-beginner.png`
++- `frontend/ui_evidence/b2-case2-romana-teglia-hand-fresh-wholewheat-detailed.png`
++- `frontend/ui_evidence/b2-case2-romana-teglia-hand-fresh-wholewheat-planner-after-reload.png`
++- `frontend/ui_evidence/b2-case2-romana-teglia-hand-fresh-wholewheat-after-reload.png`
++- `frontend/ui_evidence/b2-case3-newyork-mixer-fresh-glutenfree-beginner.png`
++- `frontend/ui_evidence/b2-case3-newyork-mixer-fresh-glutenfree-detailed.png`
++- `frontend/ui_evidence/b2-case3-newyork-mixer-fresh-glutenfree-planner-after-reload.png`
++- `frontend/ui_evidence/b2-case3-newyork-mixer-fresh-glutenfree-after-reload-verified.png`
++- `frontend/ui_evidence/b2-public-preview-identityfix-home.png` (deployed
++  landing-page load; not a case-specific test)
++- `frontend/ui_evidence/b2-public-room-only-after-mark.png`
++- `frontend/ui_evidence/b2-public-room-only-after-reload.png`
++- `frontend/ui_evidence/b2-public-custom-blend-cold-after-mark.png`
++- `frontend/ui_evidence/b2-public-custom-blend-cold-de-metric.png`
++- `frontend/ui_evidence/b2-public-custom-blend-cold-de-us-before-reload.png`
++- `frontend/ui_evidence/b2-public-custom-blend-cold-de-us-after-reload.png`
++- `frontend/ui_evidence/b2-public-custom-blend-cold-de-us-input-reset.png`
++- `frontend/ui_evidence/b2-public-custom-blend-cold-de-us-after-reload.png`
++- `frontend/ui_evidence/b2-public-fridgein-fix-beginner-and-details.png`
++- `frontend/ui_evidence/b2-public-fridgein-fix-beginner-1of9.png`
++- `frontend/ui_evidence/b2-public-fridgein-fix-planner.png`
++- `frontend/ui_evidence/b2-public-fridgein-fix-after-reload-1of9.png`
++- `frontend/ui_evidence/b2-public-preview-fridgein-fix-home.png`
++
++## Verification
++
++- `npm run check:beginner-plan-persistence`: passed after the identity fix.
++- `npx tsc --noEmit --pretty false`: passed after the identity fix.
++- Three local UI cases were reloaded in a real browser and their guided progress
++  was checked after restoration.
++- The room-only case and one custom-blend cold case were exercised in the
++  public UI, including progress persistence after full reload.
++- `npm run check:home-pizza-plan`: passed with the fridge-entry regression.
++- `npx tsc --noEmit --pretty false`: passed after the event split.
++- Latest deployment `m3gh4gw90j` served the exact exported bundle; SHA-256:
++  `0a2237c9f831da6d57765a89cb0153417bd1c67c29b254982fbe3c0b461fc951`.
++- Case-specific verification of the previously confirmed Napolitana and New
++  York cold scenarios was intentionally not repeated.
++- Neapolitan cold cross-surface verification, other custom-blend ratios,
++  language/unit combinations beyond DE/US, and remaining combinations stay
++  open. Room-only was confirmed on `fi76aijhtf`; the later fix changes only
++  fridge-entry milestones and did not change room-only schedule generation.
++- B3 was not started.
+diff --git a/B2_VERIFICATION_REPORT.md b/B2_VERIFICATION_REPORT.md
+new file mode 100644
+index 0000000..feb1827
+--- /dev/null
++++ b/B2_VERIFICATION_REPORT.md
+@@ -0,0 +1,189 @@
++# PizzaBook B2 Verification Report
++
++## Test environment
++
++- App: Expo web UI, local preview at `http://localhost:3000`
++- Browser: isolated `agent-browser` session with browser-backed local storage
++- Bake date/time in the three representative cases: 12 October 2026, 19:00
++- Welcome message dismissal was persisted before the final reload screenshots.
++- These three earlier results are local UI results; no public-preview claim is
++  made for those three cases.
++- Current identity-fix build was deployed to
++  `https://pizzabook--fi76aijhtf.expo.app` (deployment ID `fi76aijhtf`,
++  alias `b2-identityfix-20261011`). The preview landing page loaded in
++  `agent-browser`. The exact served JavaScript bundle matched the fresh local
++  export (`07ce27d3c1f021ff439672695d332941db4cc5b10b61951e27d2f47f0603e5b0`).
++  This does not claim that the three cases were replayed on the public preview.
++
++## Case results
++
++### B2-UI-1 — Romana Tonda / mixer / dry yeast / Manitoba
++
++Beginner and the detailed recipe showed mixer-specific mixing, Manitoba
++handling, and dry yeast. Planner and Beginner both scheduled mixing at 15:05,
++folds at 15:45 and 16:15, balling at 16:55, fridge-out at 17:00, preheat at
++18:00, and baking at 19:00. The two 16:55/17:00 events are separate balling and
++fridge-out milestones. The detailed recipe's time-specific fridge and preheat
++steps agreed. After completing the first guided action and performing a real
++reload, Beginner showed `1/8`.
++
++### B2-UI-2 — Romana Teglia / hand / fresh yeast / whole wheat
++
++The dough remained one mass for the tray, not individual balls. Detailed
++instructions used hand mixing and gentle whole-wheat handling. Beginner and
++Planner agreed on mixing at 15:05, folds at 15:45 and 16:15, fridge-in at
++16:55, fridge-out at 17:00, preheat at 18:40 (20 minutes at 250°C), and baking
++at 19:00. Beginner additionally displayed a separate 18:45 tray/topping
++milestone; Planner does not schedule that as a separate appointment. After
++completing the first guided action and performing a real reload, Beginner
++showed `1/8`.
++
++### B2-UI-3 — New York / mixer / fresh yeast / gluten-free
++
++Detailed instructions explicitly used psyllium, a cohesive gluten-free mass,
++and mixer-specific mixing without gluten-development kneading. Beginner and
++Planner agreed on mixing at 15:05, gluten-free portioning at 16:55, fridge-out
++at 17:00, preheat at 18:00, and baking at 19:00. Planner's generic “balling”
++wording at 16:55 is a portioning event; Beginner and the detailed recipe retain
++the gluten-free-specific handling.
++
++The first reload of this combination exposed a progress issue: `romanFormat`
++was carried from prior Romana settings into a New York plan identity even
++though New York does not use a Roman subtype. After correcting the plan-key
++builder to include that field only for Romana, the case was run again. The
++first action persisted and a real reload restored `1/6`; the stored snapshot
++identity and guided progress record matched.
++
++## Room-only public verification
++
++On deployment `fi76aijhtf`, the public UI was set to Neapolitan / direct /
++hand-mixed / Tipo 0/00 with room-only fermentation and a bake time of
++11 October 2026 at 17:00. Beginner showed mixing at 13:05, folds at 13:45 and
++14:15, shaping at 14:55, room-fermentation end at 16:00, preheat at 16:00
++(60 min at 300°C), and baking at 17:00. Detailed instructions agreed on the
++16:00 room-fermentation end and preheat. Planner showed the same timed work
++events and bake time; its 14:55 step explains the two-hour covered room rest,
++and it does not add a separate appointment named “room fermentation end”.
++There were no refrigerator entry or removal events on any surface.
++
++After marking the first step, opening Profile, returning to Calculator, and
++performing a full browser reload, the bake date, terms and `1/7` progress
++remained unchanged. This is a public UI and reload result, superseding the
++earlier local-only boundary note. No room-only scheduling code was changed.
++
++## Executed versus not executed
++
++| Scenario | Beginner | Detailed instructions | Planner | Real reload / progress | Status |
++|---|---|---|---|---|---|
++| Romana Tonda, mixer, dry, Manitoba | Checked | Checked | Checked | `1/8` retained | Executed |
++| Romana Teglia, hand, fresh, whole wheat | Checked | Checked | Checked | `1/8` retained | Executed |
++| New York, mixer, fresh, gluten-free | Checked | Checked | Checked | `1/6` retained after key fix | Executed |
++| Room-only / Neapolitan / hand / Tipo 0/00 | Checked | Checked | Checked | `1/7` retained after Profile return and real reload | Publicly executed on `fi76aijhtf`; no fridge events |
++| Neapolitan cold plan, hand, fresh, Tipo 0/00 | Earlier B1 local progress test only | Not compared in this pass | Not compared in this pass | Earlier B1 test; not repeated here | Cold-plan cross-surface case not executed in this B2 pass |
++| Romana Tonda / hand / fresh / 70% Tipo 0/00 + 30% whole wheat | Checked | Checked | Checked | `1/8` retained after DE/US reload; changed flour reset to `0/8` and stayed after reload | Publicly executed on `fi76aijhtf`; cross-surface fridge-in mismatch found |
++| Same custom blend on corrected build | Checked | Checked | Checked | `1/9` retained after mark, Profile return and full reload | Publicly executed on `m3gh4gw90j`; fridge-in now agrees at 17:00 |
++| Language HR → DE, metric → US | Checked on saved custom plan | Checked | Checked | `1/8` retained through full reload before input change | Publicly executed on `fi76aijhtf`; other locales/systems open |
++| Spelt and other custom-blend UI combinations | Not checked | Not checked | Not checked | Not checked | Not executed |
++| Remaining style/mix/yeast/flour cross-product | Not checked | Not checked | Not checked | Not checked | Not exhaustive |
++| Public preview for earlier three combinations | Not rerun | Not rerun | Not rerun | Not rerun | Confirmed Napolitana and New York cold cases intentionally not repeated |
++| Mixed-flour ratios beyond 70/30 Tipo 0/00 + whole wheat | Not checked | Not checked | Not checked | Not checked | Open |
++| Language and unit combinations beyond HR/DE and metric/US | Not checked | Not checked | Not checked | Not checked | Open |
++| Neapolitan cold-plan cross-surface case | Not checked in this B2 pass | Not checked in this B2 pass | Not checked in this B2 pass | Not checked in this B2 pass | Open |
++
++An earlier, targeted public B2 fridge-out check is documented in
++`B1_VERIFICATION_REPORT.md`; it was not repeated in this pass.
++
++## Commands and result
++
++```text
++cd frontend && npm run check:beginner-plan-persistence
++  PASS — production persistence, calculator, guided-plan and restore functions
++cd frontend && npm run check:home-pizza-plan
++  PASS — Beginner schedule and separate balling/fridge-in regression
++cd frontend && npx tsc --noEmit --pretty false
++  PASS
++```
++
++The persistence regression includes the new invariant that changing a stale
++Roman subtype cannot change the identity of a non-Romana Beginner plan. The
++browser test then verified the impact in the actual app and storage lifecycle.
++
++The initial identity-fix deployment landing-page load is captured in
++`frontend/ui_evidence/b2-public-preview-identityfix-home.png`. Later, the
++room-only and custom-blend cases were exercised on that deployment; the
++corrected custom-blend event timing was then verified on the newer deployment.
++
++## Final open B2 checks and fridge-entry fix
++
++### Custom blend cold-plan reproduction
++
++On the public deployment `fi76aijhtf`, the plan was Romana Tonda, direct hand
++mixing, fresh yeast, custom flour blend (70% Tipo 0/00 and 30% whole wheat),
++four 210 g dough balls, baking 13 October 2026 at 19:00. The ingredient panel
++showed 354 g Tipo 0/00 + 152 g whole wheat (506 g total flour), 299 g water,
++14.2 g salt, 0.34 g fresh yeast, and 20 g olive oil.
++
++Beginner and Planner placed “divide/shape and put in the refrigerator” at
++16:55 on 12 October. Detailed instructions correctly placed transfer to the
++refrigerator at 17:00. The schedule has `ballingAt=16:55`,
++`fridgeAt=17:00` (Phase C is 5 minutes), followed by fridge-out 17:00 on
++13 October, preheat 18:00, shaping/topping 18:45, and bake 19:00. Root cause:
++Beginner and `reversePlan` used one combined balling/fridge-in event at
++`ballingAt`, except for one previously special-cased Neapolitan configuration.
++
++The smallest fix separates shaping at `ballingAt` from fridge entry at
++`fridgeAt` when those times differ. The relevant `reversePlan` regression test
++uses both a Neapolitan fixture and a Romana Tonda fixture and checks the two
++event timestamps. The public UI on the corrected deployment
++`m3gh4gw90j` showed “Oblikuj kuglice” at 16:55 and “Stavi kuglice u hladnjak”
++at 17:00 in both Beginner and Planner, matching the detailed recipe. After
++marking the first action, visiting Profile, returning, and fully reloading,
++`1/9` and all dates/times remained. The extra actionable event explains why
++the corrected plan total is nine rather than eight.
++
++### Language, units, progress and reset
++
++On the saved custom plan on `fi76aijhtf`, HR was changed to DE and metric to
++US. The schedule remained 12 October 15:05/15:45/16:15/16:55, then 13 October
++17:00/18:00/18:45/19:00; progress remained `1/8` after a full reload. Flour
++converted to 12.5 oz Tipo 0/00 (70%) + 5.4 oz whole wheat (30%), 1.12 lb total
++flour; water 10.5 oz, oil 0.7 oz, dough ball 7.4 oz, sauce 3.4 oz each and
++cheese 3.5 oz each. Temperature values displayed in °F. Salt (14.2 g) and
++yeast (0.34 g) remain grams by the app’s precision-sensitive weight-display
++policy. Changing blend component B from whole wheat to spelt (keeping 30%)
++changed the plan identity and reset progress from `1/8` to `0/8`; after reload,
++spelt and `0/8` remained.
++
++### Public deployment identities
++
++- Tested before the event fix: `https://pizzabook--fi76aijhtf.expo.app`,
++  deployment `fi76aijhtf`.
++- Corrected build: `https://pizzabook--m3gh4gw90j.expo.app`, deployment
++  `m3gh4gw90j`, alias `b2-fridgein-fix-20261011`.
++- Corrected JS bundle SHA-256 matched the local export:
++  `0a2237c9f831da6d57765a89cb0153417bd1c67c29b254982fbe3c0b461fc951`.
++- The room-only case was verified on `fi76aijhtf`. The later code change only
++  splits cold balling/fridge-entry events; room-only generation was untouched
++  and was not rerun on the corrected deployment.
++
++## Archive contents
++
++`PizzaBook_B2_Coverage_Review.zip` contains the current relevant implementation
++sources (`index.tsx`, `planner.tsx`, calculator, persistence/restore, preference,
++experience-level, translation, guided-recipe, notification and recipe-step
++modules), the focused and supporting Beginner verification scripts, project
++TypeScript/package manifests, the B1/B2 review reports and diffs, and the
++case-specific local and public UI screenshots including post-reload progress
++and Planner timelines. Secrets, dependency trees, and generated web bundles are
++excluded.
++
++## Deployment and remaining scope
++
++The latest corrected identity-fix build is deployed at
++`https://pizzabook--m3gh4gw90j.expo.app` (deployment ID `m3gh4gw90j`,
++alias `b2-fridgein-fix-20261011`). Earlier public UI checks were run on
++`fi76aijhtf`. Confirmed earlier Napolitana and New York cold cases were
++intentionally not repeated. The room-only schedule formula was not changed.
++Still open: Neapolitan cold cross-surface comparison, other blend ratios and
++flours, other language/unit combinations, and the remaining style/mixing/
++yeast/flour combinations. B3 was not started.
+diff --git a/frontend/B2-coverage-identity-fix.diff b/frontend/B2-coverage-identity-fix.diff
+new file mode 100644
+index 0000000..09904a2
+--- /dev/null
++++ b/frontend/B2-coverage-identity-fix.diff
+@@ -0,0 +1,26 @@
++--- a/frontend/src/beginnerPlanPersistence.ts
+++++ b/frontend/src/beginnerPlanPersistence.ts
++@@ -109,7 +109,7 @@
++   return createBeginnerPlanInputKey([
++     input.bakeAt,
++     input.pizzaStyle,
++-    input.romanFormat,
+++    input.pizzaStyle === 'romana' ? input.romanFormat : null,
++     input.pizzas,
++     input.effectiveBall,
++     input.roomTemp,
++--- a/frontend/scripts/verify-beginner-plan-persistence.js
+++++ b/frontend/scripts/verify-beginner-plan-persistence.js
++@@ -99,6 +99,12 @@
++ assert.notEqual(teglia30x40Key, teglia20x60Key, 'Teglia dimensions must reset progress even with equal dough mass');
++ assert.equal(createAppIdentity({ isRomanTeglia: false, trayWidth: 30, trayLength: 40 }), createAppIdentity({ isRomanTeglia: false, trayWidth: 20, trayLength: 60 }), 'non-Teglia tray dimensions must not affect identity');
++ assert.notEqual(createAppIdentity({ diameter: 30, isRomanTeglia: false }), createAppIdentity({ diameter: 33, isRomanTeglia: false }), 'round pizza diameter must reset progress');
+++assert.equal(
+++  createAppIdentity({ pizzaStyle: 'ny_style', romanFormat: 'tonda', isRomanTeglia: false }),
+++  createAppIdentity({ pizzaStyle: 'ny_style', romanFormat: 'teglia', isRomanTeglia: false }),
+++  'stale Roman format must not reset non-Romana Beginner progress',
+++);
+++
++ const initialNow = new Date('2026-10-10T08:00:00.000Z');
++ const laterNow = new Date('2026-10-10T10:00:00.000Z');
++ const thirtyMinutesBeforeBake = new Date('2026-10-10T10:00:00.000Z');
+diff --git a/frontend/scripts/verify-beginner-plan-persistence.js b/frontend/scripts/verify-beginner-plan-persistence.js
+new file mode 100644
+index 0000000..b63d6fe
+--- /dev/null
++++ b/frontend/scripts/verify-beginner-plan-persistence.js
+@@ -0,0 +1,331 @@
++#!/usr/bin/env node
++
++const assert = require('node:assert/strict');
++const fs = require('node:fs');
++const path = require('node:path');
++const ts = require('typescript');
++const vm = require('node:vm');
++
++function loadTypeScriptModule(relativePath) {
++  const source = fs.readFileSync(path.join(__dirname, '..', relativePath), 'utf8');
++  const compiled = ts.transpileModule(source, {
++    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
++  }).outputText;
++  const moduleRef = { exports: {} };
++  vm.runInNewContext(compiled, { module: moduleRef, exports: moduleRef.exports }, { filename: relativePath });
++  return moduleRef.exports;
++}
++
++const persistence = loadTypeScriptModule('src/beginnerPlanPersistence.ts');
++const calculator = loadTypeScriptModule('src/calculator.ts');
++const guidedRecipe = loadTypeScriptModule('src/guidedRecipe.ts');
++const restoreCoordinator = loadTypeScriptModule('src/beginnerPlanRestoreCoordinator.ts');
++const appSource = fs.readFileSync(path.join(__dirname, '..', 'app', '(tabs)', 'index.tsx'), 'utf8');
++
++function makeSchedule(bakeAt, mode) {
++  const startAt = new Date(bakeAt.getTime() - (mode === 'fridgeRoom' ? 9 : 2) * 3600000);
++  return {
++    startAt,
++    bakeAt,
++    preheatAt: new Date(bakeAt.getTime() - 45 * 60000),
++    ballingAt: new Date(startAt.getTime() + 2 * 3600000),
++    fridgeAt: mode === 'fridgeRoom' ? new Date(startAt.getTime() + 2 * 3600000) : undefined,
++    roomBeforeFridgeHours: mode === 'fridgeRoom' ? 2 : 2,
++    fridgeHours: mode === 'fridgeRoom' ? 4 : 0,
++    roomAfterFridgeHours: mode === 'fridgeRoom' ? 3 : 0,
++    prefermentHours: 0,
++    phaseAMinutes: 20,
++    phaseBMinutes: 90,
++    phaseCMinutes: 5,
++  };
++}
++
++function encodeSnapshot(schedule, mode, inputKey) {
++  return JSON.stringify({
++    version: persistence.BEGINNER_PLAN_STORAGE_VERSION,
++    inputKey,
++    bakeAt: schedule.bakeAt.toISOString(),
++    calculationNow: new Date(schedule.bakeAt.getTime() - 10 * 3600000).toISOString(),
++    mode,
++    schedule: persistence.serializeBeginnerSchedule(schedule),
++  });
++}
++
++function parseSnapshot(raw) {
++  return persistence.parseBeginnerPlanSnapshot(raw, calculator.isHomeScheduleDurationValid);
++}
++
++function assertSourceContract() {
++  assert.ok(appSource.includes('createBeginnerPlanRestoreCoordinator'));
++  assert.ok(appSource.includes('createBeginnerPlanRestoreLoaders'));
++  assert.ok(appSource.includes('applyLoadedCalculatorPreferences'));
++  assert.ok(appSource.includes('createBeginnerPlanInputKeyFromState'));
++  assert.ok(appSource.includes('createGuidedPlanId([beginnerPlanInputKey])'));
++  assert.ok(appSource.includes('return () => beginnerRestoreCoordinator.current.invalidate(generation);'));
++}
++
++assertSourceContract();
++
++function createAppIdentity(overrides = {}) {
++  return persistence.createBeginnerPlanInputKeyFromState({
++    bakeAt: 1791745200000,
++    pizzaStyle: 'romana',
++    romanFormat: 'teglia',
++    pizzas: 1,
++    effectiveBall: 1000,
++    roomTemp: 22,
++    fridgeTemp: 4,
++    oven: 'homePan',
++    ovenTemp: 250,
++    flour: 'caputo00',
++    blendA: null,
++    blendB: null,
++    blendPctA: null,
++    mixing: 'hand',
++    explicitFlourStrength: { source: 'unknown' },
++    hydration: 70,
++    preferredYeastType: 'fresh',
++    beginnerScheduleMode: 'fridgeRoom',
++    diameter: 30,
++    isRomanTeglia: true,
++    trayWidth: 30,
++    trayLength: 40,
++    ...overrides,
++  });
++}
++
++const teglia30x40Key = createAppIdentity();
++const teglia20x60Key = createAppIdentity({ trayWidth: 20, trayLength: 60 });
++assert.notEqual(teglia30x40Key, teglia20x60Key, 'Teglia dimensions must reset progress even with equal dough mass');
++assert.equal(createAppIdentity({ isRomanTeglia: false, trayWidth: 30, trayLength: 40 }), createAppIdentity({ isRomanTeglia: false, trayWidth: 20, trayLength: 60 }), 'non-Teglia tray dimensions must not affect identity');
++assert.notEqual(createAppIdentity({ diameter: 30, isRomanTeglia: false }), createAppIdentity({ diameter: 33, isRomanTeglia: false }), 'round pizza diameter must reset progress');
++assert.equal(
++  createAppIdentity({ pizzaStyle: 'ny_style', romanFormat: 'tonda', isRomanTeglia: false }),
++  createAppIdentity({ pizzaStyle: 'ny_style', romanFormat: 'teglia', isRomanTeglia: false }),
++  'stale Roman format must not reset non-Romana Beginner progress',
++);
++
++const initialNow = new Date('2026-10-10T08:00:00.000Z');
++const laterNow = new Date('2026-10-10T10:00:00.000Z');
++const thirtyMinutesBeforeBake = new Date('2026-10-10T10:00:00.000Z');
++for (const mode of ['roomOnly', 'fridgeRoom']) {
++  const bakeAt = mode === 'roomOnly'
++    ? new Date('2026-10-10T10:30:00.000Z')
++    : new Date('2026-10-11T18:00:00.000Z');
++  const schedule = makeSchedule(bakeAt, mode);
++  const inputKey = persistence.createBeginnerPlanInputKey([
++    bakeAt.getTime(), 'neapolitan', 'tonda', 4, 250, 22, 4, 'homeStone', 300, 'caputo00', 'hand', 'dry', mode,
++  ]);
++  assert.equal(calculator.isHomeScheduleDurationValid(schedule), true, `${mode}: fixture schedule must be valid`);
++
++  const restored = parseSnapshot(encodeSnapshot(schedule, mode, inputKey));
++  assert.ok(restored, `${mode}: production parser must restore the snapshot`);
++  assert.equal(persistence.isBeginnerPlanActive(restored, mode === 'roomOnly' ? thirtyMinutesBeforeBake : laterNow), true);
++  assert.equal(restored.mode, mode, `${mode}: fermentation mode must survive restore`);
++  assert.equal(restored.inputKey, inputKey, `${mode}: plan input identity must survive restore`);
++  assert.equal(JSON.stringify(restored.parsedSchedule), JSON.stringify(schedule), `${mode}: all schedule dates and durations must survive restore`);
++  assert.equal(restored.parsedCalculationNow.toISOString(), new Date(schedule.bakeAt.getTime() - 10 * 3600000).toISOString());
++
++  const completedAt = { mix: 1_000, ...(mode === 'fridgeRoom' ? { fridgeIn: 2_000 } : { balling: 2_000 }) };
++  const guidedPlanId = guidedRecipe.createGuidedPlanId([
++    restored.parsedSchedule.bakeAt.getTime(), restored.parsedSchedule.startAt.getTime(),
++    restored.parsedSchedule.roomBeforeFridgeHours, restored.parsedSchedule.fridgeHours,
++    restored.parsedSchedule.roomAfterFridgeHours, mode,
++  ]);
++  const progressStorageKey = `beginnerGuidedProgress:${guidedPlanId}`;
++  const progressRecord = { planId: guidedPlanId, completedAt };
++  assert.equal(JSON.parse(JSON.stringify({ key: progressStorageKey, ...progressRecord })).planId, guidedPlanId);
++  assert.deepEqual(progressRecord.completedAt, completedAt, `${mode}: guided progress remains separate and intact`);
++}
++
++const sameDisplayKey = persistence.createBeginnerPlanInputKey([new Date('2026-10-11T18:00:00Z').getTime(), 'neapolitan', 'tonda', 'caputo00', 'hand']);
++const changedDateKey = persistence.createBeginnerPlanInputKey([new Date('2026-10-12T18:00:00Z').getTime(), 'neapolitan', 'tonda', 'caputo00', 'hand']);
++const changedInputKey = persistence.createBeginnerPlanInputKey([new Date('2026-10-11T18:00:00Z').getTime(), 'neapolitan', 'tonda', 'manitoba', 'hand']);
++assert.equal(sameDisplayKey, persistence.createBeginnerPlanInputKey([new Date('2026-10-11T18:00:00Z').getTime(), 'neapolitan', 'tonda', 'caputo00', 'hand']), 'language/unit display changes must not change identity inputs');
++assert.notEqual(sameDisplayKey, changedDateKey, 'new Planner date must create a new plan key');
++assert.notEqual(sameDisplayKey, changedInputKey, 'relevant input must create a new plan key');
++
++for (const style of ['neapolitan', 'romana-tonda', 'romana-teglia', 'ny_style']) {
++  for (const mode of ['roomOnly', 'fridgeRoom']) {
++    for (const mixing of ['hand', 'mixer']) {
++      for (const yeast of ['fresh', 'dry']) {
++        for (const flour of ['caputo00', 'manitoba', 'spelt', 'wholeWheat', 'glutenFree', 'custom']) {
++          const identity = createAppIdentity({
++            pizzaStyle: style,
++            romanFormat: style === 'romana-teglia' ? 'teglia' : 'tonda',
++            beginnerScheduleMode: mode,
++            mixing,
++            preferredYeastType: yeast,
++            flour,
++            isRomanTeglia: style === 'romana-teglia',
++          });
++          const guidedId = guidedRecipe.createGuidedPlanId([identity]);
++          assert.equal(guidedId, guidedRecipe.createGuidedPlanId([identity]), `${style}/${mode}/${mixing}/${yeast}/${flour}: identity must be stable`);
++          assert.notEqual(guidedId, guidedRecipe.createGuidedPlanId([createAppIdentity({
++            pizzaStyle: style,
++            romanFormat: style === 'romana-teglia' ? 'teglia' : 'tonda',
++            bakeAt: 1791831600000,
++            beginnerScheduleMode: mode,
++            mixing,
++            preferredYeastType: yeast,
++            flour,
++            isRomanTeglia: style === 'romana-teglia',
++          })]), `${style}/${mode}/${mixing}/${yeast}/${flour}: changed plan must reset progress`);
++        }
++      }
++    }
++  }
++}
++
++const expired = parseSnapshot(encodeSnapshot(makeSchedule(new Date('2026-10-09T18:00:00Z'), 'roomOnly'), 'roomOnly', sameDisplayKey));
++assert.equal(persistence.isBeginnerPlanActive(expired, initialNow), false, 'expired plan must not become a new plan');
++assert.equal(parseSnapshot(null), null, 'absent legacy snapshot must remain compatible');
++assert.equal(parseSnapshot('{"version":1'), null, 'invalid JSON must be ignored');
++assert.equal(parseSnapshot(JSON.stringify({ version: 1, inputKey: sameDisplayKey, bakeAt: '2026-10-11T18:00:00Z', calculationNow: initialNow.toISOString(), mode: 'roomOnly', schedule: {} })), null, 'structurally invalid snapshot must be ignored');
++
++function deferred() {
++  let resolve;
++  const promise = new Promise((nextResolve) => { resolve = nextResolve; });
++  return { promise, resolve };
++}
++
++async function assertRestoreCoordinatorFlow() {
++  const dryPreference = deferred();
++  const requestedKeys = [];
++  const dryBakeAt = new Date('2026-10-11T18:00:00.000Z');
++  const drySchedule = makeSchedule(dryBakeAt, 'roomOnly');
++  const dryInputKey = persistence.createBeginnerPlanInputKey([dryBakeAt.getTime(), 'neapolitan', 'tonda', 'caputo00', 'hand', 'dry', 'roomOnly']);
++  const storageValues = {
++    [restoreCoordinator.EXPERIENCE_LEVEL_STORAGE_KEY]: JSON.stringify('beginner'),
++    [restoreCoordinator.TEMPERATURE_UNIT_STORAGE_KEY]: JSON.stringify('fahrenheit'),
++    [restoreCoordinator.MEASUREMENT_SYSTEM_STORAGE_KEY]: JSON.stringify('us'),
++    [restoreCoordinator.PREFERRED_YEAST_TYPE_STORAGE_KEY]: null,
++    [restoreCoordinator.CALCULATOR_SETTINGS_STORAGE_KEY]: JSON.stringify({ pizzaStyle: 'neapolitan' }),
++    [restoreCoordinator.BEGINNER_BAKE_AT_STORAGE_KEY]: '2026-10-11T18:00:00.000Z',
++    [restoreCoordinator.BEGINNER_PLAN_SNAPSHOT_STORAGE_KEY]: encodeSnapshot(drySchedule, 'roomOnly', dryInputKey),
++  };
++  const storage = {
++    getItem: async (key) => {
++      requestedKeys.push(key);
++      if (key === restoreCoordinator.PREFERRED_YEAST_TYPE_STORAGE_KEY) return dryPreference.promise;
++      return storageValues[key] ?? null;
++    },
++  };
++  const loaders = restoreCoordinator.createBeginnerPlanRestoreLoaders(storage);
++  const coordinator = restoreCoordinator.createBeginnerPlanRestoreCoordinator();
++  const generation = coordinator.begin();
++  let committed = null;
++  let saveCalls = 0;
++  let notificationSyncCalls = 0;
++  const restorePromise = coordinator.load(generation, loaders).then((data) => {
++    if (!data || !coordinator.isCurrent(generation)) return;
++    committed = data;
++    saveCalls += 1;
++    notificationSyncCalls += 1;
++  });
++  await Promise.resolve();
++  assert.equal(committed, null, 'temporary defaults must not commit before dry preference loads');
++  assert.equal(saveCalls, 0, 'temporary defaults must not save a snapshot');
++  assert.equal(notificationSyncCalls, 0, 'temporary defaults must not sync alarms');
++  assert.deepEqual(new Set(requestedKeys), new Set([
++    restoreCoordinator.EXPERIENCE_LEVEL_STORAGE_KEY,
++    restoreCoordinator.TEMPERATURE_UNIT_STORAGE_KEY,
++    restoreCoordinator.MEASUREMENT_SYSTEM_STORAGE_KEY,
++    restoreCoordinator.PREFERRED_YEAST_TYPE_STORAGE_KEY,
++    restoreCoordinator.CALCULATOR_SETTINGS_STORAGE_KEY,
++    restoreCoordinator.BEGINNER_BAKE_AT_STORAGE_KEY,
++    restoreCoordinator.BEGINNER_PLAN_SNAPSHOT_STORAGE_KEY,
++  ]), 'restore must read the real identity and snapshot keys');
++  dryPreference.resolve(JSON.stringify('dry'));
++  await restorePromise;
++  assert.equal(committed.experienceLevel, 'beginner', 'JSON-encoded experience must decode to beginner');
++  assert.equal(committed.preferences.temperatureUnit, 'fahrenheit', 'JSON-encoded temperature unit must decode');
++  assert.equal(committed.preferences.measurementSystem, 'us', 'JSON-encoded measurement system must decode');
++  assert.equal(committed.preferences.preferredYeastType, 'dry', 'saved dry preference must win over the fresh default');
++  const restoredDryPlan = parseSnapshot(committed.beginnerPlanSnapshot);
++  assert.ok(restoredDryPlan, 'the raw snapshot JSON must remain available to the snapshot parser');
++  assert.equal(restoredDryPlan.inputKey, dryInputKey, 'the decoded dry preference must restore the dry plan identity');
++  assert.equal(restoreCoordinator.resolveBeginnerRestoreBakeAt(committed, restoredDryPlan, new Date('2026-10-10T08:00:00.000Z')).getTime(), dryBakeAt.getTime(), 'the active dry plan must restore its bake date');
++  const proStorage = {
++    ...storage,
++    getItem: async (key) => key === restoreCoordinator.EXPERIENCE_LEVEL_STORAGE_KEY
++      ? JSON.stringify('pro')
++      : storage.getItem(key),
++  };
++  const proDecoded = await restoreCoordinator.createBeginnerPlanRestoreLoaders(proStorage).load();
++  assert.equal(proDecoded.experienceLevel, 'pro', 'JSON-encoded pro experience must decode correctly');
++  assert.equal(saveCalls, 1, 'save is enabled only after the complete restore');
++  assert.equal(notificationSyncCalls, 1, 'alarm sync is enabled only after the complete restore');
++}
++
++async function assertGenerationProtection() {
++  const coordinator = restoreCoordinator.createBeginnerPlanRestoreCoordinator();
++  const oldLoad = deferred();
++  const newLoad = deferred();
++  const oldGeneration = coordinator.begin();
++  const oldPromise = coordinator.load(oldGeneration, { load: () => oldLoad.promise });
++  const newGeneration = coordinator.begin();
++  const newPromise = coordinator.load(newGeneration, { load: () => newLoad.promise });
++  let sharedBakeAt = new Date('2026-10-12T18:00:00.000Z');
++
++  const proData = { experienceLevel: 'pro', preferences: { temperatureUnit: 'celsius', measurementSystem: 'metric', preferredYeastType: 'fresh' }, calculatorSettings: null, legacyBakeAt: null, beginnerPlanSnapshot: null };
++  newLoad.resolve(proData);
++  assert.deepEqual(await newPromise, proData, 'newest load must commit when it finishes first');
++  assert.equal(restoreCoordinator.resolveBeginnerRestoreBakeAt(proData, null, new Date()), undefined, 'Pro restore must preserve the existing shared date');
++  oldLoad.resolve({ experienceLevel: 'beginner', preferences: { temperatureUnit: 'celsius', measurementSystem: 'metric', preferredYeastType: 'dry' }, calculatorSettings: null, legacyBakeAt: '2026-10-11T18:00:00.000Z', beginnerPlanSnapshot: 'stale' });
++  assert.equal(await oldPromise, null, 'older load must be discarded when it finishes last');
++  assert.equal(sharedBakeAt.getTime(), new Date('2026-10-12T18:00:00.000Z').getTime(), 'stale response must preserve the existing shared date');
++
++  const rejected = restoreCoordinator.createBeginnerPlanRestoreCoordinator();
++  const rejectedGeneration = rejected.begin();
++  await assert.rejects(rejected.load(rejectedGeneration, { load: () => Promise.reject(new Error('read failed')) }));
++  assert.equal(sharedBakeAt.getTime(), new Date('2026-10-12T18:00:00.000Z').getTime(), 'rejected read must preserve the existing shared date');
++
++  const plannerReturn = { experienceLevel: 'beginner', preferences: { temperatureUnit: 'celsius', measurementSystem: 'metric', preferredYeastType: 'dry' }, calculatorSettings: null, legacyBakeAt: '2026-10-13T18:00:00.000Z', beginnerPlanSnapshot: null };
++  const plannerBakeAt = restoreCoordinator.resolveBeginnerRestoreBakeAt(plannerReturn, null, new Date('2026-10-10T08:00:00.000Z'));
++  assert.equal(plannerBakeAt.toISOString(), '2026-10-13T18:00:00.000Z', 'return from Planner must restore its legacy bake date');
++  const priorPlan = parseSnapshot(encodeSnapshot(makeSchedule(new Date('2026-10-11T18:00:00.000Z'), 'roomOnly'), 'roomOnly', 'prior-plan'));
++  const plannerReturnWithPriorSnapshot = { ...plannerReturn, legacyBakeAt: '2026-10-14T18:00:00.000Z' };
++  const changedPlannerBakeAt = restoreCoordinator.resolveBeginnerRestoreBakeAt(plannerReturnWithPriorSnapshot, priorPlan, new Date('2026-10-10T08:00:00.000Z'));
++  assert.equal(changedPlannerBakeAt.toISOString(), '2026-10-14T18:00:00.000Z', 'a new Planner date must supersede an older active snapshot date');
++  sharedBakeAt = plannerBakeAt;
++
++  const modeChange = restoreCoordinator.createBeginnerPlanRestoreCoordinator();
++  const beginnerLoad = deferred();
++  const proLoad = deferred();
++  const beginnerGeneration = modeChange.begin();
++  const beginnerPromise = modeChange.load(beginnerGeneration, { load: () => beginnerLoad.promise });
++  const proGeneration = modeChange.begin();
++  const proPromise = modeChange.load(proGeneration, { load: () => proLoad.promise });
++  proLoad.resolve({ experienceLevel: 'pro', preferences: { temperatureUnit: 'celsius', measurementSystem: 'metric', preferredYeastType: 'fresh' }, calculatorSettings: null, legacyBakeAt: null, beginnerPlanSnapshot: null });
++  assert.equal((await proPromise).experienceLevel, 'pro', 'Pro mode must win when mode changes during reading');
++  beginnerLoad.resolve({ experienceLevel: 'beginner', preferences: { temperatureUnit: 'celsius', measurementSystem: 'metric', preferredYeastType: 'dry' }, calculatorSettings: null, legacyBakeAt: '2026-10-11T18:00:00.000Z', beginnerPlanSnapshot: 'stale' });
++  assert.equal(await beginnerPromise, null, 'Beginner response must not restore a plan after switching to Pro');
++
++  const unmounted = restoreCoordinator.createBeginnerPlanRestoreCoordinator();
++  const unmountedLoad = deferred();
++  const unmountedGeneration = unmounted.begin();
++  const unmountedPromise = unmounted.load(unmountedGeneration, { load: () => unmountedLoad.promise });
++  unmounted.dispose();
++  unmountedLoad.resolve({ experienceLevel: 'beginner', preferences: { temperatureUnit: 'celsius', measurementSystem: 'metric', preferredYeastType: 'dry' }, calculatorSettings: null, legacyBakeAt: '2026-10-11T18:00:00.000Z', beginnerPlanSnapshot: 'stale' });
++  assert.equal(await unmountedPromise, null, 'unmounted response must not apply state or shared date');
++  assert.equal(sharedBakeAt.toISOString(), '2026-10-13T18:00:00.000Z', 'unmounted response must preserve the existing shared date');
++
++  const strictMode = restoreCoordinator.createBeginnerPlanRestoreCoordinator();
++  strictMode.activate();
++  const firstSetupGeneration = strictMode.begin();
++  strictMode.invalidate(firstSetupGeneration);
++  strictMode.activate();
++  const secondSetupGeneration = strictMode.begin();
++  assert.equal(strictMode.isCurrent(secondSetupGeneration), true, 'Strict Mode setup-cleanup-setup must reactivate the coordinator');
++  strictMode.dispose();
++  assert.equal(strictMode.isCurrent(secondSetupGeneration), false, 'dispose must invalidate the coordinator');
++}
++
++assertSourceContract();
++assertRestoreCoordinatorFlow().then(assertGenerationProtection).then(() => {
++  console.log('Beginner plan persistence and async restore checks passed using production persistence, calculator, guided-plan, and restore-coordinator functions.');
++}).catch((error) => {
++  console.error(error);
++  process.exitCode = 1;
++});
+diff --git a/frontend/src/beginnerPlanPersistence.ts b/frontend/src/beginnerPlanPersistence.ts
+new file mode 100644
+index 0000000..d89d088
+--- /dev/null
++++ b/frontend/src/beginnerPlanPersistence.ts
+@@ -0,0 +1,132 @@
++export type BeginnerPlanMode = 'roomOnly' | 'fridgeRoom';
++
++export type BeginnerPlanSnapshot = {
++  version: 1;
++  inputKey: string;
++  bakeAt: string;
++  calculationNow: string;
++  mode: BeginnerPlanMode;
++  schedule: Record<string, unknown>;
++};
++
++export const BEGINNER_PLAN_STORAGE_KEY = 'beginnerPlanSnapshot';
++export const BEGINNER_PLAN_STORAGE_VERSION = 1;
++
++const scheduleDateFields = ['startAt', 'bakeAt', 'preheatAt', 'ballingAt', 'doughReadyAt', 'fridgeAt'] as const;
++
++export function serializeBeginnerSchedule<T extends object>(schedule: T): Record<string, unknown> {
++  return Object.fromEntries(Object.entries(schedule).map(([key, value]) => [
++    key,
++    value instanceof Date ? value.toISOString() : value,
++  ]));
++}
++
++export function parseBeginnerSchedule<T>(
++  value: unknown,
++  isValidSchedule: (schedule: T) => boolean,
++): T | null {
++  if (!value || typeof value !== 'object') return null;
++  const candidate = { ...(value as Record<string, unknown>) } as Record<string, unknown>;
++  for (const field of scheduleDateFields) {
++    if (candidate[field] === undefined) continue;
++    if (typeof candidate[field] !== 'string') return null;
++    const parsed = new Date(candidate[field]);
++    if (!Number.isFinite(parsed.getTime())) return null;
++    candidate[field] = parsed;
++  }
++  if (!(candidate.startAt instanceof Date) || !(candidate.bakeAt instanceof Date)
++    || typeof candidate.roomBeforeFridgeHours !== 'number'
++    || typeof candidate.fridgeHours !== 'number'
++    || typeof candidate.roomAfterFridgeHours !== 'number'
++    || !isValidSchedule(candidate as unknown as T)) return null;
++  return candidate as unknown as T;
++}
++
++export function parseBeginnerPlanSnapshot<T>(
++  value: string | null,
++  isValidSchedule: (schedule: T) => boolean,
++): BeginnerPlanSnapshot & { parsedSchedule: T; parsedCalculationNow: Date } | null {
++  if (!value) return null;
++  try {
++    const parsed = JSON.parse(value) as Partial<BeginnerPlanSnapshot>;
++    if (parsed.version !== BEGINNER_PLAN_STORAGE_VERSION || typeof parsed.inputKey !== 'string'
++      || (parsed.mode !== 'roomOnly' && parsed.mode !== 'fridgeRoom')
++      || typeof parsed.bakeAt !== 'string' || typeof parsed.calculationNow !== 'string') return null;
++    const bakeAt = new Date(parsed.bakeAt);
++    const calculationNow = new Date(parsed.calculationNow);
++    const schedule = parseBeginnerSchedule(parsed.schedule, isValidSchedule);
++    if (!Number.isFinite(bakeAt.getTime()) || !Number.isFinite(calculationNow.getTime()) || !schedule) return null;
++    return {
++      ...parsed,
++      version: 1,
++      mode: parsed.mode,
++      inputKey: parsed.inputKey,
++      bakeAt: parsed.bakeAt,
++      calculationNow: parsed.calculationNow,
++      schedule: parsed.schedule as Record<string, unknown>,
++      parsedSchedule: schedule,
++      parsedCalculationNow: calculationNow,
++    };
++  } catch {
++    return null;
++  }
++}
++
++export function isBeginnerPlanActive<T extends { bakeAt: Date }>(snapshot: { parsedSchedule: T }, now: Date): boolean {
++  return snapshot.parsedSchedule.bakeAt.getTime() > now.getTime();
++}
++
++export function createBeginnerPlanInputKey(identity: readonly unknown[]): string {
++  return JSON.stringify(identity);
++}
++
++export type BeginnerPlanIdentityInput = {
++  bakeAt: number | null;
++  pizzaStyle: string;
++  romanFormat: string;
++  pizzas: number;
++  effectiveBall: number;
++  roomTemp: number;
++  fridgeTemp: number;
++  oven: string;
++  ovenTemp: number;
++  flour: string;
++  blendA: string | null;
++  blendB: string | null;
++  blendPctA: number | null;
++  mixing: string;
++  explicitFlourStrength: unknown;
++  hydration: number;
++  preferredYeastType: string;
++  beginnerScheduleMode: string | undefined;
++  diameter: number;
++  isRomanTeglia: boolean;
++  trayWidth: number;
++  trayLength: number;
++};
++
++export function createBeginnerPlanInputKeyFromState(input: BeginnerPlanIdentityInput): string {
++  return createBeginnerPlanInputKey([
++    input.bakeAt,
++    input.pizzaStyle,
++    input.pizzaStyle === 'romana' ? input.romanFormat : null,
++    input.pizzas,
++    input.effectiveBall,
++    input.roomTemp,
++    input.fridgeTemp,
++    input.oven,
++    input.ovenTemp,
++    input.flour,
++    input.blendA,
++    input.blendB,
++    input.blendPctA,
++    input.mixing,
++    input.explicitFlourStrength,
++    input.hydration,
++    input.preferredYeastType,
++    input.beginnerScheduleMode,
++    input.diameter,
++    input.isRomanTeglia ? input.trayWidth : null,
++    input.isRomanTeglia ? input.trayLength : null,
++  ]);
++}
+diff --git a/frontend/src/beginnerPlanRestoreCoordinator.ts b/frontend/src/beginnerPlanRestoreCoordinator.ts
+new file mode 100644
+index 0000000..10be802
+--- /dev/null
++++ b/frontend/src/beginnerPlanRestoreCoordinator.ts
+@@ -0,0 +1,139 @@
++import type { MeasurementSystem, PreferredYeastType, TemperatureUnit } from './preferences';
++import type { UserExperienceLevel } from './experienceLevel';
++
++export const EXPERIENCE_LEVEL_STORAGE_KEY = 'userExperienceLevel';
++export const TEMPERATURE_UNIT_STORAGE_KEY = 'temperatureUnit';
++export const MEASUREMENT_SYSTEM_STORAGE_KEY = 'measurementSystem';
++export const PREFERRED_YEAST_TYPE_STORAGE_KEY = 'preferredYeastType';
++export const CALCULATOR_SETTINGS_STORAGE_KEY = 'calculatorSettings';
++export const BEGINNER_BAKE_AT_STORAGE_KEY = 'beginnerBakeAt';
++export const BEGINNER_PLAN_SNAPSHOT_STORAGE_KEY = 'beginnerPlanSnapshot';
++
++export type BeginnerRestorePreferences = {
++  temperatureUnit: TemperatureUnit;
++  measurementSystem: MeasurementSystem;
++  preferredYeastType: PreferredYeastType;
++};
++
++export type BeginnerRestoreData = {
++  experienceLevel: UserExperienceLevel | null;
++  preferences: BeginnerRestorePreferences;
++  calculatorSettings: string | null;
++  legacyBakeAt: string | null;
++  beginnerPlanSnapshot: string | null;
++};
++
++export type BeginnerRestoreStorage = {
++  getItem: (key: string) => Promise<string | null>;
++};
++
++export type BeginnerRestoreLoaders = {
++  load: () => Promise<BeginnerRestoreData>;
++};
++
++type RestoreSchedule = { parsedSchedule: { bakeAt: Date } };
++
++function decodeStoredScalar(value: string | null): string | null {
++  if (value === null) return null;
++  try {
++    const decoded = JSON.parse(value);
++    return typeof decoded === 'string' ? decoded : null;
++  } catch {
++    return value;
++  }
++}
++
++function readExperienceLevel(value: string | null): UserExperienceLevel | null {
++  const decoded = decodeStoredScalar(value);
++  return decoded === 'beginner' || decoded === 'pro' ? decoded : null;
++}
++
++function readTemperatureUnit(value: string | null): TemperatureUnit {
++  return decodeStoredScalar(value) === 'fahrenheit' ? 'fahrenheit' : 'celsius';
++}
++
++function readMeasurementSystem(value: string | null): MeasurementSystem {
++  return decodeStoredScalar(value) === 'us' ? 'us' : 'metric';
++}
++
++function readPreferredYeastType(value: string | null): PreferredYeastType {
++  return decodeStoredScalar(value) === 'dry' ? 'dry' : 'fresh';
++}
++
++export function createBeginnerPlanRestoreLoaders(storage: BeginnerRestoreStorage): BeginnerRestoreLoaders {
++  return {
++    async load(): Promise<BeginnerRestoreData> {
++      const [experienceLevel, temperatureUnit, measurementSystem, preferredYeastType, calculatorSettings, legacyBakeAt, beginnerPlanSnapshot] = await Promise.all([
++        storage.getItem(EXPERIENCE_LEVEL_STORAGE_KEY),
++        storage.getItem(TEMPERATURE_UNIT_STORAGE_KEY),
++        storage.getItem(MEASUREMENT_SYSTEM_STORAGE_KEY),
++        storage.getItem(PREFERRED_YEAST_TYPE_STORAGE_KEY),
++        storage.getItem(CALCULATOR_SETTINGS_STORAGE_KEY),
++        storage.getItem(BEGINNER_BAKE_AT_STORAGE_KEY),
++        storage.getItem(BEGINNER_PLAN_SNAPSHOT_STORAGE_KEY),
++      ]);
++      return {
++        experienceLevel: readExperienceLevel(experienceLevel),
++        preferences: {
++          temperatureUnit: readTemperatureUnit(temperatureUnit),
++          measurementSystem: readMeasurementSystem(measurementSystem),
++          preferredYeastType: readPreferredYeastType(preferredYeastType),
++        },
++        calculatorSettings,
++        legacyBakeAt,
++        beginnerPlanSnapshot,
++      };
++    },
++  };
++}
++
++export function resolveBeginnerRestoreBakeAt(
++  data: BeginnerRestoreData,
++  storedPlan: RestoreSchedule | null,
++  now: Date,
++): Date | null | undefined {
++  if (data.experienceLevel === 'pro') return undefined;
++  let legacyBakeAt: Date | undefined;
++  if (data.legacyBakeAt) {
++    const parsedBakeAt = new Date(data.legacyBakeAt);
++    const availableHours = (parsedBakeAt.getTime() - now.getTime()) / 3600000;
++    if (Number.isFinite(parsedBakeAt.getTime()) && parsedBakeAt.getTime() > now.getTime() && availableHours >= 1) {
++      legacyBakeAt = parsedBakeAt;
++    }
++  }
++  if (legacyBakeAt && (!storedPlan || legacyBakeAt.getTime() !== storedPlan.parsedSchedule.bakeAt.getTime())) return legacyBakeAt;
++  if (storedPlan && storedPlan.parsedSchedule.bakeAt.getTime() > now.getTime()) {
++    return storedPlan.parsedSchedule.bakeAt;
++  }
++  if (storedPlan && storedPlan.parsedSchedule.bakeAt.getTime() <= now.getTime()) return null;
++  return undefined;
++}
++
++export function createBeginnerPlanRestoreCoordinator() {
++  let generation = 0;
++  let mounted = true;
++
++  return {
++    activate(): void {
++      mounted = true;
++    },
++    begin(): number {
++      generation += 1;
++      return generation;
++    },
++    invalidate(activeGeneration: number): void {
++      if (generation === activeGeneration) generation += 1;
++    },
++    dispose(): void {
++      mounted = false;
++      generation += 1;
++    },
++    isCurrent(activeGeneration: number): boolean {
++      return mounted && generation === activeGeneration;
++    },
++    async load(activeGeneration: number, loaders: BeginnerRestoreLoaders): Promise<BeginnerRestoreData | null> {
++      const data = await loaders.load();
++      return mounted && generation === activeGeneration ? data : null;
++    },
++  };
++}

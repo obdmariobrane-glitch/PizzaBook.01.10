@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { Alert, View, Text, StyleSheet, ScrollView, Pressable, TextInput, ActivityIndicator, Platform, KeyboardAvoidingView, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import Icon from '@react-native-vector-icons/ionicons';
 
 import { api, fileUrl, useAuth } from '../../src/auth';
@@ -12,8 +12,9 @@ import { formatTemperature, formatWeight } from '../../src/units';
 import PizzaRatingSlider from '../../src/components/PizzaRatingSlider';
 import PostMedia from '../../src/components/PostMedia';
 import type { PostMediaSource } from '../../src/components/PostMedia';
+import { COMMUNITY_ENABLED } from '../../src/communityFeature';
 
-export default function PostDetail() {
+function PostDetailContent() {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
   const router = useRouter();
@@ -347,3 +348,8 @@ const styles = StyleSheet.create({
   commentInput: { flex: 1, backgroundColor: COLORS.surface, borderRadius: RADIUS.pill, paddingHorizontal: SPACING.md, paddingVertical: 10, fontSize: 14, color: COLORS.onSurface, borderWidth: 1, borderColor: COLORS.border },
   sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.brand, alignItems: 'center', justifyContent: 'center' },
 });
+
+export default function PostDetail() {
+  if (!COMMUNITY_ENABLED) return <Redirect href="/(tabs)" />;
+  return <PostDetailContent />;
+}

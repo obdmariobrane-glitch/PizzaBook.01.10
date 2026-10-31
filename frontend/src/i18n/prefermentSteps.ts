@@ -2,11 +2,204 @@
 // P1 = Preferment build, P2 = Final mix (hand OR mixer), P3 = Rest / Balling / Baking.
 import type { Lang } from './translations';
 import type { PreferredYeastType } from '../preferences';
-import { getSpiralMixingSteps, getSpiralMixingTitle } from './spiralMixing';
+import type { FlourType } from '../calculator';
+import { adaptSpiralMixerSourceSteps, calculateProWaterSplit, getSpiralMixingTitle, removeProIceReferencesFromSteps, type SpiralMixingRecipe } from './spiralMixing';
 
 export type Phase = { title: string; steps: string[] };
 export type Path = { p1: Phase; p2: Phase; p3: Phase };
 export type MethodSteps = { hand: Path; mixer: Path };
+
+const spiralNoOilFinish: Record<Lang, string> = {
+  hr: 'Nastavite miješati dok se tijesto ne poveže i postane glatko, zatim zaustavite spiralni mikser.',
+  en: 'Continue mixing until the dough comes together and becomes smooth, then stop the spiral mixer.',
+  de: 'Mischen Sie weiter, bis sich der Teig verbindet und glatt wird, und stoppen Sie dann den Spiralkneter.',
+  sl: 'Nadaljujte z mešanjem, dokler se testo ne poveže in postane gladko, nato ustavite spiralni mešalnik.',
+};
+const spiralOilStepPattern = /olive oil|maslinov(?:og ulja|o ulje)|olivenöl|oljčn(?:ega olja|o olje)/i;
+const mixerOilFinish: Record<Lang, string> = {
+  hr: 'Nastavite miješati dok se tijesto ne poveže i postane glatko, zatim zaustavite mikser.',
+  en: 'Continue mixing until the dough comes together and becomes smooth, then stop the mixer.',
+  de: 'Mischen Sie weiter, bis sich der Teig verbindet und glatt wird, und stoppen Sie dann den Mixer.',
+  sl: 'Nadaljujte z mešanjem, dokler se testo ne poveže in postane gladko, nato ustavite mešalnik.',
+};
+const mixerOilStep = (lang: Lang, amount: string): string => ({
+  hr: `Dodajte ${amount} maslinovog ulja i miješajte dok ga tijesto potpuno ne upije.`,
+  en: `Add ${amount} olive oil and mix until it is absorbed.`,
+  de: `Geben Sie ${amount} Olivenöl hinzu und mischen Sie, bis es aufgenommen ist.`,
+  sl: `Dodajte ${amount} oljčnega olja in mešajte, dokler se ne vpije.`,
+}[lang]);
+
+export function getProHomeMixerDirectSteps(
+  lang: Lang,
+  yeastType: PreferredYeastType,
+  recipe: SpiralMixingRecipe,
+): string[] {
+  const split = calculateProWaterSplit({
+    waterBaseGrams: recipe.waterBaseGrams,
+    liquidWaterGrams: recipe.liquidWaterGrams,
+    iceGrams: recipe.iceGrams,
+    initialWaterPct: recipe.initialWaterPct,
+  });
+  const amount = recipe.formatWeight;
+  const flour = recipe.flourBlendDescription
+    ? `${amount(recipe.flourGrams)} ${recipe.flourLabel} (${recipe.flourBlendDescription})`
+    : `${amount(recipe.flourGrams)} ${recipe.flourLabel}`;
+  const water = recipe.iceGrams > 0
+    ? `${amount(recipe.liquidWaterGrams)} ${({ hr: 'tekuće vode', en: 'liquid water', de: 'flüssiges Wasser', sl: 'tekoče vode' }[lang])}`
+    : `${amount(recipe.waterBaseGrams)} ${({ hr: 'vode', en: 'water', de: 'Wasser', sl: 'vode' }[lang])}`;
+  const yeast = `${amount(recipe.yeastGrams, true)} ${({ hr: { fresh: 'svježeg kvasca', activeDry: 'aktivnog suhog kvasca', dry: 'instant suhog kvasca' }, en: { fresh: 'fresh yeast', activeDry: 'active dry yeast', dry: 'instant dry yeast' }, de: { fresh: 'Frischhefe', activeDry: 'Aktiv-Trockenhefe', dry: 'Instant-Trockenhefe' }, sl: { fresh: 'svežega kvasa', activeDry: 'aktivnega suhega kvasa', dry: 'instant suhega kvasa' } }[lang][yeastType])}`;
+  const initialWater = amount(split.initialLiquidWaterGrams);
+  const remainingWater = amount(split.remainingLiquidWaterGrams);
+  const salt = amount(recipe.saltGrams, true);
+  const oil = amount(recipe.oilGrams);
+  const psyllium = amount(recipe.psylliumGrams ?? 0, true);
+  const isGlutenFree = recipe.flourBehavior === 'glutenFree';
+  const psylliumAddition = isGlutenFree && (recipe.psylliumGrams ?? 0) > 0
+    ? ({
+      hr: ` i ${psyllium} psyllium ljuskica`,
+      en: ` and ${psyllium} psyllium husk`,
+      de: ` und ${psyllium} Flohsamenschalen`,
+      sl: ` ter ${psyllium} psylliuma`,
+    }[lang])
+    : '';
+  const prepareYeast = {
+    hr: yeastType === 'fresh'
+      ? `Svježi kvasac otopite u dijelu početne tekuće vode (${initialWater}); ta je voda uključena samo jednom u početnu porciju.`
+      : yeastType === 'activeDry'
+        ? `Aktivni suhi kvasac pripremite prema uputama na pakiranju u dijelu početne tekuće vode (${initialWater}); tu vodu uračunajte samo jednom.`
+        : 'Instant suhi kvasac nemojte otapati; dodajte ga izravno brašnu pri početku miješanja.',
+    en: yeastType === 'fresh'
+      ? `Dissolve the fresh yeast in part of the initial liquid water (${initialWater}); count this water only once within the initial portion.`
+      : yeastType === 'activeDry'
+        ? `Prepare the active dry yeast according to the package directions using part of the initial liquid water (${initialWater}); count this water only once.`
+        : 'Do not dissolve instant dry yeast; add it directly to the flour when mixing begins.',
+    de: yeastType === 'fresh'
+      ? `Lösen Sie die Frischhefe in einem Teil des anfänglichen Flüssigwassers (${initialWater}) auf; zählen Sie dieses Wasser nur einmal zur Anfangsportion.`
+      : yeastType === 'activeDry'
+        ? `Bereiten Sie die Aktiv-Trockenhefe nach Packungsanleitung mit einem Teil des anfänglichen Flüssigwassers (${initialWater}) zu; zählen Sie dieses Wasser nur einmal.`
+        : 'Lösen Sie Instant-Trockenhefe nicht auf; geben Sie sie zu Beginn des Mischens direkt zum Mehl.',
+    sl: yeastType === 'fresh'
+      ? `Sveži kvas raztopite v delu začetne tekoče vode (${initialWater}); to vodo v začetno porcijo vštejte samo enkrat.`
+      : yeastType === 'activeDry'
+        ? `Aktivni suhi kvas pripravite po navodilih na embalaži z delom začetne tekoče vode (${initialWater}); to vodo vštejte samo enkrat.`
+        : 'Instant suhega kvasa ne raztapljajte; ob začetku mešanja ga dodajte neposredno moki.',
+  }[lang];
+  const addInitial = {
+    hr: yeastType === 'dry'
+      ? `U posudu dodajte ${flour}${psylliumAddition}, početnih ${initialWater} tekuće vode i ${yeast}; miješajte na niskoj brzini dok se sastojci ne povežu.`
+      : `U posudu dodajte ${flour}${psylliumAddition}, pripremljeni kvasac i ostatak početne porcije od ${initialWater} tekuće vode; miješajte na niskoj brzini dok se sastojci ne povežu.`,
+    en: yeastType === 'dry'
+      ? `Add ${flour}${psylliumAddition}, the initial ${initialWater} of liquid water, and ${yeast} to the bowl; mix at low speed until combined.`
+      : `Add ${flour}${psylliumAddition}, the prepared yeast, and the rest of the initial ${initialWater} liquid-water portion to the bowl; mix at low speed until combined.`,
+    de: yeastType === 'dry'
+      ? `Geben Sie ${flour}${psylliumAddition}, die anfänglichen ${initialWater} flüssiges Wasser und ${yeast} in die Schüssel; mischen Sie bei niedriger Geschwindigkeit, bis alles verbunden ist.`
+      : `Geben Sie ${flour}${psylliumAddition}, die vorbereitete Hefe und den übrigen Teil der anfänglichen ${initialWater} flüssigen Wassermenge in die Schüssel; mischen Sie bei niedriger Geschwindigkeit, bis alles verbunden ist.`,
+    sl: yeastType === 'dry'
+      ? `V posodo dodajte ${flour}${psylliumAddition}, začetnih ${initialWater} tekoče vode in ${yeast}; mešajte pri nizki hitrosti, da se sestavine povežejo.`
+      : `V posodo dodajte ${flour}${psylliumAddition}, pripravljen kvas in preostanek začetne porcije ${initialWater} tekoče vode; mešajte pri nizki hitrosti, da se sestavine povežejo.`,
+  }[lang];
+  const addRemainingWater = split.remainingLiquidWaterGrams > 0
+    ? ({
+      hr: `Postupno dodajte preostalih ${remainingWater} tekuće vode dok se upija.`,
+      en: `Gradually add the remaining ${remainingWater} liquid water as it is absorbed.`,
+      de: `Geben Sie die übrigen ${remainingWater} flüssiges Wasser nach und nach zu, während es aufgenommen wird.`,
+      sl: `Postopoma dodajte preostalih ${remainingWater} tekoče vode, ko se vpija.`,
+    }[lang])
+    : ({
+      hr: 'Sva izmjerena tekuća voda dodana je u početnoj porciji.',
+      en: 'All measured liquid water is included in the initial portion.',
+      de: 'Das gesamte abgemessene Flüssigwasser ist in der Anfangsportion enthalten.',
+      sl: 'Vsa odmerjena tekoča voda je vključena v začetno porcijo.',
+    }[lang]);
+  const saltStep = ({
+    hr: `Kada je voda gotovo upijena, dodajte ${salt} soli.`,
+    en: `When the water is almost absorbed, add ${salt} salt.`,
+    de: `Wenn das Wasser fast aufgenommen ist, geben Sie ${salt} Salz hinzu.`,
+    sl: `Ko se voda skoraj vpije, dodajte ${salt} soli.`,
+  }[lang]);
+  const mixingFinish = {
+    hr: isGlutenFree
+      ? 'Miješajte samo dok se sastojci ne povežu u homogenu, ljepljivu masu; bezglutensko tijesto ne razvija klasičnu glutensku mrežu.'
+      : recipe.flourBehavior === 'spelt'
+        ? 'Miješajte kratko i nježno, samo dok tijesto ne postane ujednačeno i povezano; nemojte ga premijesiti.'
+        : recipe.flourBehavior === 'wholeWheat'
+          ? 'Miješajte nježno i umjereno dok tijesto ne postane povezano; ne pokušavajte ga zagladiti dugim ili agresivnim miješanjem.'
+          : 'Miješajte dok tijesto ne postane glatko, povezano i odgovarajuće elastično.',
+    en: isGlutenFree
+      ? 'Mix only until the ingredients form a homogeneous, sticky mixture; gluten-free dough does not develop a traditional gluten network.'
+      : recipe.flourBehavior === 'spelt'
+        ? 'Mix briefly and gently, only until the dough is even and cohesive; do not overmix it.'
+        : recipe.flourBehavior === 'wholeWheat'
+          ? 'Mix gently and moderately until the dough is cohesive; do not try to smooth it by mixing longer or more aggressively.'
+          : 'Mix until the dough is smooth, cohesive, and appropriately elastic.',
+    de: isGlutenFree
+      ? 'Mischen Sie nur, bis eine gleichmäßige, klebrige Masse entsteht; glutenfreier Teig entwickelt kein herkömmliches Glutennetz.'
+      : recipe.flourBehavior === 'spelt'
+        ? 'Mischen Sie kurz und schonend, bis der Teig gleichmäßig und verbunden ist; kneten Sie ihn nicht zu lange.'
+        : recipe.flourBehavior === 'wholeWheat'
+          ? 'Mischen Sie schonend und maßvoll, bis der Teig verbunden ist; versuchen Sie nicht, ihn durch längeres oder kräftigeres Mischen zu glätten.'
+          : 'Mischen Sie, bis der Teig glatt, verbunden und angemessen elastisch ist.',
+    sl: isGlutenFree
+      ? 'Mešajte samo, dokler se sestavine ne povežejo v homogeno, lepljivo maso; brezglutensko testo ne razvije običajne glutenske mreže.'
+      : recipe.flourBehavior === 'spelt'
+        ? 'Mešajte kratko in nežno, samo dokler testo ne postane enakomerno in povezano; ne pregnetite ga.'
+        : recipe.flourBehavior === 'wholeWheat'
+          ? 'Mešajte nežno in zmerno, dokler se testo ne poveže; ne poskušajte ga zgladiti z daljšim ali agresivnejšim mešanjem.'
+          : 'Mešajte, dokler testo ne postane gladko, povezano in primerno elastično.',
+  }[lang];
+  const steps = [
+    ({
+      hr: 'Operite i temeljito osušite ruke.',
+      en: 'Wash and thoroughly dry your hands.',
+      de: 'Waschen und trocknen Sie Ihre Hände gründlich.',
+      sl: 'Umijte in temeljito osušite roke.',
+    }[lang]),
+    ({
+      hr: 'Pripremite kućni mikser i njegovu posudu.',
+      en: 'Prepare the home mixer and its bowl.',
+      de: 'Bereiten Sie den Haushaltsmixer und seine Schüssel vor.',
+      sl: 'Pripravite domači mešalnik in njegovo posodo.',
+    }[lang]),
+    ({
+      hr: `Izmjerite ${flour}, ${salt} soli, ${yeast} i ${water}${recipe.oilGrams > 0 ? ` te ${oil} maslinovog ulja` : ''}${isGlutenFree && recipe.psylliumGrams ? ` te ${psyllium} psylliuma` : ''}.`,
+      en: `Measure ${flour}, ${salt} salt, ${yeast}, and ${water}${recipe.oilGrams > 0 ? `, plus ${oil} olive oil` : ''}${isGlutenFree && recipe.psylliumGrams ? `, plus ${psyllium} psyllium husk` : ''}.`,
+      de: `Wiegen Sie ${flour}, ${salt} Salz, ${yeast} und ${water}${recipe.oilGrams > 0 ? ` sowie ${oil} Olivenöl` : ''}${isGlutenFree && recipe.psylliumGrams ? ` sowie ${psyllium} Flohsamenschalen` : ''} ab.`,
+      sl: `Odmerite ${flour}, ${salt} soli, ${yeast} in ${water}${recipe.oilGrams > 0 ? ` ter ${oil} oljčnega olja` : ''}${isGlutenFree && recipe.psylliumGrams ? ` ter ${psyllium} psylliuma` : ''}.`,
+    }[lang]),
+    prepareYeast,
+    addInitial,
+    addRemainingWater,
+    saltStep,
+    mixingFinish,
+    ...(recipe.oilGrams > 0
+      ? [({
+        hr: `Dodajte ${oil} maslinovog ulja i miješajte dok se ne upije.`,
+        en: `Add ${oil} olive oil and mix until absorbed.`,
+        de: `Geben Sie ${oil} Olivenöl hinzu und mischen Sie, bis es aufgenommen ist.`,
+        sl: `Dodajte ${oil} oljčnega olja in mešajte, dokler se ne vpije.`,
+      }[lang])]
+      : []),
+  ];
+  const restMinutes = isGlutenFree ? 5 : recipe.restMinutes;
+  if (restMinutes !== undefined && restMinutes > 0) {
+    const rest = Number.isInteger(restMinutes) ? `${restMinutes}` : `${restMinutes.toFixed(1)}`;
+    steps.push(({
+      hr: isGlutenFree
+        ? `Pokrijte smjesu i ostavite je ${rest} minuta kako bi psyllium upio vodu.`
+        : `Pokrijte tijesto i ostavite ga ${rest} minuta u posudi miksera.`,
+      en: isGlutenFree
+        ? `Cover the mixture and rest it for ${rest} minutes so the psyllium can absorb water.`
+        : `Cover the dough and let it rest in the mixer bowl for ${rest} minutes.`,
+      de: isGlutenFree
+        ? `Decken Sie die Masse ab und lassen Sie sie ${rest} Minuten ruhen, damit das Flohsamenschalenpulver Wasser aufnehmen kann.`
+        : `Decken Sie den Teig ab und lassen Sie ihn ${rest} Minuten in der Mixerschüssel ruhen.`,
+      sl: isGlutenFree
+        ? `Maso pokrijte in pustite ${rest} minut počivati, da psyllium vpije vodo.`
+        : `Testo pokrijte in ga pustite ${rest} minut počivati v posodi mešalnika.`,
+    }[lang]));
+  }
+  return steps;
+}
 
 // ============================ HR ============================
 const HR_BIGA_P1: Phase = {
@@ -48,7 +241,7 @@ const HR_BIGA_P3: Phase = {
     'Preklopite tijesto par puta rukama (stretch & fold), pokrijte i ostavite 30 minuta na sobnoj temperaturi.',
     'Oblikujte čvrste loptice (bulice) od 260–300 g.',
     'Ostavite loptice 30–60 minuta na sobnoj temperaturi, pa ih spremite u hladnjak na odabrano vrijeme.',
-    'Izvadite loptice 15–20 minuta prije razvlačenja ili kada se približno udvostruče, razvucite na semoli, nadjenite i pecite.',
+    'Nježno izvadite jednu kuglicu iz fermentacijske kutije i prebacite je na radnu površinu lagano posutu semolom; ostale kuglice držite pokrivene. Po potrebi kuglicu nakon vađenja lagano pospite semolom, zatim oblikujte pizzu, nadjenite je, prebacite na odabranu površinu za pečenje i pecite prema uputama pećnice.',
   ],
 };
 
@@ -90,7 +283,7 @@ const HR_POOLISH_P3: Phase = {
     'Napravite jedno preklapanje rukama (stretch & fold), pokrijte i ostavite još 30 minuta.',
     'Oblikujte tijesto u glatku kuglu i pripremite ga za podjelu.',
     'Podijelite tijesto i oblikujte glatke loptice od 260–280 g.',
-    'Ostavite loptice da se opuste prije razvlačenja, zatim ih razvucite, nadjenite i pecite.',
+    'Nježno izvadite jednu kuglicu iz fermentacijske kutije i prebacite je na pripremljenu radnu površinu; ostale kuglice držite pokrivene. Oblikujte je, nadjenite, prebacite na odabranu površinu za pečenje i pecite prema uputama pećnice.',
   ],
 };
 
@@ -134,7 +327,7 @@ const EN_BIGA_P3: Phase = {
     'Fold the dough a few times by hand (stretch & fold), cover and place in the fridge for 60 to 90 minutes.',
     'Shape firm dough balls of 260–300 g.',
     'Leave the balls for 15 minutes at room temp, then place them in the fridge for another 5 to 6 hours.',
-    'Take the balls out 10–15 minutes before baking, stretch on semolina, top and bake at the highest temperature.',
+    'Gently remove one dough ball from the fermentation box and transfer it to a lightly semolina-dusted work surface; keep the other balls covered. Lightly dust the ball with semolina after removing it if needed, then shape the pizza, add toppings, transfer it to the selected baking surface, and bake according to the oven instructions.',
   ],
 };
 
@@ -176,7 +369,7 @@ const EN_POOLISH_P3: Phase = {
     'Do one stretch & fold by hand, cover and leave for another 30 minutes.',
     'Shape the dough into a smooth ball and prepare it for dividing.',
     'Divide the dough and shape smooth balls of 260–280 g.',
-    'Let the balls relax before stretching, then stretch on semolina, top and bake.',
+    'Gently remove one dough ball from the fermentation box and transfer it to a lightly semolina-dusted work surface; keep the other balls covered. Lightly dust the ball with semolina after removing it if needed, then shape the pizza, add toppings, transfer it to the selected baking surface, and bake according to the oven instructions.',
   ],
 };
 
@@ -220,7 +413,7 @@ const DE_BIGA_P3: Phase = {
     'Falten Sie den Teig einige Male mit den Händen (Stretch & Fold), decken Sie ab und stellen Sie ihn für 60 bis 90 Minuten in den Kühlschrank.',
     'Formen Sie feste Teiglinge zu je 260–300 g.',
     'Lassen Sie die Teiglinge 15 Minuten bei Raumtemp., dann für weitere 5 bis 6 Stunden in den Kühlschrank.',
-    'Nehmen Sie die Teiglinge 10–15 Minuten vor dem Backen heraus, ziehen Sie sie auf Semola aus, belegen und backen Sie bei höchster Temperatur.',
+    'Nehmen Sie eine Teigkugel vorsichtig aus der Gärbox und legen Sie sie auf eine leicht mit Semola bestäubte Arbeitsfläche; lassen Sie die übrigen Kugeln abgedeckt. Bestäuben Sie die Kugel nach dem Herausnehmen bei Bedarf leicht mit Semola, formen Sie anschließend die Pizza, belegen Sie sie, legen Sie sie auf die ausgewählte Backfläche und backen Sie sie gemäß den Ofenanweisungen.',
   ],
 };
 
@@ -262,7 +455,7 @@ const DE_POOLISH_P3: Phase = {
     'Ein Stretch & Fold von Hand machen, abdecken und weitere 30 Minuten ruhen lassen.',
     'Den Teig zu einer glatten Kugel formen und zum Teilen vorbereiten.',
     'Den Teig teilen und glatte Kugeln zu je 260–280 g formen.',
-    'Die Kugeln entspannen lassen, dann auf Semola ausziehen, belegen und backen.',
+    'Nehmen Sie eine Teigkugel vorsichtig aus der Gärbox und legen Sie sie auf eine leicht mit Semola bestäubte Arbeitsfläche; lassen Sie die übrigen Kugeln abgedeckt. Bestäuben Sie die Kugel nach dem Herausnehmen bei Bedarf leicht mit Semola, formen Sie anschließend die Pizza, belegen Sie sie, legen Sie sie auf die ausgewählte Backfläche und backen Sie sie gemäß den Ofenanweisungen.',
   ],
 };
 
@@ -306,7 +499,7 @@ const SL_BIGA_P3: Phase = {
     'Testo nekajkrat prepognite z rokami (stretch & fold), pokrijte in postavite v hladilnik za 60 do 90 minut.',
     'Oblikujte čvrste kepice po 260–300 g.',
     'Kepice pustite 15 minut pri sobni temp., nato pa jih spravite v hladilnik za še 5 do 6 ur.',
-    'Vzemite kepice 10–15 minut pred peko, raztegnite na zdrobu, obložite in pecite pri najvišji temperaturi.',
+    'Eno kroglico nežno vzemite iz fermentacijske posode in jo prenesite na delovno površino, rahlo posuto z zdrobom; preostale kroglice naj ostanejo pokrite. Po potrebi kroglico po odstranitvi rahlo posujte z zdrobom, nato pico oblikujte, obložite, prenesite na izbrano površino za peko in specite po navodilih pečice.',
   ],
 };
 
@@ -348,7 +541,7 @@ const SL_POOLISH_P3: Phase = {
     'Naredite en stretch & fold z rokami, pokrijte in pustite še 30 minut.',
     'Testo oblikujte v gladko kepo in ga pripravite za delitev.',
     'Testo razdelite in oblikujte gladke kepice po 260–280 g.',
-    'Kepice pustite počivati, nato jih raztegnite na zdrobu, obložite in specite.',
+    'Eno kroglico nežno vzemite iz fermentacijske posode in jo prenesite na delovno površino, rahlo posuto z zdrobom; preostale kroglice naj ostanejo pokrite. Po potrebi kroglico po odstranitvi rahlo posujte z zdrobom, nato pico oblikujte, obložite, prenesite na izbrano površino za peko in specite po navodilih pečice.',
   ],
 };
 
@@ -396,8 +589,8 @@ const TEGLIA_P3: Record<Lang, Phase> = {
     title: 'Faza C: Podjela, završno dizanje i pečenje',
     steps: [
       'Tijesto tijekom preostale fermentacije drži pokriveno kao jednu masu; nemoj oblikovati kugle.',
-      'Naulji plehove prema izračunatom broju i dimenzijama. Tijesto podijeli na izračunatu masu po plehu i nježno utisni do rubova. Ako se vraća, pokrij ga i ostavi do 15 minuta da se opusti prije nastavka.',
-      'Pokrij plehove i nakon utiskivanja ostavi tijesto da se završno diže 60–120 minuta, prema rasporedu i stanju tijesta. Spremno je kada je vidljivo napuhnuto i mjehurasto. Ako raspored ne ostavlja barem 75 minuta za pripremu i dizanje, pomakni pečenje.',
+      'Naulji tepsije prema izračunatom broju i dimenzijama. Tijesto podijeli na izračunatu masu po tepsiji i nježno utisni do rubova. Ako se vraća, pokrij ga i ostavi do 15 minuta da se opusti prije nastavka.',
+      'Pokrij tepsije i nakon utiskivanja ostavi tijesto da se završno diže 60–120 minuta, prema rasporedu i stanju tijesta. Spremno je kada je vidljivo napuhnuto i mjehurasto. Ako raspored ne ostavlja barem 75 minuta za pripremu i dizanje, pomakni pečenje.',
       'Dodaj nadjev i peci prema uputama za odabranu pećnicu.',
     ],
   },
@@ -446,7 +639,13 @@ export function labelSelectedYeast(text: string, lang: Lang, yeastType: Preferre
   return text.replace(patterns, labels[yeastType]);
 }
 
-export function adaptDirectYeastStep(text: string, lang: Lang, yeastType: PreferredYeastType): string {
+export function adaptDirectYeastStep(
+  text: string,
+  lang: Lang,
+  yeastType: PreferredYeastType,
+  isPro = false,
+  isHomeMixer = false,
+): string {
   const dissolvePattern = {
     hr: /[^.!?]*(?:otopite|rastopite)[^.!?]*kvasac[^.!?]*[.!?]?/i,
     en: /[^.!?]*dissolv(?:e|ed|ing)[^.!?]*yeast[^.!?]*[.!?]?/i,
@@ -488,7 +687,7 @@ export function adaptDirectYeastStep(text: string, lang: Lang, yeastType: Prefer
     },
   }[lang];
   const labelled = labelSelectedYeast(text, lang, yeastType);
-  if (lockedDirectHydrationPattern.test(labelled)) {
+  if (lockedDirectHydrationPattern.test(labelled) && (!isPro || !isHomeMixer || yeastType === 'fresh')) {
     return labelled;
   }
   const dissolveInstruction = labelled.match(dissolvePattern)?.[0];
@@ -502,12 +701,22 @@ export function adaptDirectYeastStep(text: string, lang: Lang, yeastType: Prefer
     }[lang]
     : '';
   const prepared = labelled.replace(dissolvePattern, `${handling[yeastType]}${firstWaterNote}`);
-  return (yeastType === 'dry' ? prepared.replace(yeastWaterPattern, ({
-    hr: 'vodo',
+  if (yeastType !== 'dry') return prepared;
+  const waterOnly = prepared.replace(yeastWaterPattern, ({
+    hr: isPro ? 'vodu' : 'vodo',
     en: 'water',
     de: 'Wasser',
     sl: 'vodo',
-  }[lang])) : prepared);
+  }[lang]));
+  if (isPro && isHomeMixer && waterOnly !== prepared) {
+    return `${waterOnly} ${({
+      hr: 'Miješajte 1–2 minute, zatim dodajte instant suhi kvasac prije preostale vode.',
+      en: 'Mix for 1–2 minutes, then add the instant dry yeast before adding the remaining water.',
+      de: '1–2 Minuten mischen, dann die Instant-Trockenhefe vor dem restlichen Wasser zugeben.',
+      sl: 'Mešajte 1–2 minuti, nato dodajte instant suhi kvas pred preostalo vodo.',
+    }[lang])}`;
+  }
+  return waterOnly;
 }
 
 export function adaptDirectMixingSteps(
@@ -516,9 +725,18 @@ export function adaptDirectMixingSteps(
   yeastType: PreferredYeastType,
   mixing: 'hand' | 'mixer' | 'spiral',
   hasOil = false,
+  isPro = false,
 ): string[] {
   if (mixing === 'spiral') {
-    return getSpiralMixingSteps(lang, yeastType, { method: 'direct', hasOil });
+    const adapted = adaptSpiralMixerSourceSteps(
+      steps.map((step) => adaptDirectYeastStep(step, lang, yeastType, isPro)),
+      lang,
+    );
+    if (!hasOil) {
+      const oilIndex = adapted.findIndex((step) => spiralOilStepPattern.test(step));
+      if (oilIndex >= 0) adapted[oilIndex] = spiralNoOilFinish[lang];
+    }
+    return adapted;
   }
   return steps.map((step, index) => {
     if (mixing === 'hand' && index === 0) {
@@ -595,7 +813,7 @@ export function adaptDirectMixingSteps(
       }[lang];
       return `${step} ${afterWater}`;
     }
-    return adaptDirectYeastStep(step, lang, yeastType);
+    return adaptDirectYeastStep(step, lang, yeastType, isPro);
   });
 }
 
@@ -604,72 +822,118 @@ export function getYeastAwarePrefermentSteps(
   method: 'biga' | 'poolish',
   mixing: 'hand' | 'mixer' | 'spiral',
   yeastType: PreferredYeastType,
+  mainYeastAmount: string,
   teglia = false,
   hasOil = false,
+  flour: FlourType = 'caputo00',
+  glutenFreeBlend = false,
+  remainingFlourDescription?: string,
+  fridgeTemp = 4,
+  spiralRecipe?: SpiralMixingRecipe,
 ): Path {
   const path = (method === 'biga' ? BIGA_STEPS : POOLISH_STEPS)[lang][mixing === 'spiral' ? 'mixer' : mixing];
+  const glutenFree = flour === 'glutenFree' || (flour === 'custom' && glutenFreeBlend);
   const p1 = { ...path.p1, steps: [...path.p1.steps] };
   const p2 = { ...path.p2, steps: [...path.p2.steps] };
+  const selectedFridgeTemperature = `${fridgeTemp}°C`;
   const copy = {
     hr: {
       bigaFresh: 'U brašno ravnomjerno izmrvite svježi kvasac.',
       bigaActiveDry: 'Aktivni suhi kvas otopite u dijelu tople vode prema uputama na pakiranju; tu vodu oduzmite od izmjerene vode.',
       bigaDry: 'Instant suhi kvasac ravnomjerno umiješajte u brašno.',
-      bigaFinalFresh: 'Preostali svježi kvasac otopite u manjem dijelu izmjerene hladne vode pa ga dodajte s većim dijelom te vode.',
-      bigaFinalActiveDry: 'Preostali aktivni suhi kvas otopite u dijelu tople vode prema uputama na pakiranju; tu vodu uračunajte u izmjerenu vodu za završni zamjes.',
-      bigaFinalDry: 'Preostali instant suhi kvasac ravnomjerno umiješajte u dio preostalog brašna pa dodajte uz veći dio hladne vode.',
+      bigaFinalFresh: `Preostali svježi kvasac (${mainYeastAmount}) otopite u manjem dijelu izmjerene hladne vode pa ga dodajte s većim dijelom te vode.`,
+      bigaFinalActiveDry: `Preostali aktivni suhi kvasac (${mainYeastAmount}) otopite u dijelu tople vode prema uputama na pakiranju; tu vodu uračunajte u izmjerenu vodu za završni zamjes, pa otopinu dodajte s većim dijelom početne vode.`,
+      bigaFinalDry: `Preostali instant suhi kvasac (${mainYeastAmount}) ravnomjerno umiješajte u dio preostalog brašna pa dodajte uz veći dio hladne vode.`,
       poolishFresh: 'Svježi kvasac otopite u izmjerenoj vodi za Poolish.',
       poolishActiveDry: 'Aktivni suhi kvas pripremite u dijelu tople izmjerene vode prema uputama na pakiranju; tu vodu uračunajte u vodu za Poolish.',
       poolishDry: 'Instant suhi kvasac ravnomjerno umiješajte u brašno za Poolish.',
       poolishWater: 'Dodajte izmjerenu vodu uz miješanje pjenjačom ili vilicom dok ne dobijete glatku smjesu.',
-      poolishFinalFresh: 'Završni svježi kvasac otopite u dijelu izmjerene preostale vode; dodajte ga s preostalim brašnom i većim dijelom vode.',
-      poolishFinalActiveDry: 'Aktivni suhi kvasac za završno tijesto pripremite u dijelu tople preostale vode prema uputama na pakiranju; uračunajte je u vodu za završni zamjes.',
-      poolishFinalDry: 'Završni instant suhi kvasac ravnomjerno umiješajte u preostalo brašno pa dodajte veći dio preostale vode.',
+      poolishFinalFresh: `Završni svježi kvasac (${mainYeastAmount}) otopite u dijelu izmjerene preostale vode; dodajte ga s preostalim brašnom i većim dijelom vode.`,
+      poolishFinalActiveDry: `Aktivni suhi kvasac za završno tijesto (${mainYeastAmount}) pripremite u dijelu tople preostale vode prema uputama na pakiranju; dodajte ga s preostalim brašnom i većim dijelom vode, a tu vodu uračunajte u ukupnu količinu.`,
+      poolishFinalDry: `Završni instant suhi kvasac (${mainYeastAmount}) ravnomjerno umiješajte u preostalo brašno pa dodajte veći dio preostale vode.`,
     },
     en: {
       bigaFresh: 'Evenly crumble the fresh yeast through the flour.',
       bigaActiveDry: 'Dissolve active dry yeast in part of the warm water according to the package directions; subtract that water from the measured amount.',
       bigaDry: 'Mix the instant dry yeast evenly into the flour.',
-      bigaFinalFresh: 'Dissolve the remaining fresh yeast in a small part of the measured cold water, then add it with most of that water.',
-      bigaFinalActiveDry: 'Dissolve the remaining active dry yeast in part of the warm water according to the package directions; count that water toward the measured final-mix water.',
-      bigaFinalDry: 'Mix the remaining instant dry yeast evenly into part of the remaining flour, then add it with most of the cold water.',
+      bigaFinalFresh: `Dissolve the remaining fresh yeast (${mainYeastAmount}) in a small part of the measured cold water, then add it with most of that water.`,
+      bigaFinalActiveDry: `Dissolve the remaining active dry yeast (${mainYeastAmount}) in part of the warm water according to the package directions; count that water toward the measured final-mix water, then add the solution with most of the initial water.`,
+      bigaFinalDry: `Mix the remaining instant dry yeast (${mainYeastAmount}) evenly into part of the remaining flour, then add it with most of the cold water.`,
       poolishFresh: 'Dissolve the fresh yeast in the measured Poolish water.',
       poolishActiveDry: 'Prepare active dry yeast in part of the measured warm water according to the package directions; count that water toward the Poolish water.',
       poolishDry: 'Mix the instant dry yeast evenly into the Poolish flour.',
       poolishWater: 'Add the measured water while whisking or stirring with a fork until smooth.',
-      poolishFinalFresh: 'Dissolve the final-dough fresh yeast in part of the measured remaining water; add it with the remaining flour and most of the water.',
-      poolishFinalActiveDry: 'Prepare the final-dough active dry yeast in part of the warm remaining water according to the package directions; count it toward the final-mix water.',
-      poolishFinalDry: 'Mix the final-dough instant dry yeast evenly into the remaining flour, then add most of the remaining water.',
+      poolishFinalFresh: `Dissolve the final-dough fresh yeast (${mainYeastAmount}) in part of the measured remaining water; add it with the remaining flour and most of the water.`,
+      poolishFinalActiveDry: `Prepare the final-dough active dry yeast (${mainYeastAmount}) in part of the warm remaining water according to the package directions; add it with the remaining flour and most of the water, counting that solution toward the total water.`,
+      poolishFinalDry: `Mix the final-dough instant dry yeast (${mainYeastAmount}) evenly into the remaining flour, then add most of the remaining water.`,
     },
     de: {
       bigaFresh: 'Die frische Hefe gleichmäßig über das Mehl bröseln.',
       bigaActiveDry: 'Aktiv-Trockenhefe nach Packungsanleitung in einem Teil des warmen Wassers auflösen; dieses Wasser von der abgemessenen Menge abziehen.',
       bigaDry: 'Die Instant-Trockenhefe gleichmäßig unter das Mehl mischen.',
-      bigaFinalFresh: 'Die restliche Frischhefe in einem kleinen Teil des abgemessenen kalten Wassers auflösen und mit dem größten Teil dieses Wassers zugeben.',
-      bigaFinalActiveDry: 'Die restliche Aktiv-Trockenhefe nach Packungsanleitung in einem Teil des warmen Wassers auflösen; dieses Wasser zur abgemessenen Wassermenge für den Hauptteig zählen.',
-      bigaFinalDry: 'Die restliche Instant-Trockenhefe gleichmäßig unter einen Teil des restlichen Mehls mischen und mit dem größten Teil des kalten Wassers zugeben.',
+      bigaFinalFresh: `Die restliche Frischhefe (${mainYeastAmount}) in einem kleinen Teil des abgemessenen kalten Wassers auflösen und mit dem größten Teil dieses Wassers zugeben.`,
+      bigaFinalActiveDry: `Die restliche Aktiv-Trockenhefe (${mainYeastAmount}) nach Packungsanleitung in einem Teil des warmen Wassers auflösen; dieses Wasser zur abgemessenen Wassermenge für den Hauptteig zählen und die Lösung mit dem größten Teil des Anfangswassers zugeben.`,
+      bigaFinalDry: `Die restliche Instant-Trockenhefe (${mainYeastAmount}) gleichmäßig unter einen Teil des restlichen Mehls mischen und mit dem größten Teil des kalten Wassers zugeben.`,
       poolishFresh: 'Die frische Hefe im abgemessenen Poolish-Wasser auflösen.',
       poolishActiveDry: 'Aktiv-Trockenhefe nach Packungsanleitung in einem Teil des abgemessenen warmen Wassers vorbereiten; dieses Wasser zum Poolish-Wasser zählen.',
       poolishDry: 'Die Instant-Trockenhefe gleichmäßig unter das Poolish-Mehl mischen.',
       poolishWater: 'Das abgemessene Wasser unter Rühren mit dem Schneebesen oder einer Gabel zugeben, bis die Mischung glatt ist.',
-      poolishFinalFresh: 'Die Frischhefe für den Hauptteig in einem Teil des abgemessenen restlichen Wassers auflösen; mit dem restlichen Mehl und dem größten Teil des Wassers zugeben.',
-      poolishFinalActiveDry: 'Die Aktiv-Trockenhefe für den Hauptteig nach Packungsanleitung in einem Teil des warmen restlichen Wassers vorbereiten; dieses Wasser zur abgemessenen Menge für den Hauptteig zählen.',
-      poolishFinalDry: 'Die Instant-Trockenhefe für den Hauptteig gleichmäßig unter das restliche Mehl mischen und dann den größten Teil des restlichen Wassers zugeben.',
+      poolishFinalFresh: `Die Frischhefe für den Hauptteig (${mainYeastAmount}) in einem Teil des abgemessenen restlichen Wassers auflösen; mit dem restlichen Mehl und dem größten Teil des Wassers zugeben.`,
+      poolishFinalActiveDry: `Die Aktiv-Trockenhefe für den Hauptteig (${mainYeastAmount}) nach Packungsanleitung in einem Teil des warmen restlichen Wassers vorbereiten; mit dem restlichen Mehl und dem größten Teil des Wassers zugeben und die Lösung zur Gesamtwassermenge zählen.`,
+      poolishFinalDry: `Die Instant-Trockenhefe für den Hauptteig (${mainYeastAmount}) gleichmäßig unter das restliche Mehl mischen und dann den größten Teil des restlichen Wassers zugeben.`,
     },
     sl: {
       bigaFresh: 'Sveži kvas enakomerno nadrobite po moki.',
       bigaActiveDry: 'Aktivni suhi kvas raztopite v delu tople vode po navodilih na embalaži; to vodo odštejte od odmerjene količine.',
       bigaDry: 'Instant suhi kvas enakomerno vmešajte v moko.',
-      bigaFinalFresh: 'Preostali sveži kvas raztopite v manjšem delu odmerjene hladne vode in ga dodajte z večino te vode.',
-      bigaFinalActiveDry: 'Preostali aktivni suhi kvas raztopite v delu tople vode po navodilih na embalaži; to vodo vštejte v odmerjeno vodo za končno gnetenje.',
-      bigaFinalDry: 'Preostali instant suhi kvas enakomerno vmešajte v del preostale moke in dodajte z večino hladne vode.',
+      bigaFinalFresh: `Preostali sveži kvas (${mainYeastAmount}) raztopite v manjšem delu odmerjene hladne vode in ga dodajte z večino te vode.`,
+      bigaFinalActiveDry: `Preostali aktivni suhi kvas (${mainYeastAmount}) raztopite v delu tople vode po navodilih na embalaži; to vodo vštejte v odmerjeno vodo za končno gnetenje in raztopino dodajte z večino začetne vode.`,
+      bigaFinalDry: `Preostali instant suhi kvas (${mainYeastAmount}) enakomerno vmešajte v del preostale moke in dodajte z večino hladne vode.`,
       poolishFresh: 'Sveži kvas raztopite v odmerjeni vodi za Poolish.',
       poolishActiveDry: 'Aktivni suhi kvas pripravite v delu odmerjene tople vode po navodilih na embalaži; to vodo vštejte v vodo za Poolish.',
       poolishDry: 'Instant suhi kvas enakomerno vmešajte v moko za Poolish.',
       poolishWater: 'Med mešanjem z metlico ali vilicami dodajte odmerjeno vodo, da dobite gladko zmes.',
-      poolishFinalFresh: 'Sveži kvas za končno testo raztopite v delu odmerjene preostale vode; dodajte ga s preostalo moko in večino vode.',
-      poolishFinalActiveDry: 'Aktivni suhi kvas za končno testo pripravite v delu tople preostale vode po navodilih na embalaži; to vodo vštejte v vodo za končno gnetenje.',
-      poolishFinalDry: 'Instant suhi kvas za končno testo enakomerno vmešajte v preostalo moko, nato dodajte večino preostale vode.',
+      poolishFinalFresh: `Sveži kvas za končno testo (${mainYeastAmount}) raztopite v delu odmerjene preostale vode; dodajte ga s preostalo moko in večino vode.`,
+      poolishFinalActiveDry: `Aktivni suhi kvas za končno testo (${mainYeastAmount}) pripravite v delu tople preostale vode po navodilih na embalaži; dodajte ga s preostalo moko in večino vode, raztopino pa vštejte v skupno količino vode.`,
+      poolishFinalDry: `Instant suhi kvas za končno testo (${mainYeastAmount}) enakomerno vmešajte v preostalo moko, nato dodajte večino preostale vode.`,
+    },
+  }[lang];
+  const glutenFreeCopy = {
+    hr: {
+      bigaRest: `Bezglutensko tijesto nemojte preklapati; pokrijte ga i stavite u hladnjak na 60–90 minuta pri ${selectedFridgeTemperature}.`,
+      bigaBallsFridge: `Ostavite loptice 30–60 minuta na sobnoj temperaturi, pa ih spremite u hladnjak na odabrano vrijeme pri ${selectedFridgeTemperature}.`,
+      poolishRest: 'Bezglutensko tijesto nemojte preklapati; pokrijte ga i ostavite još 30 minuta na sobnoj temperaturi.',
+      bigaBall: 'Bezglutensko tijesto nježno podijelite na kuglice od 260–300 g; oblikujte ih strugačem ili lagano nauljenim rukama, bez zatezanja površine.',
+      poolishMass: 'Bezglutensko tijesto nježno skupite u jednu masu bez rastezanja ili zatezanja.',
+      poolishBalls: 'Tijesto nježno podijelite na kuglice od 260–280 g; oblikujte meke kuglice bez zatezanja površine.',
+      finalShape: 'Nježno izvadite jednu bezglutensku kuglicu iz fermentacijske kutije strugačem ili lagano nauljenim rukama i prebacite je na radnu površinu posutu certificiranim bezglutenskim brašnom ili rižinim brašnom; ostale kuglice držite pokrivene. Tijesto oblikujte nježnim pritiskanjem, bez razvlačenja kao pšenično tijesto. Dodajte nadjev, prebacite pizzu na odabranu površinu za pečenje i pecite pri najvišoj temperaturi.',
+    },
+    en: {
+      bigaRest: `Do not fold the gluten-free dough; cover it and refrigerate for 60–90 minutes at ${selectedFridgeTemperature}.`,
+      bigaBallsFridge: `Leave the balls at room temperature for 30–60 minutes, then keep them in the fridge for the selected time at ${selectedFridgeTemperature}.`,
+      poolishRest: 'Do not fold the gluten-free dough; keep it covered for another 30 minutes at room temperature.',
+      bigaBall: 'Gently divide the gluten-free dough into 260–300 g portions; shape them with a scraper or lightly oiled hands without tightening the surface.',
+      poolishMass: 'Gently gather the gluten-free dough into one mass without stretching or tightening it.',
+      poolishBalls: 'Gently divide the dough into 260–280 g portions and shape soft balls without tightening the surface.',
+      finalShape: 'Gently remove one gluten-free dough ball from the fermentation box with a scraper or lightly oiled hands and transfer it to a work surface dusted with certified gluten-free flour or rice flour; keep the other balls covered. Shape the dough with gentle pressing, without stretching it like wheat dough. Add toppings, transfer the pizza to the selected baking surface, and bake at the highest temperature.',
+    },
+    de: {
+      bigaRest: `Falten Sie den glutenfreien Teig nicht; decken Sie ihn ab und stellen Sie ihn für 60–90 Minuten bei ${selectedFridgeTemperature} in den Kühlschrank.`,
+      bigaBallsFridge: `Lassen Sie die Teigkugeln 30–60 Minuten bei Raumtemperatur stehen und stellen Sie sie anschließend für die ausgewählte Zeit bei ${selectedFridgeTemperature} in den Kühlschrank.`,
+      poolishRest: 'Falten Sie den glutenfreien Teig nicht; lassen Sie ihn abgedeckt weitere 30 Minuten bei Raumtemperatur ruhen.',
+      bigaBall: 'Teilen Sie den glutenfreien Teig vorsichtig in Portionen von 260–300 g; formen Sie diese mit einem Teigschaber oder leicht geölten Händen, ohne die Oberfläche zu straffen.',
+      poolishMass: 'Fassen Sie den glutenfreien Teig vorsichtig zu einer Masse zusammen, ohne ihn zu dehnen oder zu straffen.',
+      poolishBalls: 'Teilen Sie den Teig vorsichtig in Portionen von 260–280 g und formen Sie lockere Teigkugeln, ohne die Oberfläche zu straffen.',
+      finalShape: 'Nehmen Sie eine glutenfreie Teigkugel vorsichtig mit einem Teigschaber oder leicht geölten Händen aus der Gärbox und legen Sie sie auf eine mit zertifiziert glutenfreiem Mehl oder Reismehl bestäubte Arbeitsfläche; lassen Sie die übrigen Kugeln abgedeckt. Formen Sie den Teig durch vorsichtiges Drücken, ohne ihn wie Weizenteig zu dehnen. Belegen Sie die Pizza, legen Sie sie auf die ausgewählte Backfläche und backen Sie sie bei höchster Temperatur.',
+    },
+    sl: {
+      bigaRest: `Brezglutenskega testa ne prepogibajte; pokrijte ga in postavite v hladilnik za 60–90 minut pri ${selectedFridgeTemperature}.`,
+      bigaBallsFridge: `Kroglice pustite 30–60 minut pri sobni temperaturi, nato jih za izbrani čas postavite v hladilnik pri ${selectedFridgeTemperature}.`,
+      poolishRest: 'Brezglutenskega testa ne prepogibajte; pokritega pustite še 30 minut pri sobni temperaturi.',
+      bigaBall: 'Brezglutensko testo nežno razdelite na porcije po 260–300 g; oblikujte jih s strgalom ali rahlo naoljenimi rokami, brez zategovanja površine.',
+      poolishMass: 'Brezglutensko testo nežno združite v eno maso, ne da bi ga raztezali ali zategovali.',
+      poolishBalls: 'Testo nežno razdelite na porcije po 260–280 g in oblikujte mehke kroglice brez zategovanja površine.',
+      finalShape: 'Eno brezglutensko kroglico nežno vzemite iz fermentacijske posode s strgalom ali rahlo naoljenimi rokami in jo prenesite na delovno površino, posuto s certificirano brezglutensko moko ali riževo moko; preostale kroglice naj ostanejo pokrite. Testo oblikujte z nežnim pritiskanjem, ne da bi ga raztezali kot pšenično testo. Dodajte nadev, prenesite pico na izbrano površino za peko in pecite pri najvišji temperaturi.',
     },
   }[lang];
 
@@ -680,14 +944,188 @@ export function getYeastAwarePrefermentSteps(
     p1.steps[0] = yeastType === 'fresh' ? copy.poolishFresh : yeastType === 'activeDry' ? copy.poolishActiveDry : copy.poolishDry;
     p1.steps[1] = yeastType === 'fresh' ? path.p1.steps[1] : copy.poolishWater;
     p2.steps[1] = yeastType === 'fresh' ? copy.poolishFinalFresh : yeastType === 'activeDry' ? copy.poolishFinalActiveDry : copy.poolishFinalDry;
+    if (mixing === 'mixer' || mixing === 'spiral') {
+      p2.steps[1] += ({
+        hr: ' Pokrenite mikser u 1. brzini.',
+        en: ' Start the mixer on speed 1.',
+        de: ' Starten Sie den Mixer auf Stufe 1.',
+        sl: ' Mešalnik zaženite pri 1. hitrosti.',
+      }[lang]);
+    }
   }
 
   if (mixing === 'spiral') {
     p2.title = getSpiralMixingTitle(lang, method);
-    p2.steps = getSpiralMixingSteps(lang, yeastType, { method, hasOil });
+    p2.steps = adaptSpiralMixerSourceSteps(p2.steps, lang);
+    if (method === 'biga') {
+      p2.steps[1] += ({
+        hr: ' Pokrenite spiralni mikser u 1. brzini.',
+        en: ' Start the spiral mixer on speed 1.',
+        de: ' Starten Sie den Spiralkneter auf Stufe 1.',
+        sl: ' Zaženite spiralni mešalnik pri 1. hitrosti.',
+      }[lang]);
+    }
+    const flourAmount = spiralRecipe
+      ? spiralRecipe.flourBlendDescription
+        ? `${spiralRecipe.formatWeight(spiralRecipe.flourGrams)} ${spiralRecipe.flourLabel} (${spiralRecipe.flourBlendDescription})`
+        : `${spiralRecipe.formatWeight(spiralRecipe.flourGrams)} ${spiralRecipe.flourLabel}`
+      : remainingFlourDescription;
+    if (method === 'biga' && flourAmount) {
+      p2.steps[1] = `${({
+        hr: `Dodajte preostalo brašno (${flourAmount}) u posudu. `,
+        en: `Add the remaining flour (${flourAmount}) to the bowl. `,
+        de: `Geben Sie das restliche Mehl (${flourAmount}) in die Schüssel. `,
+        sl: `V posodo dodajte preostalo moko (${flourAmount}). `,
+      }[lang])}${p2.steps[1]}`;
+    }
+    if (!hasOil) {
+      const oilIndex = p2.steps.findIndex((step) => spiralOilStepPattern.test(step));
+      if (oilIndex >= 0) p2.steps[oilIndex] = spiralNoOilFinish[lang];
+    }
+    if (spiralRecipe) {
+      const split = calculateProWaterSplit({
+        waterBaseGrams: spiralRecipe.waterBaseGrams,
+        liquidWaterGrams: spiralRecipe.liquidWaterGrams,
+        iceGrams: spiralRecipe.iceGrams,
+        initialWaterPct: spiralRecipe.initialWaterPct,
+      });
+      p2.steps[1] += ({
+        hr: ` Početna tekuća voda: ${spiralRecipe.formatWeight(split.initialLiquidWaterGrams)}.`,
+        en: ` Initial liquid water: ${spiralRecipe.formatWeight(split.initialLiquidWaterGrams)}.`,
+        de: ` Anfängliches Flüssigwasser: ${spiralRecipe.formatWeight(split.initialLiquidWaterGrams)}.`,
+        sl: ` Začetna tekoča voda: ${spiralRecipe.formatWeight(split.initialLiquidWaterGrams)}.`,
+      }[lang]);
+      if (method === 'poolish' && flourAmount) {
+        p2.steps[1] += ({
+          hr: ` Preostala količina brašna: ${flourAmount}.`,
+          en: ` Remaining flour amount: ${flourAmount}.`,
+          de: ` Menge des restlichen Mehls: ${flourAmount}.`,
+          sl: ` Količina preostale moke: ${flourAmount}.`,
+        }[lang]);
+      }
+      if (p2.steps[2]) {
+        p2.steps[2] += ({
+          hr: ` Preostala tekuća voda za postupno dodavanje: ${spiralRecipe.formatWeight(split.remainingLiquidWaterGrams)}.`,
+          en: ` Remaining liquid water to add gradually: ${spiralRecipe.formatWeight(split.remainingLiquidWaterGrams)}.`,
+          de: ` Verbleibendes Flüssigwasser zur schrittweisen Zugabe: ${spiralRecipe.formatWeight(split.remainingLiquidWaterGrams)}.`,
+          sl: ` Preostala tekoča voda za postopno dodajanje: ${spiralRecipe.formatWeight(split.remainingLiquidWaterGrams)}.`,
+        }[lang]);
+      }
+    }
   }
 
-  return { ...path, p1, p2, p3: teglia ? TEGLIA_P3[lang] : path.p3 };
+  if (method === 'biga' && remainingFlourDescription && mixing !== 'spiral') {
+    const remainingFlourStep = ({
+      hr: `Dodajte svu preostalu količinu brašna (${remainingFlourDescription}) u tijesto; kod instant kvasca ukupna količina uključuje i dio upotrijebljen za kvasac.${mixing === 'mixer' ? ' Pokrenite mikser u 1. brzini.' : ''}`,
+      en: `Add all remaining flour (${remainingFlourDescription}) to the dough; for instant yeast, this total includes the portion used with the yeast.${mixing === 'mixer' ? ' Start the mixer on speed 1.' : ''}`,
+      de: `Geben Sie die gesamte restliche Mehlmenge (${remainingFlourDescription}) zum Teig; bei Instanthefe ist der bereits mit der Hefe vermischte Anteil darin enthalten.${mixing === 'mixer' ? ' Starten Sie den Mixer auf Stufe 1.' : ''}`,
+      sl: `Dodajte vso preostalo moko (${remainingFlourDescription}) v testo; pri instant kvasu je v tej količini vštet tudi del, uporabljen za kvas.${mixing === 'mixer' ? ' Mešalnik zaženite pri 1. hitrosti.' : ''}`,
+    }[lang]);
+    p2.steps.splice(mixing === 'mixer' ? 2 : 3, 0, remainingFlourStep);
+  }
+
+  if (mixing === 'mixer' && spiralRecipe) {
+    p2.steps = removeProIceReferencesFromSteps(p2.steps, lang);
+    if (method === 'biga') {
+      p2.steps[1] += ({
+        hr: ' Pokrenite kućni mikser na niskoj brzini.',
+        en: ' Start the home mixer at low speed.',
+        de: ' Starten Sie den Haushaltsmixer bei niedriger Geschwindigkeit.',
+        sl: ' Domači mešalnik zaženite pri nizki hitrosti.',
+      }[lang]);
+    }
+    const saltPattern = {
+      hr: /\bsol(?:i)?\b/i,
+      en: /\bsalt\b/i,
+      de: /\bsalz\b/i,
+      sl: /\bsol(?:i)?\b/i,
+    }[lang];
+    const saltIndex = p2.steps.findIndex((step) => saltPattern.test(step));
+    if (saltIndex >= 0 && spiralRecipe.saltGrams > 0) {
+      const saltAmount = spiralRecipe.formatWeight(spiralRecipe.saltGrams, true);
+      const saltText = ({
+        hr: `${saltAmount} soli`,
+        en: `${saltAmount} salt`,
+        de: `${saltAmount} Salz`,
+        sl: `${saltAmount} soli`,
+      }[lang]);
+      p2.steps[saltIndex] = p2.steps[saltIndex].replace(saltPattern, saltText);
+    }
+    const oilIndex = p2.steps.findIndex((step) => spiralOilStepPattern.test(step));
+    if (oilIndex >= 0) {
+      p2.steps[oilIndex] = hasOil && spiralRecipe.oilGrams > 0
+        ? mixerOilStep(lang, spiralRecipe.formatWeight(spiralRecipe.oilGrams))
+        : mixerOilFinish[lang];
+    }
+    const flourAmount = remainingFlourDescription
+      ?? (spiralRecipe.flourBlendDescription
+        ? `${spiralRecipe.formatWeight(spiralRecipe.flourGrams)} ${spiralRecipe.flourLabel} (${spiralRecipe.flourBlendDescription})`
+        : `${spiralRecipe.formatWeight(spiralRecipe.flourGrams)} ${spiralRecipe.flourLabel}`);
+    if (method === 'poolish' && flourAmount) {
+      p2.steps[1] += ({
+        hr: ` Količina preostalog brašna: ${flourAmount}.`,
+        en: ` Remaining flour amount: ${flourAmount}.`,
+        de: ` Menge des restlichen Mehls: ${flourAmount}.`,
+        sl: ` Količina preostale moke: ${flourAmount}.`,
+      }[lang]);
+    }
+    const split = calculateProWaterSplit({
+      waterBaseGrams: spiralRecipe.waterBaseGrams,
+      liquidWaterGrams: spiralRecipe.liquidWaterGrams,
+      iceGrams: spiralRecipe.iceGrams,
+      initialWaterPct: spiralRecipe.initialWaterPct,
+    });
+    p2.steps[1] += ({
+      hr: ` Početna tekuća voda: ${spiralRecipe.formatWeight(split.initialLiquidWaterGrams)}.`,
+      en: ` Initial liquid water: ${spiralRecipe.formatWeight(split.initialLiquidWaterGrams)}.`,
+      de: ` Anfängliches Flüssigwasser: ${spiralRecipe.formatWeight(split.initialLiquidWaterGrams)}.`,
+      sl: ` Začetna tekoča voda: ${spiralRecipe.formatWeight(split.initialLiquidWaterGrams)}.`,
+    }[lang]);
+    if (split.remainingLiquidWaterGrams > 0) {
+      const remainingWaterPattern = {
+        hr: /(?:preost|ostatak).*vod|vod.*(?:preost|ostatak)/i,
+        en: /remaining.*water|water.*remaining/i,
+        de: /restlich.*wasser|wasser.*restlich/i,
+        sl: /preostal.*vod|vod.*preostal/i,
+      }[lang];
+      const remainingWaterIndex = p2.steps.findIndex((step) => remainingWaterPattern.test(step));
+      if (remainingWaterIndex < 0) {
+        throw new Error(`PRO home-mixer ${method} instructions are missing the remaining-water step (${lang}).`);
+      }
+      p2.steps[remainingWaterIndex] += ({
+        hr: ` Količina preostale tekuće vode za postupno dodavanje: ${spiralRecipe.formatWeight(split.remainingLiquidWaterGrams)}.`,
+        en: ` Remaining liquid water to add gradually: ${spiralRecipe.formatWeight(split.remainingLiquidWaterGrams)}.`,
+        de: ` Verbleibendes Flüssigwasser zur schrittweisen Zugabe: ${spiralRecipe.formatWeight(split.remainingLiquidWaterGrams)}.`,
+        sl: ` Količina preostale tekoče vode za postopno dodajanje: ${spiralRecipe.formatWeight(split.remainingLiquidWaterGrams)}.`,
+      }[lang]);
+    }
+  }
+
+  const p3 = !teglia && glutenFree
+    ? { ...path.p3, steps: [...path.p3.steps] }
+    : path.p3;
+  if (!teglia && glutenFree) {
+    p3.steps[2] = method === 'biga' ? glutenFreeCopy.bigaRest : glutenFreeCopy.poolishRest;
+    if (method === 'biga') {
+      p3.steps[3] = glutenFreeCopy.bigaBall;
+      p3.steps[4] = glutenFreeCopy.bigaBallsFridge;
+    } else {
+      p3.steps[3] = glutenFreeCopy.poolishMass;
+      p3.steps[4] = glutenFreeCopy.poolishBalls;
+    }
+    p3.steps[p3.steps.length - 1] = glutenFreeCopy.finalShape;
+  }
+
+  const applySelectedFridgeTemperature = (phase: Phase): Phase => ({
+    ...phase,
+    steps: phase.steps.map((step) => step.replace(/4\s*[–-]\s*6\s*°C/gi, selectedFridgeTemperature)),
+  });
+  return {
+    ...path,
+    p1: applySelectedFridgeTemperature(p1),
+    p2: applySelectedFridgeTemperature(p2),
+    p3: applySelectedFridgeTemperature(teglia ? TEGLIA_P3[lang] : p3),
+  };
 }
 
 // Localized "reset checked steps" button label
@@ -762,7 +1200,7 @@ export const PHASE_TIMER_DURATIONS: Record<string, BaseTimer[]> = {
 
   // ---- DIRECT (existing A/B/C/D) ----
   'direct-hand-A': [
-    { id: 'rest15m', seconds: 15 * 60, kind: 'rest' },
+    { id: 'rest5m', seconds: 5 * 60, kind: 'rest' },
   ],
   'direct-hand-B': [
     { id: 'rt30m', seconds: 30 * 60, kind: 'rt' },
