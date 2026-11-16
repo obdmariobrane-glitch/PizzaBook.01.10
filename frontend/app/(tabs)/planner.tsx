@@ -27,6 +27,7 @@ import {
 } from '../../src/calculator';
 import { cancelLocal, cancelObsoletePlannerNotifications, cancelPlannerNotificationsForMethods, cancelPlannerNotificationsForMethodsExcept, isPushSupported, requestNotificationPermissions, scheduleNotificationBatch, scheduleLocal } from '../../src/notifications';
 import { getSpiralPlannerNote } from '../../src/i18n/spiralMixing';
+import { addProNapolitanaDirectInitialPlannerSteps } from '../../src/proNapolitanaDirectPlanner';
 import {
   applyPlannerPhaseOverrides,
   assignPlannerPhaseKeys,
@@ -383,16 +384,28 @@ export default function Planner() {
     plannerStepCopy.finalMixTitle.replace('{PREFERMENT}', plannerStepCopy.bigaName),
     plannerStepCopy.finalMixTitle.replace('{PREFERMENT}', plannerStepCopy.poolishName),
   ];
-  const generatedSteps = assignPlannerPhaseKeys(bakeAt && hasCurrentBeginnerDirectSchedule && (roomTempLoaded || !!sharedCalculatorPlanSettings) ? reversePlan(bakeAt, method, effectiveStyle, plannerStepCopy, plannerDirectHomeSchedule, plannerBigaHomeSchedule, plannerPoolishHomeSchedule, lang, formatTemperature(plannerDirectHomeSchedule?.ovenTemp ?? 250, temperatureUnit), activeCalculatorPlanSettings.roomTemp, isBeginner ? undefined : plannerFermentationSchedule, activePlannerTegliaSettings).map((step) => ({
-    ...step,
-    desc: formatUnitText(
-      plannerMixTitles.includes(step.title)
-        ? `${step.desc}\n\n${plannerStepCopy.yeastHandling[preferredYeastType]}${activeMixing === 'spiral' ? `\n\n${getSpiralPlannerNote(lang)}` : ''}`
-        : step.desc,
-      temperatureUnit,
-      measurementSystem,
-    ),
-  })) : [], isBeginner ? JSON.stringify(['beginner', effectiveStyle, activePlannerTegliaSettings.romanFormat, method, activeMixing]) : undefined);
+  const generatedSteps = assignPlannerPhaseKeys((() => {
+    const planSteps = bakeAt && hasCurrentBeginnerDirectSchedule && (roomTempLoaded || !!sharedCalculatorPlanSettings)
+      ? reversePlan(bakeAt, method, effectiveStyle, plannerStepCopy, plannerDirectHomeSchedule, plannerBigaHomeSchedule, plannerPoolishHomeSchedule, lang, formatTemperature(plannerDirectHomeSchedule?.ovenTemp ?? 250, temperatureUnit), activeCalculatorPlanSettings.roomTemp, isBeginner ? undefined : plannerFermentationSchedule, activePlannerTegliaSettings).map((step) => ({
+        ...step,
+        desc: formatUnitText(
+          plannerMixTitles.includes(step.title)
+            ? `${step.desc}\n\n${plannerStepCopy.yeastHandling[preferredYeastType]}${activeMixing === 'spiral' ? `\n\n${getSpiralPlannerNote(lang)}` : ''}`
+            : step.desc,
+          temperatureUnit,
+          measurementSystem,
+        ),
+      }))
+      : [];
+    if (!isBeginner
+      && method === 'direct'
+      && effectiveStyle === 'neapolitan'
+      && (plannerDirectHomeSchedule?.fridgeHours ?? 0) > 0
+      && (plannerDirectHomeSchedule?.ovenType as string | undefined) !== 'kamado') {
+      return addProNapolitanaDirectInitialPlannerSteps(planSteps, lang);
+    }
+    return planSteps;
+  })(), isBeginner ? JSON.stringify(['beginner', effectiveStyle, activePlannerTegliaSettings.romanFormat, method, activeMixing]) : undefined);
   const phaseKeySignature = JSON.stringify(generatedSteps.map((step) => step.phaseKey));
   useEffect(() => {
     const currentPhaseKeys: string[] = JSON.parse(phaseKeySignature);
