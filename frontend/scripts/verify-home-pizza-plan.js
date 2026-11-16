@@ -125,7 +125,7 @@ assert.match(bigaUiSource, /fridgeAt && fridgeAt\.getTime\(\) > ballingAt\.getTi
 assert.match(bigaUiSource, /at: fridgeAt/);
 assert.match(source, /fridgeAt && fridgeAt\.getTime\(\) > ballingAt\.getTime\(\) && homeCopy\?\.fridgeIn/);
 assert.match(bigaUiSource, /coldFinalStart!\.step/);
-assert.match(bigaUiSource, /:\s*roomFinalStart!\.step/);
+assert.match(bigaUiSource, /:\s*includeRoomOnlyCarryStep && roomFinalStart\s*\?\s*\[roomFinalStart\.step\]/);
 assert.match(bigaUiSource, /if \(fridgeHours > 0\)[\s\S]*isRomanTeglia/);
 assert.match(bigaUiSource, /isBeginner && \/\^\(biga\|poolish\)\[-_\]\//);
 assert.match(bigaUiSource, /formatTemperature\(dough\.waterTemp, temperatureUnit\)/);
