@@ -799,7 +799,7 @@ export default function CalculatorHome() {
             endsAt: val.endsAt ?? (now + remainingMs),
           };
           const runningStillValid = hydrated.status === 'running' && hydrated.endsAt > now;
-          const pausedStillValid = hydrated.status === 'paused' && hydrated.remainingMs > 0;
+          const pausedStillValid = hydrated.status === 'paused' && (hydrated.remainingMs ?? 0) > 0;
           if ((runningStillValid || pausedStillValid) && !(isBeginner && /^(biga|poolish)[-_]/i.test(k))) {
             fresh[k] = hydrated;
           } else if (isBeginner && /^(biga|poolish)[-_]/i.test(k) && val?.notifId) {
