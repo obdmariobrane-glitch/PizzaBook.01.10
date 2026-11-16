@@ -34,6 +34,7 @@ import {
 } from '../../src/calculator';
 import { cancelLocal, cancelObsoletePlannerNotifications, cancelPlannerNotificationsForMethods, cancelPlannerNotificationsForMethodsExcept, cancelPlannerNotificationsForPlan, isPushSupported, requestNotificationPermissions, scheduleNotificationBatch, scheduleLocal } from '../../src/notifications';
 import { getSpiralPlannerNote } from '../../src/i18n/spiralMixing';
+import { addProNapolitanaDirectInitialPlannerSteps } from '../../src/proNapolitanaDirectPlanner';
 import {
   applyPlannerPhaseOverrides,
   assignPlannerPhaseKeys,
@@ -631,7 +632,8 @@ export default function Planner() {
     plannerStepCopy.finalMixTitle.replace('{PREFERMENT}', plannerStepCopy.bigaName),
     plannerStepCopy.finalMixTitle.replace('{PREFERMENT}', plannerStepCopy.poolishName),
   ];
-  const generatedSteps = assignPlannerPhaseKeys(bakeAt && hasCurrentBeginnerDirectSchedule && (roomTempLoaded || !!sharedCalculatorPlanSettings) && hasCurrentCalculatorRecipe ? reversePlan(
+  const generatedSteps = assignPlannerPhaseKeys((() => {
+    const planSteps = bakeAt && hasCurrentBeginnerDirectSchedule && (roomTempLoaded || !!sharedCalculatorPlanSettings) && hasCurrentCalculatorRecipe ? reversePlan(
     bakeAt,
     method,
     effectiveStyle,
@@ -663,7 +665,16 @@ export default function Planner() {
       temperatureUnit,
       measurementSystem,
     ),
-  })) : [],
+    })) : [];
+    if (!isBeginner
+      && plannerOvenType !== 'kamado'
+      && method === 'direct'
+      && effectiveStyle === 'neapolitan'
+      && (plannerDirectHomeSchedule?.fridgeHours ?? 0) > 0) {
+      return addProNapolitanaDirectInitialPlannerSteps(planSteps, lang);
+    }
+    return planSteps;
+  })(),
   isBeginner
     ? JSON.stringify(['beginner', effectiveStyle, activePlannerTegliaSettings.romanFormat, method, activeMixing])
     : 'pro',
