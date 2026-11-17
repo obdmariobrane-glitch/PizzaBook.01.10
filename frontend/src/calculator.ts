@@ -2119,7 +2119,66 @@ interface DoughCalculationResult {
   waterTemp: number;
   waterTemperature?: BeginnerDirectWaterTemperature;
   yeastPct: number;
+  yeastBudgetGrams?: number;
+  bigaYeastGrams?: number;
+  bigaYeastRequiredGrams?: number;
+  bigaYeastExcessGrams?: number;
+  bigaYeastBudgetExceeded?: boolean;
+  finalDoughYeastGrams?: number;
   eTotal: number;
+}
+
+export type BigaYeastAllocation = {
+  bigaYeastGrams: number;
+  finalDoughYeastGrams: number;
+  excessGrams: number;
+  exceedsBudget: boolean;
+};
+
+export function calculateBigaYeastGrams(
+  bigaFlourGrams: number,
+  bigaPhases: readonly FermentationPhase[],
+  yeastType: CommercialYeastType,
+): number {
+  if (!Number.isFinite(bigaFlourGrams) || bigaFlourGrams <= 0) {
+    throw new RangeError('Biga yeast calculation requires positive Biga flour.');
+  }
+  if (bigaPhases.length === 0 || !bigaPhases.every((phase) =>
+    Number.isFinite(phase.hours) && phase.hours > 0 && Number.isFinite(phase.temperature))) {
+    throw new RangeError('Biga yeast calculation requires finite positive fermentation phases.');
+  }
+  const rawExposure = bigaPhases.reduce((total, phase) => {
+    const rate = phase.environment === 'room'
+      ? 1 + 0.08 * (phase.temperature - 20)
+      : 0.12 * (1 + 0.05 * (phase.temperature - 4));
+    return total + phase.hours * rate;
+  }, 0);
+  if (!Number.isFinite(rawExposure) || rawExposure < 0) {
+    throw new RangeError('Biga yeast calculation requires finite nonnegative exposure.');
+  }
+  const exposure = Math.max(0.5, rawExposure);
+  const freshYeastPct = 0.5 / exposure;
+  return bigaFlourGrams * (freshYeastPct / 100) * YEAST_MASS_FACTORS[yeastType];
+}
+
+export function calculateBigaYeastAllocation(
+  totalYeastBudgetGrams: number,
+  requiredBigaYeastGrams: number,
+): BigaYeastAllocation {
+  if (!Number.isFinite(totalYeastBudgetGrams) || totalYeastBudgetGrams < 0
+    || !Number.isFinite(requiredBigaYeastGrams) || requiredBigaYeastGrams < 0) {
+    throw new RangeError('Biga yeast allocation requires finite nonnegative quantities.');
+  }
+  const bigaYeastGrams = requiredBigaYeastGrams;
+  const finalDoughYeastGrams = Math.max(0, totalYeastBudgetGrams - bigaYeastGrams);
+  const excessGrams = Math.max(0, requiredBigaYeastGrams - totalYeastBudgetGrams);
+  const equalityTolerance = Math.max(1, totalYeastBudgetGrams, requiredBigaYeastGrams) * Number.EPSILON * 8;
+  return {
+    bigaYeastGrams,
+    finalDoughYeastGrams,
+    excessGrams,
+    exceedsBudget: excessGrams > equalityTolerance,
+  };
 }
 
 export function doughCalc(opts: {
@@ -2137,6 +2196,7 @@ export function doughCalc(opts: {
   flourType?: FlourType;
   beginnerDirectStyle?: BeginnerDirectDoughStyle;
   beginnerDirectMixing?: BeginnerDirectMixing;
+  useDirectYeastModelForBiga?: boolean;
   // When provided, the method's Home schedule replaces legacy timing inputs for yeast calculation.
   bigaHomeSchedule?: BigaHomePizzaSchedule;
   poolishHomeSchedule?: PoolishHomePizzaSchedule;
@@ -2154,7 +2214,8 @@ export function doughCalc(opts: {
       : 0.12 * (1 + 0.05 * (phase.temperature - 4));
     return total + phase.hours * rate;
   }, 0);
-  const useDirectYeastModel = opts.method === 'direct';
+  const useDirectYeastModel = opts.method === 'direct'
+    || (opts.method === 'biga' && opts.useDirectYeastModelForBiga === true);
   const eTotal = useDirectYeastModel
     ? calculateDirectFermentationScheduleExposure(fermentation.phases)
     : Math.max(0.5, scheduleExposure);
@@ -2221,6 +2282,35 @@ export function doughCalc(opts: {
     const totalYeast = R2(yeast);
     const bigaYeast = R2(totalYeast * R0(bigaFlour) / totalFlour);
     const mainYeast = R2(totalYeast - bigaYeast);
+    if (opts.useDirectYeastModelForBiga) {
+      const bigaPhases = fermentation.phases.filter((phase) => phase.kind === 'preferment');
+      const bigaYeastRequiredGrams = bigaPhases.length > 0
+        ? calculateBigaYeastGrams(bigaFlour, bigaPhases, yeastType)
+        : 0;
+      const yeastBudgetGrams = yeast;
+      const allocation = calculateBigaYeastAllocation(yeastBudgetGrams, bigaYeastRequiredGrams);
+      const actualTotalYeastGrams = allocation.bigaYeastGrams + allocation.finalDoughYeastGrams;
+      return {
+        method: 'biga' as const,
+        preferment: { flour: R0(bigaFlour), water: R0(bigaWater), yeast: allocation.bigaYeastGrams },
+        main: {
+          flour: R0(flour - bigaFlour), water: R0(water - bigaWater),
+          salt: R1(salt), oil: R0(oil), yeast: allocation.finalDoughYeastGrams,
+          psyllium: R0(psyllium),
+        },
+        total: { ...buildBlock(), yeast: actualTotalYeastGrams },
+        totalDough: R0(totalDough),
+        waterTemp: R0(waterTemp),
+        yeastPct: R2(effectiveYeastPct),
+        yeastBudgetGrams,
+        bigaYeastGrams: allocation.bigaYeastGrams,
+        bigaYeastRequiredGrams,
+        bigaYeastExcessGrams: allocation.excessGrams,
+        bigaYeastBudgetExceeded: allocation.exceedsBudget,
+        finalDoughYeastGrams: allocation.finalDoughYeastGrams,
+        eTotal: R1(eTotal),
+      };
+    }
     return {
       method: 'biga' as const,
       preferment: { flour: R0(bigaFlour), water: R0(bigaWater), yeast: R2(bigaYeast) },

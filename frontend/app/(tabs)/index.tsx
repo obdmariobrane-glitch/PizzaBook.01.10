@@ -1833,6 +1833,7 @@ export default function CalculatorHome() {
       : undefined,
     beginnerDirectMixing: isBeginner ? toBeginnerDirectMixing(mixingForExperience) : undefined,
     yeastType: preferredYeastType,
+    useDirectYeastModelForBiga: !isBeginner && method === 'biga',
     flourType: flour,
     bigaHomeSchedule: bigaHomePlan?.schedule,
     poolishHomeSchedule: poolishHomePlan?.schedule,
