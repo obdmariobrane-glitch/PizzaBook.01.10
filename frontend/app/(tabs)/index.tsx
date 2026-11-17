@@ -30,12 +30,12 @@ import {
 } from '../../src/preferences';
 import { displayTemperature, formatLength, formatTemperature, formatUnitText, formatWeight, temperatureInputToCelsius, weightInputToGrams } from '../../src/units';
 import {
-  dimensionsCalc, doughCalc, getDirectHomeFermentationSchedule, getFermentationSchedule, getTemperingWindow, getTegliaFinalProofPlan, iceCalc, getBakingTimeRange, formatBakingTimeRange, isHomeScheduleDurationValid,
+  dimensionsCalc, doughCalc, getDirectHomeFermentationSchedule, getFermentationSchedule, getSpongeFermentationSchedule, SPONGE_YEAST_REFERENCE, getTemperingWindow, getTegliaFinalProofPlan, iceCalc, getBakingTimeRange, formatBakingTimeRange, isHomeScheduleDurationValid,
   Method, OvenType, FlourType, PizzaStyle, HomeFlourStrengthSource, PIZZA_STYLE_PROFILES, FLOUR_PROFILES, BASE_FLOURS, normalizeBeginnerSavedState, beginnerHydrationFor, beginnerBallWeightForDiameter, beginnerDiameterForBallWeight, blendIdealHydration,
   splitFlourBlend,
   calculateBeginnerPhaseBPlan, createDirectHomePizzaPlan, createBigaHomePizzaPlan, createPoolishHomePizzaPlan, getBeginnerFlourGuidanceKind, getBeginnerPreheatMinutes, getHomeFlourStrengthInput, getHomePlanLegacyFermentationHours,
   BeginnerPhaseBPlan, BeginnerDirectScheduleMode,
-  MixingSelection, parseMixingSelection, toCalculatorMixing, toBeginnerDirectMixing,
+  MixingSelection, parseMixingSelection, toCalculatorMixing, toBeginnerDirectMixing, SpongeYeastMode,
   HomePizzaPlanSchedule, BigaHomePizzaSchedule, PoolishHomePizzaSchedule, getBigaHomeScheduleMilestones, getPoolishHomeScheduleMilestones, getSharedHomeBakeAt, subscribeSharedHomeBakeAt,
   setSharedHomeBakeAt, setSharedHomeDirectSchedule, setSharedHomeBigaSchedule, setSharedHomePoolishSchedule,
   setSharedCalculatorPlanSettings,
@@ -239,6 +239,11 @@ type CalculatorSettings = {
   poolishPct: number;
   bigaHours: number;
   poolishHours: number;
+  spongeFlourPct: number;
+  spongeHours: number;
+  spongeTemp: number;
+  spongeYeastMode: SpongeYeastMode;
+  spongeManualYeastGrams: number;
   hydration: number;
   saltPct: number;
   oilPct: number;
@@ -320,7 +325,7 @@ const FLOUR_IMAGES: Record<FlourType, any> = {
   custom: require('../../assets/images/flour-custom.png'),
 };
 
-const METHOD_INFO: Record<Lang, Record<Method, { title: string; body: string }>> = {
+const METHOD_INFO: Record<Lang, Record<Exclude<Method, 'sponge'>, { title: string; body: string }>> = {
   hr: {
     direct: {
       title: 'Direktna metoda (Direct Dough)',
@@ -379,6 +384,13 @@ const METHOD_INFO: Record<Lang, Record<Method, { title: string; body: string }>>
   },
 };
 
+const SPONGE_METHOD_INFO: Record<Lang, { title: string; body: string }> = {
+  hr: { title: 'Sponge', body: 'Sponge je predtijesto od dijela brašna, vode i kvasca. Nakon fermentacije miješa se s preostalim sastojcima u završno tijesto.' },
+  en: { title: 'Sponge', body: 'A Sponge is a preferment made with a portion of the flour, water, and yeast. After fermentation, it is mixed with the remaining ingredients to build the final dough.' },
+  de: { title: 'Sponge', body: 'Ein Sponge ist ein Vorteig aus einem Teil des Mehls, Wasser und Hefe. Nach der Fermentation wird er mit den übrigen Zutaten zum Hauptteig vermischt.' },
+  sl: { title: 'Sponge', body: 'Sponge je predtesto iz dela moke, vode in kvasa. Po fermentaciji ga zmešamo s preostalimi sestavinami za končno testo.' },
+};
+
 export default function CalculatorHome() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -418,6 +430,11 @@ export default function CalculatorHome() {
   const [poolishPct, setPoolishPct] = useState(35);
   const [bigaHours, setBigaHours] = useState(24);
   const [poolishHours, setPoolishHours] = useState(24);
+  const [spongeFlourPct, setSpongeFlourPct] = useState<number>(SPONGE_YEAST_REFERENCE.flourShare);
+  const [spongeHours, setSpongeHours] = useState<number>(SPONGE_YEAST_REFERENCE.fermentationHours);
+  const [spongeTemp, setSpongeTemp] = useState<number>(SPONGE_YEAST_REFERENCE.fermentationTempC);
+  const [spongeYeastMode, setSpongeYeastMode] = useState<SpongeYeastMode>('automatic');
+  const [spongeManualYeastGrams, setSpongeManualYeastGrams] = useState(1.25);
   const [methodExpanded, setMethodExpanded] = useState(false);
   const [hydration, setHydration] = useState(beginnerHydrationFor('neapolitan', 'caputo00'));
   const [saltPct, setSaltPct] = useState(PIZZA_STYLE_PROFILES.neapolitan.saltPct);
@@ -563,13 +580,18 @@ export default function CalculatorHome() {
             setDiameter(restoreBeginnerStyles && (saved.pizzaStyle ?? 'neapolitan') === 'neapolitan' ? PIZZA_STYLE_PROFILES.neapolitan.defaultDiameter : saved.diameter);
           }
           if (saved.customBallWeight !== undefined) setCustomBallWeight(saved.customBallWeight);
-          if (saved.method === 'direct' || saved.method === 'biga' || saved.method === 'poolish') {
+          if (saved.method === 'direct' || saved.method === 'biga' || saved.method === 'poolish' || saved.method === 'sponge') {
             setMethod(saved.flour === 'glutenFree' ? 'direct' : saved.method);
           }
           if (typeof saved.bigaPct === 'number') setBigaPct(saved.bigaPct);
           if (typeof saved.poolishPct === 'number') setPoolishPct(saved.poolishPct);
           if (typeof saved.bigaHours === 'number') setBigaHours(saved.bigaHours);
           if (typeof saved.poolishHours === 'number') setPoolishHours(saved.poolishHours);
+          if (typeof saved.spongeFlourPct === 'number') setSpongeFlourPct(saved.spongeFlourPct);
+          if (typeof saved.spongeHours === 'number') setSpongeHours(saved.spongeHours);
+          if (typeof saved.spongeTemp === 'number') setSpongeTemp(saved.spongeTemp);
+          if (saved.spongeYeastMode === 'automatic' || saved.spongeYeastMode === 'manual') setSpongeYeastMode(saved.spongeYeastMode);
+          if (typeof saved.spongeManualYeastGrams === 'number' && saved.spongeManualYeastGrams > 0) setSpongeManualYeastGrams(saved.spongeManualYeastGrams);
           if (typeof saved.hydration === 'number') setHydration(saved.hydration);
           if (typeof saved.saltPct === 'number') setSaltPct(saved.saltPct);
           if (typeof saved.oilPct === 'number') setOilPct(saved.oilPct);
@@ -619,15 +641,15 @@ export default function CalculatorHome() {
       flourStrengthSource,
       ...(flourStrengthSource === 'w' && strengthIsValid ? { flourW: parsedStrength } : {}),
       ...(flourStrengthSource === 'protein' && strengthIsValid ? { flourProteinPct: parsedStrength } : {}),
-      customBallWeight, method, bigaPct, poolishPct, bigaHours, poolishHours, hydration, saltPct, oilPct,
+      customBallWeight, method, bigaPct, poolishPct, bigaHours, poolishHours, spongeFlourPct, spongeHours, spongeTemp, spongeYeastMode, spongeManualYeastGrams, hydration, saltPct, oilPct,
       roomTemp, roomHours, fridgeTemp, fridgeHours, useIce, oven, ovenTemp, mixing: mixingForExperience, beginnerScheduleMode,
     };
     AsyncStorage.setItem(CALCULATOR_SETTINGS_KEY, JSON.stringify(settings)).catch(() => {});
-  }, [settingsLoaded, settingsLoadStatus, experienceLoaded, pizzaStyle, romanFormat, trayWidth, trayLength, flour, flourStrengthSource, flourStrengthValue, blendA, blendB, blendPctA, pizzas, diameter, customBallWeight, method, bigaPct, poolishPct, bigaHours, poolishHours, hydration, saltPct, oilPct, roomTemp, roomHours, fridgeTemp, fridgeHours, useIce, oven, ovenTemp, mixing, mixingForExperience, beginnerScheduleMode]);
+  }, [settingsLoaded, settingsLoadStatus, experienceLoaded, pizzaStyle, romanFormat, trayWidth, trayLength, flour, flourStrengthSource, flourStrengthValue, blendA, blendB, blendPctA, pizzas, diameter, customBallWeight, method, bigaPct, poolishPct, bigaHours, poolishHours, spongeFlourPct, spongeHours, spongeTemp, spongeYeastMode, spongeManualYeastGrams, hydration, saltPct, oilPct, roomTemp, roomHours, fridgeTemp, fridgeHours, useIce, oven, ovenTemp, mixing, mixingForExperience, beginnerScheduleMode]);
 
   useEffect(() => {
     if (experienceLoaded && isBeginner) {
-      void cancelPlannerNotificationsForMethods(['biga', 'poolish']).catch((error) => {
+      void cancelPlannerNotificationsForMethods(['biga', 'poolish', 'sponge']).catch((error) => {
         console.error('Unable to cancel unsupported Beginner Planner alarms:', error);
       });
     }
@@ -1145,7 +1167,8 @@ export default function CalculatorHome() {
     : isBeginner
       ? customBallWeight ?? beginnerBallWeightForDiameter(pizzaStyle, diameter)
       : customBallWeight ?? (diameter === styleProfile.defaultDiameter ? styleProfile.ballWeight : dims.doughBall);
-  const prefermentHours = method === 'biga' ? bigaHours : method === 'poolish' ? poolishHours : 0;
+  const prefermentHours = method === 'biga' ? bigaHours : method === 'poolish' ? poolishHours : method === 'sponge' ? spongeHours : 0;
+  const safeSpongeManualYeastGrams = Math.min(spongeManualYeastGrams, Math.max(0.01, pizzas * effectiveBall * 0.02));
   const beginnerPlanInputKey = useMemo(() => createBeginnerPlanInputKeyFromState({
     bakeAt: sharedBakeAt?.getTime() ?? null,
     pizzaStyle, romanFormat, pizzas, effectiveBall, roomTemp, fridgeTemp, oven, ovenTemp,
@@ -1163,9 +1186,10 @@ export default function CalculatorHome() {
     setRestoredBeginnerPlanKey(canRestore ? snapshot.inputKey : null);
     setBeginnerPlanHydrated(true);
   }, [settingsLoaded, experienceLoaded, sharedBakeAt, beginnerPlanInputKey]);
-  const fermentationSchedule = useMemo(() => getFermentationSchedule({
-    method, prefermentHours, roomHours, roomTemp, fridgeHours, fridgeTemp,
-  }), [method, prefermentHours, roomHours, roomTemp, fridgeHours, fridgeTemp]);
+  const fermentationSchedule = useMemo(() => method === 'sponge'
+    ? getSpongeFermentationSchedule(spongeHours, spongeTemp, roomHours, roomTemp, fridgeHours, fridgeTemp)
+    : getFermentationSchedule({ method, prefermentHours, roomHours, roomTemp, fridgeHours, fridgeTemp }),
+  [method, prefermentHours, roomHours, roomTemp, fridgeHours, fridgeTemp, spongeHours, spongeTemp]);
   const planCalculationNow = isBeginner && restoredBeginnerPlanKey === beginnerPlanInputKey && restoredBeginnerCalculationNow
     ? restoredBeginnerCalculationNow
     : scheduleCalculationNow;
@@ -1430,6 +1454,9 @@ export default function CalculatorHome() {
     if (method === 'direct' && activeProDirectHomeSchedule) {
       return getDirectHomeFermentationSchedule(activeProDirectHomeSchedule, roomTemp, fridgeTemp);
     }
+    if (method === 'sponge') {
+      return getSpongeFermentationSchedule(spongeHours, spongeTemp, roomHours, roomTemp, fridgeHours, fridgeTemp);
+    }
     return getFermentationSchedule({
       method,
       prefermentHours,
@@ -1439,30 +1466,7 @@ export default function CalculatorHome() {
       fridgeTemp,
       roomAfterFridgeHours: fridgeHours > 0 ? getTemperingWindow(roomTemp).initialMinutes / 60 : 0,
     });
-  }, [isBeginner, method, activeProDirectHomeSchedule, prefermentHours, roomHours, roomTemp, fridgeHours, fridgeTemp]);
-  useEffect(() => {
-    if (!settingsLoaded || !experienceLoaded) return;
-    setSharedCalculatorPlanSettings({
-      pizzaStyle,
-      romanFormat,
-      method,
-      mixing: toCalculatorMixing(mixingForExperience),
-      roomTemp,
-      roomHours,
-      fridgeTemp,
-      fridgeHours,
-      bigaHours,
-      poolishHours,
-      trayCount: pizzas,
-      doughPerTray: customBallWeight && customBallWeight > 0 ? customBallWeight : Math.round(trayWidth * trayLength * 0.4),
-      trayWidth,
-      trayLength,
-      proFermentationSchedule: proFermentationSchedule ?? null,
-    });
-  }, [
-    settingsLoaded, experienceLoaded, pizzaStyle, romanFormat, method, mixing, mixingForExperience, roomTemp, roomHours, fridgeTemp,
-    fridgeHours, bigaHours, poolishHours, pizzas, customBallWeight, trayWidth, trayLength, proFermentationSchedule,
-  ]);
+  }, [isBeginner, method, activeProDirectHomeSchedule, prefermentHours, roomHours, roomTemp, fridgeHours, fridgeTemp, spongeHours, spongeTemp]);
   const bigaHomePlan = useMemo(() => {
     if (!isBeginner || method !== 'biga' || sharedBakeAt === null) return null;
     return createBigaHomePizzaPlan({
@@ -1834,11 +1838,52 @@ export default function CalculatorHome() {
     beginnerDirectMixing: isBeginner ? toBeginnerDirectMixing(mixingForExperience) : undefined,
     yeastType: preferredYeastType,
     useDirectYeastModelForBiga: !isBeginner && method === 'biga',
+    spongeFlourPct,
+    spongeYeastMode,
+    spongeManualYeastGrams: safeSpongeManualYeastGrams,
+    spongeYeastType: preferredYeastType,
+    spongeFermentationTempC: spongeTemp,
+    spongeFermentationHours: spongeHours,
     flourType: flour,
     bigaHomeSchedule: bigaHomePlan?.schedule,
     poolishHomeSchedule: poolishHomePlan?.schedule,
     fermentationSchedule: proFermentationSchedule,
-  }), [pizzas, effectiveBall, hydration, saltPct, oilPct, method, bigaPct, poolishPct, prefermentHours, legacyDoughHours.roomHours, roomTemp, legacyDoughHours.fridgeHours, fridgeTemp, mixingForExperience, flour, pizzaStyle, isRomanTeglia, isBeginner, preferredYeastType, bigaHomePlan, poolishHomePlan, proFermentationSchedule]);
+  }), [pizzas, effectiveBall, hydration, saltPct, oilPct, method, bigaPct, poolishPct, spongeFlourPct, spongeHours, spongeTemp, spongeYeastMode, safeSpongeManualYeastGrams, prefermentHours, legacyDoughHours.roomHours, roomTemp, legacyDoughHours.fridgeHours, fridgeTemp, mixingForExperience, flour, pizzaStyle, isRomanTeglia, isBeginner, preferredYeastType, bigaHomePlan, poolishHomePlan, proFermentationSchedule]);
+  useEffect(() => {
+    if (!settingsLoaded || !experienceLoaded) return;
+    setSharedCalculatorPlanSettings({
+      pizzaStyle,
+      romanFormat,
+      method,
+      mixing: toCalculatorMixing(mixingForExperience),
+      roomTemp,
+      roomHours,
+      fridgeTemp,
+      fridgeHours,
+      bigaHours,
+      poolishHours,
+      spongeHours,
+      spongeTemp,
+      trayCount: pizzas,
+      doughPerTray: customBallWeight && customBallWeight > 0 ? customBallWeight : Math.round(trayWidth * trayLength * 0.4),
+      trayWidth,
+      trayLength,
+      proFermentationSchedule: proFermentationSchedule ?? null,
+      spongePreparation: method === 'sponge' && dough.preferment ? {
+        prefermentFlour: dough.preferment.flour,
+        prefermentWater: dough.preferment.water,
+        prefermentYeast: dough.preferment.yeast,
+        finalFlour: dough.main.flour,
+        finalWater: dough.main.water,
+        finalSalt: dough.main.salt,
+        finalOil: dough.main.oil,
+        finalYeast: dough.main.yeast,
+      } : null,
+    });
+  }, [
+    settingsLoaded, experienceLoaded, pizzaStyle, romanFormat, method, mixing, mixingForExperience, roomTemp, roomHours, fridgeTemp,
+    fridgeHours, bigaHours, poolishHours, spongeHours, spongeTemp, pizzas, customBallWeight, trayWidth, trayLength, proFermentationSchedule, dough,
+  ]);
   const blendFlourAmounts = useMemo(() => splitFlourBlend(dough.main.flour, blendPctA), [dough.main.flour, blendPctA]);
   const selectedPrefermentHours = fermentationSchedule.prefermentHours;
   const prefermentRoomHours = fermentationSchedule.prefermentRoomHours;
@@ -2297,7 +2342,7 @@ export default function CalculatorHome() {
     : method === 'direct' && (lang === 'de' || lang === 'en' || lang === 'sl') && (oven === 'homeStone' || oven === 'ooni' || oven === 'homePan')
       ? getDetailedDirectStepsLocalized(lang, directStepIngredients, dough.totalDough, pizzas, effectiveBall, diameter, directRecipeFridgeHours, directRecipeRoomHours, roomTemp, dims.cheese, dims.sauce, oven, ovenTemp, bakingTimeRange, mixingForExperience, isRomanTeglia ? 'romanaTeglia' : pizzaStyle === 'romana' ? 'romanaTonda' : pizzaStyle === 'ny_style' ? 'newYork' : 'napolitana', flour, { width: trayWidth, length: trayLength }, waterTemperatureCalculation?.recommendedWaterTemp, isBeginner, isBeginner ? getBeginnerPhaseAFlourBehavior(flour, blendA, blendB) : undefined, waterTemperatureCalculation?.targetFinalDoughTemp, proFinalRestMinutes, preferredYeastType)
     : null;
-  const detailedDirectSteps = mixingForExperience === 'spiral' && generatedDetailedDirectSteps
+  const detailedDirectSteps = method !== 'sponge' && mixingForExperience === 'spiral' && generatedDetailedDirectSteps
     ? generatedDetailedDirectSteps.map((phase, phaseIndex) => {
       const mixingPhaseIndex = method === 'direct' ? 0 : 1;
       if (phaseIndex !== mixingPhaseIndex) return phase;
@@ -2855,12 +2900,17 @@ export default function CalculatorHome() {
       {dough.preferment ? (
         <>
           <Text style={styles.recipeSection}>
-            {beginnerHomeRecipeLayout ? t.calc.preferment : `7 · ${t.calc.preferment}`} · {method === 'biga' ? `BIGA ${bigaPct}%` : `POOLISH ${poolishPct}%`}
+            {beginnerHomeRecipeLayout ? t.calc.preferment : `7 · ${t.calc.preferment}`} · {method === 'biga' ? `BIGA ${bigaPct}%` : method === 'poolish' ? `POOLISH ${poolishPct}%` : `SPONGE ${spongeFlourPct}%`}
           </Text>
           <ResultRow label={t.calc.totalFlour} value={weight(dough.preferment.flour)} highlight />
           <ResultRow label={t.calc.totalWater} value={weight(dough.preferment.water)} highlight />
           <ResultRow label={t.calc.yeastAmount + ' (' + yeastShortLabel + ')'} value={weight(dough.preferment.yeast, true)} />
-              {method === 'poolish' ? <Text style={styles.hint}>{t.calc.poolishHint}</Text> : <Text style={styles.hint}>{bigaHomeScheduleHint ?? t.calc.bigaHint}</Text>}
+          {method === 'biga' && dough.bigaYeastBudgetExceeded ? (
+            <Text style={[styles.hint, { color: COLORS.warning }]}>
+              {({ hr: 'Biga troši {EXCESS} više kvasca od ukupnog izračunatog budžeta.', en: 'Biga requires {EXCESS} more yeast than the total calculated budget.', de: 'Die Biga benötigt {EXCESS} mehr Hefe als das berechnete Gesamtbudget.', sl: 'Biga potrebuje {EXCESS} več kvasa od skupnega izračunanega proračuna.' }[lang]).replace('{EXCESS}', weight(dough.bigaYeastExcessGrams ?? 0, true))}
+            </Text>
+          ) : null}
+              {method === 'poolish' ? <Text style={styles.hint}>{t.calc.poolishHint}</Text> : method === 'biga' ? <Text style={styles.hint}>{bigaHomeScheduleHint ?? t.calc.bigaHint}</Text> : null}
 
           <Text style={[styles.recipeSection, { marginTop: SPACING.md }]}>{t.calc.mainDough}</Text>
           <ResultRow label={t.calc.remainingFlour} value={weight(beginnerNeapolitanBigaHome ? bigaHomeDisplayMainFlour : dough.main.flour)} highlight />
@@ -3472,7 +3522,7 @@ export default function CalculatorHome() {
                 <Text style={styles.hint}>{method === 'direct' ? t.calc.direct : method === 'biga' ? t.calc.biga : t.calc.poolish}</Text>
               ) : (
                 <Text testID="pro-method-summary" style={styles.hint}>
-                  {method === 'direct' ? t.calc.direct : method === 'biga' ? t.calc.biga : t.calc.poolish} · {hydration}%
+                  {method === 'direct' ? t.calc.direct : method === 'biga' ? t.calc.biga : method === 'poolish' ? t.calc.poolish : 'Sponge'} · {hydration}%
                 </Text>
               ) : null}
             </View>
@@ -3626,6 +3676,7 @@ export default function CalculatorHome() {
               { k: 'direct' as const, l: t.calc.direct },
               { k: 'biga' as const, l: t.calc.biga },
               { k: 'poolish' as const, l: t.calc.poolish },
+              { k: 'sponge' as const, l: 'Sponge' },
             ].filter((m) => isBeginner ? m.k === 'direct' : flour !== 'glutenFree' || m.k === 'direct').map((m) => (
               <View
                 key={m.k}
@@ -3659,6 +3710,56 @@ export default function CalculatorHome() {
               <Text style={[styles.segText, mixing === 'spiral' && { color: '#fff' }]}>{t.calc.spiralMixer}</Text>
             </Pressable>
           </View>
+
+          {method === 'sponge' ? (
+            <>
+              <View style={[styles.row, { marginTop: SPACING.md }] }>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.label}>{({ hr: 'Sponge brašno', en: 'Sponge flour share', de: 'Sponge-Mehlanteil', sl: 'Delež moke za Sponge' }[lang])}</Text>
+                  <Text style={styles.subLabel}>{({ hr: 'Udio ukupnog brašna u predtijestu', en: 'Share of total flour in the preferment', de: 'Anteil des Gesamtmehls im Vorteig', sl: 'Delež celotne moke v predtestu' }[lang])}</Text>
+                </View>
+                <View style={styles.stepper}>
+                  <Pressable testID="sponge-flour-minus" onPress={() => step(() => setSpongeFlourPct(Math.max(10, spongeFlourPct - 5)))} style={styles.stepBtn}><Icon name="remove" size={20} color={COLORS.brand} /></Pressable>
+                  <Text style={styles.stepVal}>{spongeFlourPct}%</Text>
+                  <Pressable testID="sponge-flour-plus" onPress={() => step(() => setSpongeFlourPct(Math.min(100, spongeFlourPct + 5)))} style={styles.stepBtn}><Icon name="add" size={20} color={COLORS.brand} /></Pressable>
+                </View>
+              </View>
+              <View style={[styles.row, { marginTop: SPACING.sm }] }>
+                <Text style={[styles.label, { flex: 1 }]}>{({ hr: 'Fermentacija Sponge', en: 'Sponge fermentation', de: 'Sponge-Fermentation', sl: 'Fermentacija Sponge' }[lang])}</Text>
+                <View style={styles.stepper}>
+                  <Pressable testID="sponge-hours-minus" onPress={() => step(() => setSpongeHours(Math.max(0.5, Math.round((spongeHours - 0.5) * 2) / 2)))} style={styles.stepBtn}><Icon name="remove" size={20} color={COLORS.brand} /></Pressable>
+                  <Text style={styles.stepVal}>{spongeHours}h</Text>
+                  <Pressable testID="sponge-hours-plus" onPress={() => step(() => setSpongeHours(Math.min(48, Math.round((spongeHours + 0.5) * 2) / 2)))} style={styles.stepBtn}><Icon name="add" size={20} color={COLORS.brand} /></Pressable>
+                </View>
+              </View>
+              <View style={[styles.row, { marginTop: SPACING.sm }] }>
+                <Text style={[styles.label, { flex: 1 }]}>{({ hr: 'Temperatura Sponge', en: 'Sponge temperature', de: 'Sponge-Temperatur', sl: 'Temperatura Sponge' }[lang])}</Text>
+                <View style={styles.stepper}>
+                  <Pressable testID="sponge-temp-minus" onPress={() => step(() => setSpongeTemp(Math.max(4, spongeTemp - 1)))} style={styles.stepBtn}><Icon name="remove" size={20} color={COLORS.brand} /></Pressable>
+                  <Text style={styles.stepVal}>{formatTemperature(spongeTemp, temperatureUnit)}</Text>
+                  <Pressable testID="sponge-temp-plus" onPress={() => step(() => setSpongeTemp(Math.min(35, spongeTemp + 1)))} style={styles.stepBtn}><Icon name="add" size={20} color={COLORS.brand} /></Pressable>
+                </View>
+              </View>
+              <View style={[styles.segmentedRow, { marginTop: SPACING.sm }]}>
+                <Pressable testID="sponge-yeast-automatic" onPress={() => step(() => setSpongeYeastMode('automatic'))} style={[styles.segBtn, spongeYeastMode === 'automatic' && styles.segBtnActive]}>
+                  <Text style={[styles.segText, spongeYeastMode === 'automatic' && { color: '#fff' }]}>{({ hr: 'Automatski', en: 'Automatic', de: 'Automatisch', sl: 'Samodejno' }[lang])}</Text>
+                </Pressable>
+                <Pressable testID="sponge-yeast-manual" onPress={() => step(() => setSpongeYeastMode('manual'))} style={[styles.segBtn, spongeYeastMode === 'manual' && styles.segBtnActive]}>
+                  <Text style={[styles.segText, spongeYeastMode === 'manual' && { color: '#fff' }]}>{({ hr: 'Ručno', en: 'Manual', de: 'Manuell', sl: 'Ročno' }[lang])}</Text>
+                </Pressable>
+              </View>
+              {spongeYeastMode === 'manual' ? (
+                <View style={[styles.row, { marginTop: SPACING.sm }] }>
+                  <Text style={[styles.label, { flex: 1 }]}>{({ hr: 'Kvasac za Sponge', en: 'Sponge yeast', de: 'Sponge-Hefe', sl: 'Kvas za Sponge' }[lang])}</Text>
+                  <View style={styles.stepper}>
+                    <Pressable testID="sponge-manual-yeast-minus" onPress={() => step(() => setSpongeManualYeastGrams(Math.max(0.01, Math.round((safeSpongeManualYeastGrams - 0.05) * 100) / 100)))} style={styles.stepBtn}><Icon name="remove" size={20} color={COLORS.brand} /></Pressable>
+                    <Text style={styles.stepVal}>{weight(safeSpongeManualYeastGrams)}</Text>
+                    <Pressable testID="sponge-manual-yeast-plus" onPress={() => step(() => setSpongeManualYeastGrams(Math.min(Math.max(0.01, pizzas * effectiveBall * 0.02), Math.round((safeSpongeManualYeastGrams + 0.05) * 100) / 100)))} style={styles.stepBtn}><Icon name="add" size={20} color={COLORS.brand} /></Pressable>
+                  </View>
+                </View>
+              ) : null}
+            </>
+          ) : null}
 
           {method === 'biga' ? (
             <>
@@ -4305,6 +4406,35 @@ export default function CalculatorHome() {
                     </>
                   );
                 })()
+              ) : method === 'sponge' ? (
+                <>
+                  <PhaseBlock
+                    title="Sponge"
+                    steps={[
+                      ({ hr: 'Pomiješaj {FLOUR} brašna, {WATER} vode i {YEAST} kvasca za Sponge.', en: 'Mix {FLOUR} flour, {WATER} water, and {YEAST} yeast for the Sponge.', de: 'Mische {FLOUR} Mehl, {WATER} Wasser und {YEAST} Hefe für den Sponge.', sl: 'Zmešaj {FLOUR} moke, {WATER} vode in {YEAST} kvasa za Sponge.' }[lang])
+                        .replace('{FLOUR}', weight(dough.preferment?.flour ?? 0))
+                        .replace('{WATER}', weight(dough.preferment?.water ?? 0))
+                        .replace('{YEAST}', weight(dough.preferment?.yeast ?? 0)),
+                      ({ hr: 'Fermentiraj {HOURS} h na {TEMP}.', en: 'Ferment for {HOURS} h at {TEMP}.', de: 'Lass den Sponge {HOURS} h bei {TEMP} fermentieren.', sl: 'Fermentiraj {HOURS} h pri {TEMP}.' }[lang])
+                        .replace('{HOURS}', String(spongeHours))
+                        .replace('{TEMP}', formatTemperature(spongeTemp, temperatureUnit)),
+                    ]}
+                    phaseKey="sponge-preferment"
+                    timers={[{ id: 'sponge-fermentation', seconds: spongeHours * 3600, kind: 'rt' as const }]}
+                    completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onResetTimer={resetTimer} onStopTimer={stopTimer} lang={lang} nowMs={now}
+                  />
+                  <PhaseBlock
+                    title={t.calc.mainDough}
+                    steps={[({ hr: 'Dodaj {FLOUR} brašna, {WATER} vode, {SALT} soli, {OIL} ulja i {YEAST} kvasca pa zamijesi završno tijesto.', en: 'Add {FLOUR} flour, {WATER} water, {SALT} salt, {OIL} oil, and {YEAST} yeast, then mix the final dough.', de: 'Gib {FLOUR} Mehl, {WATER} Wasser, {SALT} Salz, {OIL} Öl und {YEAST} Hefe hinzu und mische den Hauptteig.', sl: 'Dodaj {FLOUR} moke, {WATER} vode, {SALT} soli, {OIL} olja in {YEAST} kvasa ter zamesi končno testo.' }[lang])
+                      .replace('{FLOUR}', weight(dough.main.flour))
+                      .replace('{WATER}', weight(dough.main.water))
+                      .replace('{SALT}', weight(dough.main.salt, true))
+                      .replace('{OIL}', weight(dough.main.oil))
+                      .replace('{YEAST}', weight(dough.main.yeast))]}
+                    phaseKey="sponge-final-mix"
+                    completed={completedSteps} onToggle={toggleStep} activeTimers={activeTimers} onStartTimer={startTimer} onPauseTimer={pauseTimer} onResumeTimer={resumeTimer} onResetTimer={resetTimer} onStopTimer={stopTimer} lang={lang} nowMs={now}
+                  />
+                </>
               ) : (
                 (() => {
                   const path = getYeastAwarePrefermentSteps(lang, 'poolish', mixingForExperience, preferredYeastType, isRomanTeglia, dough.main.oil > 0);
@@ -4485,13 +4615,13 @@ export default function CalculatorHome() {
           <Pressable style={styles.tooltipCard} onPress={() => {}}>
             <View style={styles.tooltipHeader}>
               <Icon name="information-circle" size={20} color={COLORS.brand} />
-              <Text style={styles.tooltipTitle}>{visibleMethodInfo ? METHOD_INFO[lang][visibleMethodInfo].title : ''}</Text>
+              <Text style={styles.tooltipTitle}>{visibleMethodInfo ? (visibleMethodInfo === 'sponge' ? SPONGE_METHOD_INFO[lang] : METHOD_INFO[lang][visibleMethodInfo]).title : ''}</Text>
               <Pressable onPress={() => setMethodInfo(null)} hitSlop={8}>
                 <Icon name="close" size={20} color={COLORS.muted} />
               </Pressable>
             </View>
             <ScrollView style={{ maxHeight: 460 }}>
-              <Text style={styles.tooltipBody}>{visibleMethodInfo ? METHOD_INFO[lang][visibleMethodInfo].body : ''}</Text>
+              <Text style={styles.tooltipBody}>{visibleMethodInfo ? (visibleMethodInfo === 'sponge' ? SPONGE_METHOD_INFO[lang] : METHOD_INFO[lang][visibleMethodInfo]).body : ''}</Text>
             </ScrollView>
           </Pressable>
         </Pressable>

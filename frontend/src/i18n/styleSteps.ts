@@ -222,6 +222,7 @@ export function getStyleSteps(style: PizzaStyle, method: Method, mixing: 'hand' 
   const actualMixing = mixing === 'hand' ? 'hand' : 'mixer';
   const instructionFlour = flour === 'custom' ? 'caputo00' : flour;
   if (method === 'direct') return direct(actualMixing, style, roomHours, fridgeHours, instructionFlour, romanTray);
+  if (method === 'sponge') return null;
   return preferment(method, actualMixing, style, roomHours, fridgeHours, instructionFlour, romanTray);
 }
 const baking = (style: 'romana' | 'ny_style', oven: OvenType): string[] => {

@@ -14,7 +14,7 @@ import { formatTemperature, formatUnitText } from '../../src/units';
 import { getCachedPreferredYeastType, subscribePreferredYeastType } from '../../src/preferences';
 import { getPlannerNotificationRestoreStatus, shouldReconcilePlannerNotifications, subscribePlannerNotificationRestoreStatus } from '../../src/beginnerPlanRestoreCoordinator';
 import {
-  getDirectHomeFermentationSchedule, getFermentationSchedule, getTemperingWindow, reversePlan, selectPlannerHomeSchedules, Method, PizzaStyle,
+  getDirectHomeFermentationSchedule, getFermentationSchedule, getSpongeFermentationSchedule, getTemperingWindow, reversePlan, selectPlannerHomeSchedules, Method, PizzaStyle,
   PlannerTegliaSettings,
   BEGINNER_DIRECT_MIN_WINDOW_HOURS,
   getSharedCalculatorPlanSettings, subscribeSharedCalculatorPlanSettings,
@@ -85,6 +85,8 @@ type CalculatorPlanSettings = {
   fridgeHours: number;
   bigaHours: number;
   poolishHours: number;
+  spongeHours: number;
+  spongeTemp: number;
 };
 
 const DEFAULT_CALCULATOR_PLAN_SETTINGS: CalculatorPlanSettings = {
@@ -94,6 +96,8 @@ const DEFAULT_CALCULATOR_PLAN_SETTINGS: CalculatorPlanSettings = {
   fridgeHours: 24,
   bigaHours: 24,
   poolishHours: 24,
+  spongeHours: 4.5,
+  spongeTemp: 27,
 };
 
 const DEFAULT_PLANNER_TEGLIA_SETTINGS: PlannerTegliaSettings = {
@@ -214,6 +218,8 @@ export default function Planner() {
       fridgeHours: sharedCalculatorPlanSettings.fridgeHours,
       bigaHours: sharedCalculatorPlanSettings.bigaHours,
       poolishHours: sharedCalculatorPlanSettings.poolishHours,
+      spongeHours: sharedCalculatorPlanSettings.spongeHours,
+      spongeTemp: sharedCalculatorPlanSettings.spongeTemp,
     }
     : calculatorPlanSettings, [sharedCalculatorPlanSettings, calculatorPlanSettings]);
   const activePlannerTegliaSettings = useMemo(() => sharedCalculatorPlanSettings
@@ -278,7 +284,7 @@ export default function Planner() {
               if (settings.pizzaStyle === 'neapolitan' || settings.pizzaStyle === 'romana' || settings.pizzaStyle === 'ny_style') {
                 setStyle(settings.pizzaStyle);
               }
-              if (settings.method === 'direct' || settings.method === 'biga' || settings.method === 'poolish') {
+              if (settings.method === 'direct' || settings.method === 'biga' || settings.method === 'poolish' || settings.method === 'sponge') {
                 setSelectedMethod(settings.method);
               }
               const savedMixing = parseMixingSelection(settings.mixing);
@@ -291,6 +297,8 @@ export default function Planner() {
             fridgeHours: readNumber('fridgeHours'),
             bigaHours: readNumber('bigaHours'),
             poolishHours: readNumber('poolishHours'),
+            spongeHours: readNumber('spongeHours'),
+            spongeTemp: readNumber('spongeTemp'),
           });
           setPlannerTegliaSettings({
             romanFormat,
@@ -321,7 +329,7 @@ export default function Planner() {
   }, [returnTo, returnSection, returnToken]);
   useEffect(() => {
     if (experienceLoaded && isBeginner) {
-      void cancelPlannerNotificationsForMethods(['biga', 'poolish']).catch((error) => {
+      void cancelPlannerNotificationsForMethods(['biga', 'poolish', 'sponge']).catch((error) => {
         console.error('Unable to cancel unsupported Beginner Planner alarms:', error);
       });
     }
@@ -344,6 +352,7 @@ export default function Planner() {
         fridgeTemp: activeCalculatorPlanSettings.fridgeTemp,
         ...(method === 'biga' ? { prefermentHours: activeCalculatorPlanSettings.bigaHours } : {}),
         ...(method === 'poolish' ? { prefermentHours: activeCalculatorPlanSettings.poolishHours } : {}),
+        ...(method === 'sponge' ? { prefermentHours: activeCalculatorPlanSettings.spongeHours } : {}),
       });
     }
     if (!plannerSelectionManuallyChanged
@@ -357,6 +366,16 @@ export default function Planner() {
       return getDirectHomeFermentationSchedule(
         plannerDirectHomeSchedule,
         activeCalculatorPlanSettings.roomTemp,
+        activeCalculatorPlanSettings.fridgeTemp,
+      );
+    }
+    if (method === 'sponge') {
+      return getSpongeFermentationSchedule(
+        activeCalculatorPlanSettings.spongeHours,
+        activeCalculatorPlanSettings.spongeTemp,
+        activeCalculatorPlanSettings.roomHours,
+        activeCalculatorPlanSettings.roomTemp,
+        activeCalculatorPlanSettings.fridgeHours,
         activeCalculatorPlanSettings.fridgeTemp,
       );
     }
@@ -383,10 +402,12 @@ export default function Planner() {
     plannerStepCopy.poolishTitle,
     plannerStepCopy.finalMixTitle.replace('{PREFERMENT}', plannerStepCopy.bigaName),
     plannerStepCopy.finalMixTitle.replace('{PREFERMENT}', plannerStepCopy.poolishName),
+    'Sponge',
+    plannerStepCopy.finalMixTitle.replace('{PREFERMENT}', 'Sponge'),
   ];
   const generatedSteps = assignPlannerPhaseKeys((() => {
     const planSteps = bakeAt && hasCurrentBeginnerDirectSchedule && (roomTempLoaded || !!sharedCalculatorPlanSettings)
-      ? reversePlan(bakeAt, method, effectiveStyle, plannerStepCopy, plannerDirectHomeSchedule, plannerBigaHomeSchedule, plannerPoolishHomeSchedule, lang, formatTemperature(plannerDirectHomeSchedule?.ovenTemp ?? 250, temperatureUnit), activeCalculatorPlanSettings.roomTemp, isBeginner ? undefined : plannerFermentationSchedule, activePlannerTegliaSettings).map((step) => ({
+      ? reversePlan(bakeAt, method, effectiveStyle, plannerStepCopy, plannerDirectHomeSchedule, plannerBigaHomeSchedule, plannerPoolishHomeSchedule, lang, formatTemperature(plannerDirectHomeSchedule?.ovenTemp ?? 250, temperatureUnit), activeCalculatorPlanSettings.roomTemp, isBeginner ? undefined : plannerFermentationSchedule, activePlannerTegliaSettings, sharedCalculatorPlanSettings?.method === 'sponge' ? sharedCalculatorPlanSettings.spongePreparation : null).map((step) => ({
         ...step,
         desc: formatUnitText(
           plannerMixTitles.includes(step.title)
@@ -612,7 +633,7 @@ export default function Planner() {
         cancelLocal,
       );
       await cancelPlannerNotificationsForMethodsExcept(
-        ['direct', 'biga', 'poolish'],
+        ['direct', 'biga', 'poolish', 'sponge'],
         new Set(createdIdentifiers),
       );
       setScheduledPlanKey(planKey);
@@ -722,6 +743,7 @@ export default function Planner() {
               { key: 'direct' as const, l: t.calc.direct },
               { key: 'biga' as const, l: t.calc.biga },
               { key: 'poolish' as const, l: t.calc.poolish },
+              { key: 'sponge' as const, l: 'Sponge' },
             ].filter((m) => isBeginner ? m.key === 'direct' : true).map((m) => (
               <Pressable
                 key={m.key}

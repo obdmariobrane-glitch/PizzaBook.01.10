@@ -81,4 +81,35 @@ assert.throws(() => calculator.doughCalc({
   spongeManualYeastGrams: 0,
 }), /finite positive quantity/);
 
-console.log('PRO Sponge yeast model golden values and recipe integration passed.');
+const plannerCopy = new Proxy({}, { get: (_target, key) => String(key) });
+const spongePlannerSteps = calculator.reversePlan(
+  new Date('2030-01-02T18:00:00Z'),
+  'sponge',
+  'neapolitan',
+  plannerCopy,
+  null,
+  null,
+  null,
+  'en',
+  undefined,
+  22,
+  schedule,
+  null,
+  {
+    prefermentFlour: automatic.preferment.flour,
+    prefermentWater: automatic.preferment.water,
+    prefermentYeast: automatic.preferment.yeast,
+    finalFlour: automatic.main.flour,
+    finalWater: automatic.main.water,
+    finalSalt: automatic.main.salt,
+    finalOil: automatic.main.oil,
+    finalYeast: automatic.main.yeast,
+  },
+);
+const plannerSpongeStep = spongePlannerSteps.find((step) => step.phaseId === 'sponge.preferment');
+const plannerFinalMixStep = spongePlannerSteps.find((step) => step.phaseId === 'sponge.finalMix');
+assert.match(plannerSpongeStep.desc, /407 g/);
+assert.match(plannerSpongeStep.desc, /12\.78 g/);
+assert.match(plannerFinalMixStep.desc, /0\.24 g/);
+
+console.log('PRO Sponge yeast model, recipe, and Planner quantities passed.');

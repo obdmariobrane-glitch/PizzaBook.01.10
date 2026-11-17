@@ -351,11 +351,14 @@ export type SharedCalculatorPlanSettings = {
   fridgeHours: number;
   bigaHours: number;
   poolishHours: number;
+  spongeHours: number;
+  spongeTemp: number;
   trayCount: number;
   doughPerTray: number;
   trayWidth: number;
   trayLength: number;
   proFermentationSchedule: FermentationSchedule | null;
+  spongePreparation?: PlannerSpongePreparation | null;
 };
 
 let sharedCalculatorPlanSettings: SharedCalculatorPlanSettings | null = null;
@@ -2642,6 +2645,17 @@ export type PlannerTegliaSettings = {
   trayLength: number;
 };
 
+export type PlannerSpongePreparation = {
+  prefermentFlour: number;
+  prefermentWater: number;
+  prefermentYeast: number;
+  finalFlour: number;
+  finalWater: number;
+  finalSalt: number;
+  finalOil: number;
+  finalYeast: number;
+};
+
 type DirectHomePlannerCopy = {
   start: string;
   ballingFridge: string;
@@ -2709,6 +2723,7 @@ export function reversePlan(
   roomTemp = 22,
   selectedFermentationSchedule?: FermentationSchedule,
   tegliaSettings?: PlannerTegliaSettings | null,
+  spongePreparation?: PlannerSpongePreparation | null,
 ) {
   const steps: { at: Date; title: string; desc: string; phaseId?: string }[] = [];
   const push = (offsetMin: number, title: string, desc: string, phaseId?: string) => {
@@ -3055,6 +3070,49 @@ export function reversePlan(
         }));
       }
       push(finalRoomOffset, finalMixTitle, finalMixDesc);
+    } else if (method === 'sponge') {
+      const spongeCopy = {
+        hr: {
+          prepare: 'Pomiješaj {PREFERMENT_FLOUR} brašna, {PREFERMENT_WATER} vode i {PREFERMENT_YEAST} kvasca za Sponge. Fermentiraj {HOURS} na {SPONGE_TEMP}.',
+          final: 'Dodaj {FINAL_FLOUR} brašna, {FINAL_WATER} vode, {FINAL_SALT} soli, {FINAL_OIL} ulja i {FINAL_YEAST} kvasca te zamijesi završno tijesto.',
+        },
+        en: {
+          prepare: 'Mix {PREFERMENT_FLOUR} flour, {PREFERMENT_WATER} water, and {PREFERMENT_YEAST} yeast for the Sponge. Ferment for {HOURS} at {SPONGE_TEMP}.',
+          final: 'Add {FINAL_FLOUR} flour, {FINAL_WATER} water, {FINAL_SALT} salt, {FINAL_OIL} oil, and {FINAL_YEAST} yeast, then mix the final dough.',
+        },
+        de: {
+          prepare: 'Mische {PREFERMENT_FLOUR} Mehl, {PREFERMENT_WATER} Wasser und {PREFERMENT_YEAST} Hefe für den Sponge. Fermentiere {HOURS} bei {SPONGE_TEMP}.',
+          final: 'Gib {FINAL_FLOUR} Mehl, {FINAL_WATER} Wasser, {FINAL_SALT} Salz, {FINAL_OIL} Öl und {FINAL_YEAST} Hefe hinzu und mische den Hauptteig.',
+        },
+        sl: {
+          prepare: 'Zmešaj {PREFERMENT_FLOUR} moke, {PREFERMENT_WATER} vode in {PREFERMENT_YEAST} kvasa za Sponge. Fermentiraj {HOURS} pri {SPONGE_TEMP}.',
+          final: 'Dodaj {FINAL_FLOUR} moke, {FINAL_WATER} vode, {FINAL_SALT} soli, {FINAL_OIL} olja in {FINAL_YEAST} kvasa ter zamesi končno testo.',
+        },
+      }[bakingLanguage];
+      const amount = (grams: number | undefined) => grams === undefined
+        ? ({ hr: 'provjeri Kalkulator', en: 'see Calculator', de: 'siehe Calculator', sl: 'glej Kalkulator' }[bakingLanguage])
+        : `${Math.round(grams * 100) / 100} g`;
+      const spongeValues = {
+        HOURS: formatHoursLabel(prefermentHours),
+        SPONGE_TEMP: `${selectedFermentationSchedule.phases.find((phase) => phase.kind === 'preferment')?.temperature ?? 27}°C`,
+        PREFERMENT_FLOUR: amount(spongePreparation?.prefermentFlour),
+        PREFERMENT_WATER: amount(spongePreparation?.prefermentWater),
+        PREFERMENT_YEAST: amount(spongePreparation?.prefermentYeast),
+        FINAL_FLOUR: amount(spongePreparation?.finalFlour),
+        FINAL_WATER: amount(spongePreparation?.finalWater),
+        FINAL_SALT: amount(spongePreparation?.finalSalt),
+        FINAL_OIL: amount(spongePreparation?.finalOil),
+        FINAL_YEAST: amount(spongePreparation?.finalYeast),
+      };
+      if (prefermentHours > 0) {
+        push(finalRoomOffset + prefermentHours * 60, 'Sponge', fillPlannerCopy(spongeCopy.prepare, spongeValues), 'sponge.preferment');
+      }
+      push(finalRoomOffset, fillPlannerCopy(copy.finalMixTitle, { PREFERMENT: 'Sponge' }), fillPlannerCopy(spongeCopy.final, spongeValues), 'sponge.finalMix');
+      if (finalRoomHours > 0) {
+        push(finalRoomOffset, copy.finalBulkTitle, fillPlannerCopy(tegliaCopy?.bulkAsMass ?? copy.finalBulkDesc, {
+          HOURS: formatHoursLabel(finalRoomHours),
+        }), 'sponge.finalBulk');
+      }
     } else {
       if (prefermentHours > 0) {
         const prefermentValues = {
