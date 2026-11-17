@@ -16,23 +16,26 @@ assert.match(source, /isTegliaGlutenFreeBeginnerMixer \|\| isNeapolitanGlutenFre
 assert.match(source, /isTegliaGlutenFreeBeginnerHand \|\| isNeapolitanGlutenFreeBeginnerHand/);
 assert.match(source, /isTargetTegliaGlutenFreeHandPhaseA/);
 assert.match(source, /isTargetTegliaGlutenFreeMixerPhaseA/);
-assert.match(source, /Ulijte svu vodu, odnosno \$\{ingredients\.water\} g/);
+assert.match(beginnerSource, /isTegliaGlutenFreeBeginnerHand\s*\?\s*`U približno 80% vode, odnosno \$\{tegliaInitialWater\} g, otopite kvasac\.`/);
+assert.match(beginnerSource, /isTegliaGlutenFreeBeginnerHand\s*\?\s*`Postupno dodajte preostalih 20% vode, odnosno \$\{tegliaRemainingWater\} g\.`/);
+assert.match(beginnerSource, /isTegliaGlutenFreeBeginnerMixer\s*\?\s*`U približno 80% vode, odnosno \$\{tegliaInitialWater\} g, otopite kvasac\.`/);
+assert.match(beginnerSource, /isTegliaGlutenFreeBeginnerMixer\s*\?\s*`Postupno dodajte preostalih 20% vode, odnosno \$\{tegliaRemainingWater\} g\.`/);
 assert.match(source, /homogenu, ljepljivu masu/);
 assert.match(source, /5 minuta kako bi psyllium/);
-assert.doesNotMatch(source, /TegliaGlutenFreeBeginner[\s\S]{0,1200}90%/);
-assert.doesNotMatch(source, /TegliaGlutenFreeBeginner[\s\S]{0,1200}80%/);
 assert.match(localizedSource, /all the water|gesamte Wasser|vso vodo/);
 
 const hand = beginnerSource.match(/\(isTegliaGlutenFreeBeginnerHand \|\| isNeapolitanGlutenFreeBeginnerHand\) \? \[([\s\S]*?)\] : isGlutenFree/);
 const mixer = beginnerSource.match(/\(isTegliaGlutenFreeBeginnerMixer \|\| isNeapolitanGlutenFreeBeginnerMixer\) \? \[([\s\S]*?)\] : \(isTegliaGlutenFreeBeginnerHand/);
 assert.ok(hand && mixer);
-assert.equal((hand[1].match(/\n\s*(?:'|`)/g) ?? []).length, 9);
-assert.equal((mixer[1].match(/\n\s*(?:'|`)/g) ?? []).length, 9);
+assert.equal((hand[1].match(/\n\s*(?:'|`)/g) ?? []).length, 10);
+assert.equal((mixer[1].match(/\n\s*(?:'|`)/g) ?? []).length, 10);
 for (const steps of [hand[1], mixer[1]]) {
   assert.match(steps, /ingredients\.water/);
+  assert.match(steps, /tegliaInitialWater/);
+  assert.match(steps, /tegliaRemainingWater/);
   assert.match(steps, /ingredients\.oil/);
   assert.match(steps, /psyllium/);
-  assert.doesNotMatch(steps, /remainingWater|tegliaInitialWater|tegliaRemainingWater|90%|80%|10%|20%|Stretch & Fold|elastič/);
+  assert.doesNotMatch(steps, /Stretch & Fold|elastič/);
 }
 
 console.log('Teglia Gluten Free Beginner Direct Phase A checks passed.');
