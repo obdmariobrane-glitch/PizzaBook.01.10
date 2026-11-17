@@ -13,6 +13,7 @@ import {
   PHASE_TIMER_DURATIONS, TIMER_KIND_LABEL, TIMER_NOTIF, BaseTimer,
   formatDuration, formatCountdown,
 } from '../../src/i18n/prefermentSteps';
+import { adaptProDirectBulkPhase, adaptProRomanDirectBulkPhase, getProNapolitanaBulkRestSeconds } from '../../src/i18n/proDirectBulk';
 import { useT } from '../../src/i18n/LanguageProvider';
 import type { Lang } from '../../src/i18n/translations';
 import { getSpiralMixingSteps, getSpiralMixingTitle } from '../../src/i18n/spiralMixing';
@@ -2328,6 +2329,17 @@ export default function CalculatorHome() {
       steps: phase.steps.map((step) => adaptDirectYeastStep(step, lang, preferredYeastType)),
     }))
     : detailedDirectSteps;
+  const isProDirectGlutenFree = flour === 'glutenFree'
+    || (flour === 'custom' && (blendA === 'glutenFree' || blendB === 'glutenFree'));
+  const proDirectRoomDurationSteps = !isBeginner && method === 'direct' && !isProDirectGlutenFree && yeastAwareDetailedDirectSteps
+    ? yeastAwareDetailedDirectSteps.map((phase, phaseIndex) => phaseIndex === 1
+      ? (() => {
+        if (pizzaStyle === 'romana') return adaptProRomanDirectBulkPhase(phase, lang);
+        const totalSeconds = Math.round(directRecipeRoomHours * 3600);
+        return adaptProDirectBulkPhase(phase, lang, totalSeconds, getProNapolitanaBulkRestSeconds(roomTemp));
+      })()
+      : phase)
+    : yeastAwareDetailedDirectSteps;
   const beginnerDirectRecipeSteps = isBeginner && method === 'direct' && detailedDirectSteps
     ? detailedDirectSteps.map((phase, phaseIndex) => ({
       ...phase,
@@ -4198,7 +4210,7 @@ export default function CalculatorHome() {
                   />
                 ))
               ) : detailedDirectSteps ? (
-                (beginnerDirectHomeSteps ?? beginnerUnscheduledDirectSteps ?? beginnerDirectRecipeSteps ?? yeastAwareDetailedDirectSteps ?? detailedDirectSteps).map((phase, index) => (
+                (beginnerDirectHomeSteps ?? beginnerUnscheduledDirectSteps ?? beginnerDirectRecipeSteps ?? proDirectRoomDurationSteps ?? detailedDirectSteps).map((phase, index) => (
                   <PhaseBlock
                     key={`detailed-direct-${pizzaStyle}-${mixing}-${index}`}
                     title={phase.title}
