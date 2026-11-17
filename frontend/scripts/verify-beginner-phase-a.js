@@ -61,19 +61,22 @@ const customHandCroatianSteps = beginnerSource.match(/isNeapolitanCustomBeginner
 const customMixerCroatianSteps = beginnerSource.match(/isNeapolitanCustomBeginnerMixer \? \[([\s\S]*?)\] : \(isTegliaGlutenFreeBeginnerMixer \|\| isNeapolitanGlutenFreeBeginnerMixer\)/)[1];
 const customHandLocalizedSteps = localizedSource.match(/isNeapolitanCustomBeginnerHand \? \[([\s\S]*?)\] : isNeapolitanCustomBeginnerMixer/)[1];
 const customMixerLocalizedSteps = localizedSource.match(/isNeapolitanCustomBeginnerMixer \? \[([\s\S]*?)\] : \(isTegliaGlutenFreeBeginnerMixer \|\| isNeapolitanGlutenFreeBeginnerMixer\)/)[1];
-assert.equal((dedicatedCroatianSteps.match(/\n        (?:'|`)/g) ?? []).length, 9);
+assert.equal((dedicatedCroatianSteps.match(/\n        (?:'|`)/g) ?? []).length, 10);
 assert.equal((dedicatedLocalizedSteps.match(/\n        pick\(/g) ?? []).length, 9);
-assert.equal((dedicatedMixerCroatianSteps.match(/\n        (?:'|`)/g) ?? []).length, 9);
+assert.equal((dedicatedMixerCroatianSteps.match(/\n        (?:'|`)/g) ?? []).length, 10);
 assert.equal((dedicatedMixerLocalizedSteps.match(/\n        pick\(/g) ?? []).length, 9);
 assert.equal((customHandCroatianSteps.match(/\n        (?:'|`)/g) ?? []).length, 10);
 assert.equal((customMixerCroatianSteps.match(/\n        (?:'|`)/g) ?? []).length, 10);
 assert.equal((customHandLocalizedSteps.match(/\n        pick\(/g) ?? []).length, 10);
 assert.equal((customMixerLocalizedSteps.match(/\n        pick\(/g) ?? []).length, 10);
-assert.match(dedicatedCroatianSteps, /U svu vodu, odnosno \$\{ingredients\.water\} g/);
+assert.match(dedicatedCroatianSteps, /isTegliaGlutenFreeBeginnerHand[\s\S]*?tegliaInitialWater[\s\S]*?tegliaRemainingWater/);
+assert.match(dedicatedMixerCroatianSteps, /isTegliaGlutenFreeBeginnerMixer[\s\S]*?tegliaInitialWater[\s\S]*?tegliaRemainingWater/);
 assert.match(dedicatedLocalizedSteps, /gesamten Wassermenge|all the water|vsej vodi/);
-for (const dedicatedSteps of [dedicatedCroatianSteps, dedicatedLocalizedSteps, dedicatedMixerCroatianSteps, dedicatedMixerLocalizedSteps]) {
+for (const dedicatedSteps of [dedicatedLocalizedSteps, dedicatedMixerLocalizedSteps]) {
   assert.match(dedicatedSteps, /ingredients\.water} g/);
   assert.doesNotMatch(dedicatedSteps, /90\s*%|10\s*%|remainingWater|preostalih|restlichen/);
+}
+for (const dedicatedSteps of [dedicatedCroatianSteps, dedicatedLocalizedSteps, dedicatedMixerCroatianSteps, dedicatedMixerLocalizedSteps]) {
   assert.doesNotMatch(dedicatedSteps, /cold water|kaltes Wasser|hladnu vodu|hladno vodo/);
 }
 for (const customSteps of [customHandCroatianSteps, customMixerCroatianSteps, customHandLocalizedSteps, customMixerLocalizedSteps]) {
@@ -95,7 +98,7 @@ assert.match(localizedSource, /Priporočena temperatura vode: \$\{waterTemperatu
 assert.match(source, /doughHandlingInfoStepIndex=\{\(\(isTargetNeapolitanGlutenFreeHandPhaseA \|\| isTargetNeapolitanGlutenFreeMixerPhaseA \|\| isTargetTegliaGlutenFreeHandPhaseA \|\| isTargetTegliaGlutenFreeMixerPhaseA\) \? index === 0 \? 6/);
 assert.match(source, /isTargetNeapolitanGlutenFreeMixerPhaseA \|\| isTargetTegliaGlutenFreeHandPhaseA \|\| isTargetTegliaGlutenFreeMixerPhaseA\) \? index === 0 \? 6/);
 assert.match(source, /isTargetNeapolitanGlutenFreeMixerPhaseA \|\| isTargetTegliaGlutenFreeHandPhaseA \|\| isTargetTegliaGlutenFreeMixerPhaseA.*index === 0 \? 2/);
-assert.match(source, /Ulijte svu vodu, odnosno \$\{ingredients\.water\} g/);
+assert.match(source, /U približno 80% vode, odnosno \$\{tegliaInitialWater\} g, otopite kvasac/);
 assert.match(localizedSource, /gesamte Wasser.*ingredients\.water.*Mixerschüssel/);
 assert.match(localizedSource, /all the water.*ingredients\.water.*mixer bowl/);
 assert.match(localizedSource, /vso vodo.*ingredients\.water/);
