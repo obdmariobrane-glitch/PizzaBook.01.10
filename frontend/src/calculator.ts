@@ -7,6 +7,38 @@ export const YEAST_MASS_FACTORS: Record<CommercialYeastType, number> = {
   activeDry: 0.4,
   dry: 1 / 3,
 };
+
+export const DIRECT_YEAST_REFERENCE = {
+  Y_REF: 0.2235,
+  Q10: 2.0,
+  T_BASE: 20,
+  E_REF: 4 * Math.pow(2, 0.2) + 24 * Math.pow(2, -1.8),
+} as const;
+
+export function calculateDirectFermentationExposure(phaseHours: number, temperatureC: number): number {
+  return phaseHours * Math.pow(DIRECT_YEAST_REFERENCE.Q10, (temperatureC - DIRECT_YEAST_REFERENCE.T_BASE) / 10);
+}
+
+export function calculateDirectFermentationScheduleExposure(
+  phases: readonly { hours: number; temperature: number }[],
+): number {
+  const hoursByTemperature = new Map<number, number>();
+  for (const phase of phases) {
+    if (phase.hours <= 0) continue;
+    hoursByTemperature.set(phase.temperature, (hoursByTemperature.get(phase.temperature) ?? 0) + phase.hours);
+  }
+  return [...hoursByTemperature.entries()]
+    .sort(([temperatureA], [temperatureB]) => temperatureB - temperatureA)
+    .reduce((total, [temperature, hours]) => total + calculateDirectFermentationExposure(hours, temperature), 0);
+}
+
+export function calculateDirectFreshYeastPct(eActual: number): number {
+  if (!Number.isFinite(eActual) || eActual <= 0) {
+    throw new RangeError('Direct yeast calculation requires positive fermentation exposure.');
+  }
+  return DIRECT_YEAST_REFERENCE.Y_REF * (DIRECT_YEAST_REFERENCE.E_REF / eActual);
+}
+
 export type Mixing = 'hand' | 'home' | 'spiral';
 export type MixingSelection = 'hand' | 'mixer' | 'spiral';
 export type Fermentation = 'sameDay' | 'coldLong';
@@ -1059,9 +1091,7 @@ function calculateLegacyEquivalentFermentationSignal(
 export function calculateDirectHomeYeastRequirement(
   exposure: DirectHomeFermentationExposure,
 ): DirectHomeYeastRequirement {
-  // Legacy-equivalent PizzaBook yeast relationship applied to Home candidate exposure.
-  const effectiveExposure = Math.max(0.5, exposure.totalExposure);
-  const freshYeastPct = 0.5 / effectiveExposure;
+  const freshYeastPct = calculateDirectFreshYeastPct(exposure.totalExposure);
   const activeDryYeastPct = freshYeastPct * YEAST_MASS_FACTORS.activeDry;
   const dryYeastPct = freshYeastPct * YEAST_MASS_FACTORS.dry;
 
@@ -2118,15 +2148,19 @@ export function doughCalc(opts: {
     : opts.method === 'poolish' && opts.poolishHomeSchedule
       ? getPoolishHomeFermentationSchedule(opts.poolishHomeSchedule, opts.roomTemp, opts.fridgeTemp)
       : getFermentationSchedule(opts));
-  const eTotal = Math.max(0.5, fermentation.phases.reduce((total, phase) => {
+  const scheduleExposure = fermentation.phases.reduce((total, phase) => {
     const rate = phase.environment === 'room'
       ? 1 + 0.08 * (phase.temperature - 20)
       : 0.12 * (1 + 0.05 * (phase.temperature - 4));
     return total + phase.hours * rate;
-  }, 0)); // clamp min to avoid explosion
-  // yeastPct = K / E_total (K = factor constant; 0.5 gives ~0.1% fresh yeast for 24h cold ferment @4°C + 2h RT @22°C)
-  const K = 0.5;
-  const freshYeastPct = K / eTotal;
+  }, 0);
+  const useDirectYeastModel = opts.method === 'direct';
+  const eTotal = useDirectYeastModel
+    ? calculateDirectFermentationScheduleExposure(fermentation.phases)
+    : Math.max(0.5, scheduleExposure);
+  const freshYeastPct = useDirectYeastModel
+    ? calculateDirectFreshYeastPct(eTotal)
+    : 0.5 / eTotal;
   const yeastType = opts.yeastType === 'sourdough' ? 'fresh' : opts.yeastType ?? 'fresh';
   const yeastPct = freshYeastPct * YEAST_MASS_FACTORS[yeastType];
   const effectiveYeastPct = yeastPct;

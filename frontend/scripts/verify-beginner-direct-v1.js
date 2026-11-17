@@ -90,8 +90,8 @@ assert.ok(nineHour.schedule.fridgeHours >= 3);
 
 const exposure = { roomBeforeExposure: 1, fridgeExposure: 2, roomAfterExposure: 3, roomExposure: 4, totalExposure: 6 };
 const yeast = calculator.calculateDirectHomeYeastRequirement(exposure);
-assert.equal(yeast.freshYeastPct, 0.5 / 6);
-assert.equal(yeast.dryYeastPct, (0.5 / 6) / 3);
+assert.ok(Math.abs(yeast.freshYeastPct - 0.4278901372363955) < 1e-12);
+assert.ok(Math.abs(yeast.dryYeastPct - 0.14263004574546517) < 1e-12);
 
 const outsideScope = calculator.createDirectHomePizzaPlan({
   style: 'ny_style', pizzas: 1, ballWeight: 375, method: 'direct',
