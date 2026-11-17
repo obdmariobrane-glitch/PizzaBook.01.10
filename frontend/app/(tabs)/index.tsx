@@ -14,6 +14,7 @@ import {
   formatDuration, formatCountdown,
 } from '../../src/i18n/prefermentSteps';
 import { adaptProDirectBulkPhase, adaptProRomanDirectBulkPhase, getProNapolitanaBulkRestSeconds } from '../../src/i18n/proDirectBulk';
+import { adaptProGlutenFreeMixingPhaseA } from '../../src/i18n/proGlutenFreeBulk';
 import { useT } from '../../src/i18n/LanguageProvider';
 import type { Lang } from '../../src/i18n/translations';
 import { getSpiralMixingSteps, getSpiralMixingTitle } from '../../src/i18n/spiralMixing';
@@ -2340,6 +2341,11 @@ export default function CalculatorHome() {
       })()
       : phase)
     : yeastAwareDetailedDirectSteps;
+  const proDirectDisplaySteps = !isBeginner && method === 'direct' && isProDirectGlutenFree && yeastAwareDetailedDirectSteps
+    ? yeastAwareDetailedDirectSteps.map((phase, phaseIndex) => phaseIndex === 0
+      ? adaptProGlutenFreeMixingPhaseA(phase, mixingForExperience)
+      : phase)
+    : proDirectRoomDurationSteps;
   const beginnerDirectRecipeSteps = isBeginner && method === 'direct' && detailedDirectSteps
     ? detailedDirectSteps.map((phase, phaseIndex) => ({
       ...phase,
@@ -4210,7 +4216,7 @@ export default function CalculatorHome() {
                   />
                 ))
               ) : detailedDirectSteps ? (
-                (beginnerDirectHomeSteps ?? beginnerUnscheduledDirectSteps ?? beginnerDirectRecipeSteps ?? proDirectRoomDurationSteps ?? detailedDirectSteps).map((phase, index) => (
+                (beginnerDirectHomeSteps ?? beginnerUnscheduledDirectSteps ?? beginnerDirectRecipeSteps ?? proDirectDisplaySteps ?? detailedDirectSteps).map((phase, index) => (
                   <PhaseBlock
                     key={`detailed-direct-${pizzaStyle}-${mixing}-${index}`}
                     title={phase.title}
