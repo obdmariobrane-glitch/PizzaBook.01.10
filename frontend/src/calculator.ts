@@ -1,7 +1,8 @@
 // Pizza calculator logic
-export type Method = 'direct' | 'biga' | 'poolish';
+export type Method = 'direct' | 'biga' | 'poolish' | 'sponge';
 export type CommercialYeastType = 'fresh' | 'activeDry' | 'dry';
 export type YeastType = CommercialYeastType | 'sourdough';
+export type SpongeYeastMode = 'automatic' | 'manual';
 export const YEAST_MASS_FACTORS: Record<CommercialYeastType, number> = {
   fresh: 1,
   activeDry: 0.4,
@@ -37,6 +38,44 @@ export function calculateDirectFreshYeastPct(eActual: number): number {
     throw new RangeError('Direct yeast calculation requires positive fermentation exposure.');
   }
   return DIRECT_YEAST_REFERENCE.Y_REF * (DIRECT_YEAST_REFERENCE.E_REF / eActual);
+}
+
+export const SPONGE_YEAST_REFERENCE = {
+  flourShare: 70,
+  freshYeastPctOfTotalFlour: 2.2,
+  fermentationTempC: 27,
+  fermentationHours: 4.5,
+  provisionalQ10: 2,
+} as const;
+
+export function calculateSpongeAutomaticYeastGrams(
+  totalFlourGrams: number,
+  fermentationTempC: number,
+  fermentationHours: number,
+  yeastType: CommercialYeastType,
+): number {
+  if (
+    !Number.isFinite(totalFlourGrams)
+    || totalFlourGrams <= 0
+    || !Number.isFinite(fermentationTempC)
+    || fermentationTempC < 4
+    || fermentationTempC > 35
+    || !Number.isFinite(fermentationHours)
+    || fermentationHours <= 0
+    || fermentationHours > 48
+  ) {
+    throw new RangeError('Sponge automatic yeast inputs must be finite and positive where applicable.');
+  }
+
+  const freshYeastGrams = totalFlourGrams
+    * (SPONGE_YEAST_REFERENCE.freshYeastPctOfTotalFlour / 100)
+    * (SPONGE_YEAST_REFERENCE.fermentationHours / fermentationHours)
+    * Math.pow(SPONGE_YEAST_REFERENCE.provisionalQ10, (SPONGE_YEAST_REFERENCE.fermentationTempC - fermentationTempC) / 10);
+  const yeastGrams = freshYeastGrams * YEAST_MASS_FACTORS[yeastType];
+  if (!Number.isFinite(yeastGrams) || yeastGrams <= 0) {
+    throw new RangeError('Sponge automatic yeast calculation produced an unsupported result.');
+  }
+  return yeastGrams;
 }
 
 export type Mixing = 'hand' | 'home' | 'spiral';
@@ -2003,6 +2042,49 @@ export function getFermentationSchedule(opts: FermentationScheduleOptions): Ferm
   return { phases, prefermentHours, prefermentRoomHours, prefermentFridgeHours };
 }
 
+export function getSpongeFermentationSchedule(
+  spongeHours: number,
+  spongeTemp: number,
+  roomHours: number,
+  roomTemp: number,
+  fridgeHours: number,
+  fridgeTemp: number,
+  roomAfterFridgeHours = 0,
+): FermentationSchedule {
+  if (
+    !Number.isFinite(spongeHours)
+    || spongeHours < 0.5
+    || spongeHours > 48
+    || !Number.isFinite(spongeTemp)
+    || spongeTemp < 4
+    || spongeTemp > 35
+    || !Number.isFinite(roomHours)
+    || roomHours < 0
+    || !Number.isFinite(roomTemp)
+    || !Number.isFinite(fridgeHours)
+    || fridgeHours < 0
+    || !Number.isFinite(fridgeTemp)
+    || !Number.isFinite(roomAfterFridgeHours)
+    || roomAfterFridgeHours < 0
+  ) {
+    throw new RangeError('Sponge fermentation schedule values must be finite and within supported ranges.');
+  }
+  const phases: FermentationPhase[] = [
+    { kind: 'preferment', environment: 'room', hours: spongeHours, temperature: spongeTemp },
+  ];
+  if (roomHours > 0) phases.push({ kind: 'final', environment: 'room', hours: roomHours, temperature: roomTemp });
+  if (fridgeHours > 0) phases.push({ kind: 'final', environment: 'fridge', hours: fridgeHours, temperature: fridgeTemp });
+  if (roomAfterFridgeHours > 0) {
+    phases.push({ kind: 'final-rest', environment: 'room', hours: roomAfterFridgeHours, temperature: roomTemp });
+  }
+  return {
+    phases,
+    prefermentHours: spongeHours,
+    prefermentRoomHours: spongeHours,
+    prefermentFridgeHours: 0,
+  };
+}
+
 export function getDirectHomeFermentationSchedule(
   schedule: HomePizzaPlanSchedule,
   roomTemp: number,
@@ -2125,6 +2207,7 @@ interface DoughCalculationResult {
   bigaYeastExcessGrams?: number;
   bigaYeastBudgetExceeded?: boolean;
   finalDoughYeastGrams?: number;
+  spongeYeastPct?: number;
   eTotal: number;
 }
 
@@ -2197,6 +2280,13 @@ export function doughCalc(opts: {
   beginnerDirectStyle?: BeginnerDirectDoughStyle;
   beginnerDirectMixing?: BeginnerDirectMixing;
   useDirectYeastModelForBiga?: boolean;
+  spongeFlourPct?: number;
+  spongeHydrationPct?: number;
+  spongeYeastMode?: SpongeYeastMode;
+  spongeManualYeastGrams?: number;
+  spongeYeastType?: CommercialYeastType;
+  spongeFermentationTempC?: number;
+  spongeFermentationHours?: number;
   // When provided, the method's Home schedule replaces legacy timing inputs for yeast calculation.
   bigaHomeSchedule?: BigaHomePizzaSchedule;
   poolishHomeSchedule?: PoolishHomePizzaSchedule;
@@ -2207,7 +2297,16 @@ export function doughCalc(opts: {
     ? getBigaHomeFermentationSchedule(opts.bigaHomeSchedule, opts.roomTemp, opts.fridgeTemp)
     : opts.method === 'poolish' && opts.poolishHomeSchedule
       ? getPoolishHomeFermentationSchedule(opts.poolishHomeSchedule, opts.roomTemp, opts.fridgeTemp)
-      : getFermentationSchedule(opts));
+      : opts.method === 'sponge'
+        ? getSpongeFermentationSchedule(
+          opts.spongeFermentationHours ?? SPONGE_YEAST_REFERENCE.fermentationHours,
+          opts.spongeFermentationTempC ?? SPONGE_YEAST_REFERENCE.fermentationTempC,
+          opts.roomHours,
+          opts.roomTemp,
+          opts.fridgeHours,
+          opts.fridgeTemp,
+        )
+        : getFermentationSchedule(opts));
   const scheduleExposure = fermentation.phases.reduce((total, phase) => {
     const rate = phase.environment === 'room'
       ? 1 + 0.08 * (phase.temperature - 20)
@@ -2229,8 +2328,29 @@ export function doughCalc(opts: {
   // === Baker's percentages ===
   const totalDough = opts.pizzas * opts.ballWeight;
   const psylliumPct = opts.flourType === 'glutenFree' ? 2 : 0;
-  const totalPercent = 100 + opts.hydration + opts.saltPct + effectiveYeastPct + opts.oilPct + psylliumPct;
-  const flour = (totalDough / totalPercent) * 100;
+  const spongeYeastMode = opts.spongeYeastMode ?? 'automatic';
+  const spongeYeastType = opts.spongeYeastType ?? 'fresh';
+  const spongeFermentationTempC = opts.spongeFermentationTempC ?? SPONGE_YEAST_REFERENCE.fermentationTempC;
+  const spongeFermentationHours = opts.spongeFermentationHours ?? SPONGE_YEAST_REFERENCE.fermentationHours;
+  const spongeFreshYeastRatio = opts.method === 'sponge' && spongeYeastMode === 'automatic'
+    ? (SPONGE_YEAST_REFERENCE.freshYeastPctOfTotalFlour / 100)
+      * (SPONGE_YEAST_REFERENCE.fermentationHours / spongeFermentationHours)
+      * Math.pow(SPONGE_YEAST_REFERENCE.provisionalQ10, (SPONGE_YEAST_REFERENCE.fermentationTempC - spongeFermentationTempC) / 10)
+      * YEAST_MASS_FACTORS[spongeYeastType]
+    : 0;
+  const spongeManualYeastGrams = opts.spongeManualYeastGrams ?? 0;
+  if (opts.method === 'sponge' && spongeYeastMode === 'manual'
+    && (!Number.isFinite(spongeManualYeastGrams) || spongeManualYeastGrams <= 0)) {
+    throw new RangeError('Manual Sponge yeast must be a finite positive quantity.');
+  }
+  const standardTotalPercent = 100 + opts.hydration + opts.saltPct + effectiveYeastPct + opts.oilPct + psylliumPct;
+  const totalPercent = standardTotalPercent + spongeFreshYeastRatio * 100;
+  const flour = opts.method === 'sponge' && spongeYeastMode === 'manual'
+    ? ((totalDough - spongeManualYeastGrams) / standardTotalPercent) * 100
+    : (totalDough / totalPercent) * 100;
+  if (opts.method === 'sponge' && spongeYeastMode === 'manual' && spongeManualYeastGrams > flour * 0.1) {
+    throw new RangeError('Manual Sponge yeast must be no more than 10% of Sponge flour.');
+  }
   const water = flour * (opts.hydration / 100);
   const salt = flour * (opts.saltPct / 100);
   const yeast = flour * (yeastPct / 100);
@@ -2347,6 +2467,51 @@ export function doughCalc(opts: {
       totalDough: R0(totalDough),
       waterTemp: R0(waterTemp),
       yeastPct: R2(effectiveYeastPct),
+      eTotal: R1(eTotal),
+    };
+  }
+
+  if (opts.method === 'sponge') {
+    const spongeFlourPct = opts.spongeFlourPct ?? SPONGE_YEAST_REFERENCE.flourShare;
+    const spongeHydrationPct = opts.spongeHydrationPct ?? 62;
+    if (!Number.isFinite(spongeFlourPct) || spongeFlourPct <= 0 || spongeFlourPct > 100) {
+      throw new RangeError('Sponge flour share must be greater than 0% and no more than 100%.');
+    }
+    if (!Number.isFinite(spongeHydrationPct) || spongeHydrationPct <= 0 || spongeHydrationPct > 200) {
+      throw new RangeError('Sponge hydration must be greater than 0% and no more than 200%.');
+    }
+    const spongeFlour = flour * (spongeFlourPct / 100);
+    const spongeWater = spongeFlour * (spongeHydrationPct / 100);
+    if (spongeYeastMode === 'manual'
+      && (!Number.isFinite(spongeManualYeastGrams)
+        || spongeManualYeastGrams <= 0
+        || spongeManualYeastGrams > spongeFlour * 0.1)) {
+      throw new RangeError('Manual Sponge yeast must be positive and no more than 10% of Sponge flour.');
+    }
+    if (spongeWater > water + 1e-8) {
+      throw new RangeError('Sponge water cannot exceed the total recipe water.');
+    }
+    const spongeYeast = spongeYeastMode === 'automatic'
+      ? calculateSpongeAutomaticYeastGrams(flour, spongeFermentationTempC, spongeFermentationHours, spongeYeastType)
+      : spongeManualYeastGrams;
+    const roundedTotalFlour = R0(flour);
+    const roundedSpongeFlour = R0(spongeFlour);
+    return {
+      method: 'sponge' as const,
+      preferment: { flour: roundedSpongeFlour, water: R0(spongeWater), yeast: R2(spongeYeast) },
+      main: {
+        flour: roundedTotalFlour - roundedSpongeFlour,
+        water: R0(water) - R0(spongeWater),
+        salt: R1(salt),
+        oil: R0(oil),
+        yeast: R2(yeast),
+        psyllium: R0(psyllium),
+      },
+      total: { ...buildBlock(), yeast: R2(spongeYeast + yeast) },
+      totalDough: R0(totalDough),
+      waterTemp: R0(waterTemp),
+      yeastPct: R2(effectiveYeastPct),
+      spongeYeastPct: roundedSpongeFlour === 0 ? 0 : R2(spongeYeast / spongeFlour * 100),
       eTotal: R1(eTotal),
     };
   }
