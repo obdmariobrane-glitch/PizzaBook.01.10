@@ -1,4 +1,6 @@
 // Pizza calculator logic
+import { calculateBigaPoolishIngredients, type BigaPoolishCalculationResult } from './proMethods/bigaPoolish';
+
 export type Method = 'direct' | 'biga' | 'poolish' | 'sponge';
 export type CommercialYeastType = 'fresh' | 'activeDry' | 'dry';
 export type YeastType = CommercialYeastType | 'sourdough';
@@ -344,6 +346,8 @@ export type SharedCalculatorPlanSettings = {
   pizzaStyle: PizzaStyle;
   romanFormat: 'tonda' | 'teglia';
   method: Method;
+  bigaEnabled?: boolean;
+  poolishEnabled?: boolean;
   mixing: Mixing;
   roomTemp: number;
   roomHours: number;
@@ -359,6 +363,13 @@ export type SharedCalculatorPlanSettings = {
   trayLength: number;
   proFermentationSchedule: FermentationSchedule | null;
   spongePreparation?: PlannerSpongePreparation | null;
+  combinedPrefermentPreparation?: PlannerCombinedPrefermentPreparation | null;
+};
+
+export type PlannerCombinedPrefermentPreparation = {
+  biga: { flour: number; water: number; yeast: number };
+  poolish: { flour: number; water: number; yeast: number };
+  final: { flour: number; water: number; salt: number; oil: number; yeast: number };
 };
 
 let sharedCalculatorPlanSettings: SharedCalculatorPlanSettings | null = null;
@@ -2195,9 +2206,22 @@ export function dimensionsCalc(diameter: number, pizzas: number) {
   };
 }
 
+export function getProTegliaToppingAmounts(widthCm: number, lengthCm: number) {
+  const trayAreaFactor = (widthCm * lengthCm) / (30 * 40);
+  return {
+    sauce: Math.round(85 * trayAreaFactor),
+    cheese: Math.round(90 * trayAreaFactor),
+  };
+}
+
 interface DoughCalculationResult {
   method: Method;
   preferment: { flour: number; water: number; yeast: number } | null;
+  preferments?: {
+    biga: { flour: number; water: number; yeast: number };
+    poolish: { flour: number; water: number; yeast: number };
+  };
+  bigaPoolishModel?: BigaPoolishCalculationResult;
   main: { flour: number; water: number; salt: number; oil: number; yeast: number; psyllium: number };
   total: { flour: number; water: number; salt: number; oil: number; yeast: number; psyllium: number };
   totalDough: number;
@@ -2270,8 +2294,12 @@ export function calculateBigaYeastAllocation(
 export function doughCalc(opts: {
   pizzas: number; ballWeight: number; hydration: number; saltPct: number; oilPct: number;
   method: Method;
+  bigaEnabled?: boolean;
+  poolishEnabled?: boolean;
   bigaPct?: number;
   poolishPct?: number;
+  bigaHydrationPct?: number;
+  poolishHydrationPct?: number;
   roomHours: number; roomTemp: number;
   fridgeHours: number; fridgeTemp: number;
   prefermentHours?: number;
@@ -2396,6 +2424,51 @@ export function doughCalc(opts: {
     salt: R1(salt), oil: R0(oil), yeast: R2(yeast),
     psyllium: R0(psyllium),
   });
+
+  if ((opts.bigaEnabled ?? opts.method === 'biga') && (opts.poolishEnabled ?? opts.method === 'poolish')) {
+    const model = calculateBigaPoolishIngredients({
+      totalFlourGrams: flour,
+      totalHydrationPct: opts.hydration,
+      totalSaltPct: opts.saltPct,
+      allocationMode: 'manual',
+      bigaFlourPct: opts.bigaPct ?? 50,
+      poolishFlourPct: opts.poolishPct ?? 35,
+      bigaHydrationPct: opts.bigaHydrationPct ?? 45,
+      poolishHydrationPct: opts.poolishHydrationPct ?? 100,
+      requirePositiveFinalFlour: false,
+    });
+    const totalFlour = R0(model.total.flourGrams);
+    const totalWater = R0(model.total.waterGrams);
+    const bigaFlour = R0(model.biga.flourGrams);
+    const bigaWater = R0(model.biga.waterGrams);
+    const poolishFlour = R0(model.poolish.flourGrams);
+    const poolishWater = R0(model.poolish.waterGrams);
+    const prefermentFlour = bigaFlour + poolishFlour;
+    const totalYeast = R2(yeast);
+    const bigaYeast = prefermentFlour > 0 ? R2(totalYeast * bigaFlour / prefermentFlour) : 0;
+    const poolishYeast = prefermentFlour > 0 ? R2(totalYeast * poolishFlour / prefermentFlour) : 0;
+    const mainYeast = R2(totalYeast - bigaYeast - poolishYeast);
+    return {
+      method: opts.method,
+      preferment: null,
+      preferments: {
+        biga: { flour: bigaFlour, water: bigaWater, yeast: bigaYeast },
+        poolish: { flour: poolishFlour, water: poolishWater, yeast: poolishYeast },
+      },
+      bigaPoolishModel: model,
+      main: {
+        flour: totalFlour - bigaFlour - poolishFlour,
+        water: totalWater - bigaWater - poolishWater,
+        salt: R1(salt), oil: R0(oil), yeast: mainYeast,
+        psyllium: R0(psyllium),
+      },
+      total: { ...buildBlock(), yeast: R2(bigaYeast + poolishYeast + mainYeast) },
+      totalDough: R0(totalDough),
+      waterTemp: R0(waterTemp),
+      yeastPct: R2(effectiveYeastPct),
+      eTotal: R1(eTotal),
+    };
+  }
 
   if (opts.method === 'biga') {
     // Split the calculated total yeast dose in proportion to the displayed flour quantities.
@@ -2724,6 +2797,8 @@ export function reversePlan(
   selectedFermentationSchedule?: FermentationSchedule,
   tegliaSettings?: PlannerTegliaSettings | null,
   spongePreparation?: PlannerSpongePreparation | null,
+  combinedPrefermentHours?: { biga: number; poolish: number } | null,
+  combinedPrefermentPreparation?: PlannerCombinedPrefermentPreparation | null,
 ) {
   const steps: { at: Date; title: string; desc: string; phaseId?: string }[] = [];
   const push = (offsetMin: number, title: string, desc: string, phaseId?: string) => {
@@ -3112,6 +3187,42 @@ export function reversePlan(
         push(finalRoomOffset, copy.finalBulkTitle, fillPlannerCopy(tegliaCopy?.bulkAsMass ?? copy.finalBulkDesc, {
           HOURS: formatHoursLabel(finalRoomHours),
         }), 'sponge.finalBulk');
+      }
+    } else if (combinedPrefermentHours) {
+      const bigaHours = Math.max(0, combinedPrefermentHours.biga);
+      const poolishHours = Math.max(0, combinedPrefermentHours.poolish);
+      const bigaRoomHours = Math.min(8, bigaHours);
+      const poolishRoomHours = Math.min(1, poolishHours);
+      const combinedName = `${copy.bigaName} + ${copy.poolishName}`;
+      const amount = (grams: number) => `${Math.round(grams * 100) / 100} g`;
+      const combinedFinalDesc = {
+        hr: 'U završni zamjes dodaj Bigu i Poolish zajedno te preostale sastojke iz Kalkulatora.',
+        en: 'Combine both preferments in the final mix, then add the remaining ingredients from Calculator.',
+        de: 'Geben Sie beide Vorteige zusammen in den Hauptteig und fügen Sie die restlichen Zutaten aus dem Calculator hinzu.',
+        sl: 'V končnem mešanju združite oba predtesta in dodajte preostale sestavine iz Kalkulatorja.',
+      }[bakingLanguage];
+      const amounts = combinedPrefermentPreparation
+        ? `\n\nBiga: ${amount(combinedPrefermentPreparation.biga.flour)} flour, ${amount(combinedPrefermentPreparation.biga.water)} water, ${amount(combinedPrefermentPreparation.biga.yeast)} yeast. Poolish: ${amount(combinedPrefermentPreparation.poolish.flour)} flour, ${amount(combinedPrefermentPreparation.poolish.water)} water, ${amount(combinedPrefermentPreparation.poolish.yeast)} yeast. Final mix: ${amount(combinedPrefermentPreparation.final.flour)} flour, ${amount(combinedPrefermentPreparation.final.water)} water, ${amount(combinedPrefermentPreparation.final.salt)} salt, ${amount(combinedPrefermentPreparation.final.oil)} oil, ${amount(combinedPrefermentPreparation.final.yeast)} yeast.`
+        : '';
+      if (bigaHours > 0) {
+        push(finalRoomOffset + bigaHours * 60, copy.bigaTitle, fillPlannerCopy(copy.bigaDesc, {
+          HOURS: formatHoursLabel(bigaHours),
+          ROOM_HOURS: formatHoursLabel(bigaRoomHours),
+          FRIDGE_HOURS: formatHoursLabel(Math.max(0, bigaHours - bigaRoomHours)),
+        }), 'biga.preferment');
+      }
+      if (poolishHours > 0) {
+        push(finalRoomOffset + poolishHours * 60, copy.poolishTitle, fillPlannerCopy(copy.poolishDesc, {
+          HOURS: formatHoursLabel(poolishHours),
+          ROOM_HOURS: formatHoursLabel(poolishRoomHours),
+          FRIDGE_HOURS: formatHoursLabel(Math.max(0, poolishHours - poolishRoomHours)),
+        }), 'poolish.preferment');
+      }
+      push(finalRoomOffset, fillPlannerCopy(copy.finalMixTitle, { PREFERMENT: combinedName }), `${combinedFinalDesc}${amounts}`, 'combined.finalMix');
+      if (finalRoomHours > 0) {
+        push(finalRoomOffset, copy.finalBulkTitle, fillPlannerCopy(tegliaCopy?.bulkAsMass ?? copy.finalBulkDesc, {
+          HOURS: formatHoursLabel(finalRoomHours),
+        }), 'combined.finalBulk');
       }
     } else {
       if (prefermentHours > 0) {

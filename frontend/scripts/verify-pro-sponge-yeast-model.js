@@ -10,8 +10,21 @@ const sourcePath = path.join(__dirname, '..', 'src', 'calculator.ts');
 const compiled = ts.transpileModule(fs.readFileSync(sourcePath, 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
+const bigaPoolishSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'proMethods', 'bigaPoolish.ts'), 'utf8');
+const bigaPoolishCompiled = ts.transpileModule(bigaPoolishSource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText;
+const bigaPoolishModule = { exports: {} };
+vm.runInNewContext(bigaPoolishCompiled, { module: bigaPoolishModule, exports: bigaPoolishModule.exports });
 const moduleRef = { exports: {} };
-vm.runInNewContext(compiled, { module: moduleRef, exports: moduleRef.exports });
+vm.runInNewContext(compiled, {
+  module: moduleRef,
+  exports: moduleRef.exports,
+  require: (specifier) => {
+    assert.equal(specifier, './proMethods/bigaPoolish');
+    return bigaPoolishModule.exports;
+  },
+});
 const calculator = moduleRef.exports;
 
 assert.equal(calculator.SPONGE_YEAST_REFERENCE.freshYeastPctOfTotalFlour, 2.2);

@@ -118,6 +118,17 @@ function clampShare(value: number): number {
   return Math.min(MAX_SHARE_PCT, Math.max(MIN_SHARE_PCT, value));
 }
 
+export function normalizeComplementaryPrefermentShares(
+  requestedPct: number,
+  changedSide: PrefermentSide,
+): { bigaPct: number; poolishPct: number } {
+  const requested = Number.isFinite(requestedPct) ? requestedPct : 50;
+  const selectedPct = clampShare(Math.round(requested / SHARE_STEP_PCT) * SHARE_STEP_PCT);
+  return changedSide === 'biga'
+    ? { bigaPct: selectedPct, poolishPct: 100 - selectedPct }
+    : { bigaPct: 100 - selectedPct, poolishPct: selectedPct };
+}
+
 function roundDownToStep(value: number): number {
   return Math.floor(value / SHARE_STEP_PCT) * SHARE_STEP_PCT;
 }

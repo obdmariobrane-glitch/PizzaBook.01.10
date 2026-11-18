@@ -402,12 +402,33 @@ export default function Planner() {
     plannerStepCopy.poolishTitle,
     plannerStepCopy.finalMixTitle.replace('{PREFERMENT}', plannerStepCopy.bigaName),
     plannerStepCopy.finalMixTitle.replace('{PREFERMENT}', plannerStepCopy.poolishName),
+    plannerStepCopy.finalMixTitle.replace('{PREFERMENT}', `${plannerStepCopy.bigaName} + ${plannerStepCopy.poolishName}`),
     'Sponge',
     plannerStepCopy.finalMixTitle.replace('{PREFERMENT}', 'Sponge'),
   ];
   const generatedSteps = assignPlannerPhaseKeys((() => {
     const planSteps = bakeAt && hasCurrentBeginnerDirectSchedule && (roomTempLoaded || !!sharedCalculatorPlanSettings)
-      ? reversePlan(bakeAt, method, effectiveStyle, plannerStepCopy, plannerDirectHomeSchedule, plannerBigaHomeSchedule, plannerPoolishHomeSchedule, lang, formatTemperature(plannerDirectHomeSchedule?.ovenTemp ?? 250, temperatureUnit), activeCalculatorPlanSettings.roomTemp, isBeginner ? undefined : plannerFermentationSchedule, activePlannerTegliaSettings, sharedCalculatorPlanSettings?.method === 'sponge' ? sharedCalculatorPlanSettings.spongePreparation : null).map((step) => ({
+      ? reversePlan(
+        bakeAt,
+        method,
+        effectiveStyle,
+        plannerStepCopy,
+        plannerDirectHomeSchedule,
+        plannerBigaHomeSchedule,
+        plannerPoolishHomeSchedule,
+        lang,
+        formatTemperature(plannerDirectHomeSchedule?.ovenTemp ?? 250, temperatureUnit),
+        activeCalculatorPlanSettings.roomTemp,
+        isBeginner ? undefined : plannerFermentationSchedule,
+        activePlannerTegliaSettings,
+        sharedCalculatorPlanSettings?.method === 'sponge' ? sharedCalculatorPlanSettings.spongePreparation : null,
+        !isBeginner && !plannerSelectionManuallyChanged && sharedCalculatorPlanSettings?.bigaEnabled && sharedCalculatorPlanSettings.poolishEnabled
+          ? { biga: activeCalculatorPlanSettings.bigaHours, poolish: activeCalculatorPlanSettings.poolishHours }
+          : null,
+        !isBeginner && !plannerSelectionManuallyChanged && sharedCalculatorPlanSettings?.bigaEnabled && sharedCalculatorPlanSettings.poolishEnabled
+          ? sharedCalculatorPlanSettings.combinedPrefermentPreparation
+          : null,
+      ).map((step) => ({
         ...step,
         desc: formatUnitText(
           plannerMixTitles.includes(step.title)

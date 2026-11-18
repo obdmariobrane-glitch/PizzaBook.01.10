@@ -606,6 +606,7 @@ export function getYeastAwarePrefermentSteps(
   yeastType: PreferredYeastType,
   teglia = false,
   hasOil = false,
+  hasFinalYeast = true,
 ): Path {
   const path = (method === 'biga' ? BIGA_STEPS : POOLISH_STEPS)[lang][mixing === 'spiral' ? 'mixer' : mixing];
   const p1 = { ...path.p1, steps: [...path.p1.steps] };
@@ -618,6 +619,7 @@ export function getYeastAwarePrefermentSteps(
       bigaFinalFresh: 'Preostali svježi kvasac otopite u manjem dijelu izmjerene hladne vode pa ga dodajte s većim dijelom te vode.',
       bigaFinalActiveDry: 'Preostali aktivni suhi kvas otopite u dijelu tople vode prema uputama na pakiranju; tu vodu uračunajte u izmjerenu vodu za završni zamjes.',
       bigaFinalDry: 'Preostali instant suhi kvasac ravnomjerno umiješajte u dio preostalog brašna pa dodajte uz veći dio hladne vode.',
+      bigaFinalNoExtraYeast: 'U završni zamjes nije potrebno dodavati dodatni kvasac; dodajte preostalo brašno i povežite ga s Bigom.',
       poolishFresh: 'Svježi kvasac otopite u izmjerenoj vodi za Poolish.',
       poolishActiveDry: 'Aktivni suhi kvas pripremite u dijelu tople izmjerene vode prema uputama na pakiranju; tu vodu uračunajte u vodu za Poolish.',
       poolishDry: 'Instant suhi kvasac ravnomjerno umiješajte u brašno za Poolish.',
@@ -633,6 +635,7 @@ export function getYeastAwarePrefermentSteps(
       bigaFinalFresh: 'Dissolve the remaining fresh yeast in a small part of the measured cold water, then add it with most of that water.',
       bigaFinalActiveDry: 'Dissolve the remaining active dry yeast in part of the warm water according to the package directions; count that water toward the measured final-mix water.',
       bigaFinalDry: 'Mix the remaining instant dry yeast evenly into part of the remaining flour, then add it with most of the cold water.',
+      bigaFinalNoExtraYeast: 'No additional yeast is needed in the final mix; add the remaining flour and combine it with the Biga.',
       poolishFresh: 'Dissolve the fresh yeast in the measured Poolish water.',
       poolishActiveDry: 'Prepare active dry yeast in part of the measured warm water according to the package directions; count that water toward the Poolish water.',
       poolishDry: 'Mix the instant dry yeast evenly into the Poolish flour.',
@@ -648,6 +651,7 @@ export function getYeastAwarePrefermentSteps(
       bigaFinalFresh: 'Die restliche Frischhefe in einem kleinen Teil des abgemessenen kalten Wassers auflösen und mit dem größten Teil dieses Wassers zugeben.',
       bigaFinalActiveDry: 'Die restliche Aktiv-Trockenhefe nach Packungsanleitung in einem Teil des warmen Wassers auflösen; dieses Wasser zur abgemessenen Wassermenge für den Hauptteig zählen.',
       bigaFinalDry: 'Die restliche Instant-Trockenhefe gleichmäßig unter einen Teil des restlichen Mehls mischen und mit dem größten Teil des kalten Wassers zugeben.',
+      bigaFinalNoExtraYeast: 'Für den Hauptteig ist keine zusätzliche Hefe erforderlich; geben Sie das restliche Mehl hinzu und verbinden Sie es mit der Biga.',
       poolishFresh: 'Die frische Hefe im abgemessenen Poolish-Wasser auflösen.',
       poolishActiveDry: 'Aktiv-Trockenhefe nach Packungsanleitung in einem Teil des abgemessenen warmen Wassers vorbereiten; dieses Wasser zum Poolish-Wasser zählen.',
       poolishDry: 'Die Instant-Trockenhefe gleichmäßig unter das Poolish-Mehl mischen.',
@@ -663,6 +667,7 @@ export function getYeastAwarePrefermentSteps(
       bigaFinalFresh: 'Preostali sveži kvas raztopite v manjšem delu odmerjene hladne vode in ga dodajte z večino te vode.',
       bigaFinalActiveDry: 'Preostali aktivni suhi kvas raztopite v delu tople vode po navodilih na embalaži; to vodo vštejte v odmerjeno vodo za končno gnetenje.',
       bigaFinalDry: 'Preostali instant suhi kvas enakomerno vmešajte v del preostale moke in dodajte z večino hladne vode.',
+      bigaFinalNoExtraYeast: 'V končno testo ni treba dodati dodatnega kvasa; dodajte preostalo moko in jo povežite z bigo.',
       poolishFresh: 'Sveži kvas raztopite v odmerjeni vodi za Poolish.',
       poolishActiveDry: 'Aktivni suhi kvas pripravite v delu odmerjene tople vode po navodilih na embalaži; to vodo vštejte v vodo za Poolish.',
       poolishDry: 'Instant suhi kvas enakomerno vmešajte v moko za Poolish.',
@@ -675,7 +680,9 @@ export function getYeastAwarePrefermentSteps(
 
   if (method === 'biga') {
     p1.steps[0] = yeastType === 'fresh' ? copy.bigaFresh : yeastType === 'activeDry' ? copy.bigaActiveDry : copy.bigaDry;
-    p2.steps[1] = yeastType === 'fresh' ? copy.bigaFinalFresh : yeastType === 'activeDry' ? copy.bigaFinalActiveDry : copy.bigaFinalDry;
+    p2.steps[1] = hasFinalYeast
+      ? yeastType === 'fresh' ? copy.bigaFinalFresh : yeastType === 'activeDry' ? copy.bigaFinalActiveDry : copy.bigaFinalDry
+      : copy.bigaFinalNoExtraYeast;
   } else {
     p1.steps[0] = yeastType === 'fresh' ? copy.poolishFresh : yeastType === 'activeDry' ? copy.poolishActiveDry : copy.poolishDry;
     p1.steps[1] = yeastType === 'fresh' ? path.p1.steps[1] : copy.poolishWater;

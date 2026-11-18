@@ -10,8 +10,21 @@ const sourcePath = path.join(__dirname, '..', 'src', 'calculator.ts');
 const compiled = ts.transpileModule(fs.readFileSync(sourcePath, 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
+const bigaPoolishSource = fs.readFileSync(path.join(__dirname, '..', 'src', 'proMethods', 'bigaPoolish.ts'), 'utf8');
+const bigaPoolishCompiled = ts.transpileModule(bigaPoolishSource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText;
+const bigaPoolishModule = { exports: {} };
+vm.runInNewContext(bigaPoolishCompiled, { module: bigaPoolishModule, exports: bigaPoolishModule.exports });
 const moduleRef = { exports: {} };
-vm.runInNewContext(compiled, { module: moduleRef, exports: moduleRef.exports });
+vm.runInNewContext(compiled, {
+  module: moduleRef,
+  exports: moduleRef.exports,
+  require: (specifier) => {
+    assert.equal(specifier, './proMethods/bigaPoolish');
+    return bigaPoolishModule.exports;
+  },
+});
 const calculator = moduleRef.exports;
 
 const referencePhases = [
@@ -77,7 +90,56 @@ assert.ok(beginnerBiga.total.yeast < result.total.yeast);
 
 const indexSource = fs.readFileSync(path.join(__dirname, '..', 'app', '(tabs)', 'index.tsx'), 'utf8');
 assert.match(indexSource, /useDirectYeastModelForBiga: !isBeginner && method === 'biga'/);
+assert.match(indexSource, /getYeastAwarePrefermentSteps\(lang, 'biga',[^\n]*dough\.main\.yeast > 0\)/);
 assert.match(indexSource, /weight\(dough\.preferment\.yeast, true\)/);
 assert.match(indexSource, /weight\(dough\.main\.yeast, true\)/);
+const indexFile = ts.createSourceFile('index.tsx', indexSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+let weightInitializer;
+function findWeight(node) {
+  if (ts.isVariableDeclaration(node) && node.name.getText(indexFile) === 'weight') weightInitializer = node.initializer.getText(indexFile);
+  ts.forEachChild(node, findWeight);
+}
+findWeight(indexFile);
+const compiledWeight = ts.transpileModule(`globalThis.weight = (${weightInitializer});`, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText;
+const weightContext = {
+  formatWeight: (grams) => `${Math.round(grams * 100) / 100} g`,
+  measurementSystem: 'metric',
+  lang: 'en',
+  isBeginner: false,
+  Math,
+  Intl,
+};
+vm.runInNewContext(compiledWeight, weightContext);
+assert.equal(weightContext.weight(0.004, true), '<0.01 g');
+assert.equal(weightContext.weight(0.014, true), '0.01 g');
+
+const prefermentSourcePath = path.join(__dirname, '..', 'src', 'i18n', 'prefermentSteps.ts');
+const prefermentCompiled = ts.transpileModule(fs.readFileSync(prefermentSourcePath, 'utf8'), {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText;
+const prefermentModule = { exports: {} };
+vm.runInNewContext(prefermentCompiled, {
+  module: prefermentModule,
+  exports: prefermentModule.exports,
+  require: (specifier) => {
+    assert.equal(specifier, './spiralMixing');
+    return { getSpiralMixingSteps: () => [], getSpiralMixingTitle: () => '' };
+  },
+});
+const noExtraYeastCopy = {
+  hr: /nije potrebno dodavati dodatni kvasac/i,
+  en: /no additional yeast is needed/i,
+  de: /keine zusätzliche hefe erforderlich/i,
+  sl: /ni treba dodati dodatnega kvasa/i,
+};
+for (const lang of Object.keys(noExtraYeastCopy)) {
+  const withoutFinalYeast = prefermentModule.exports.getYeastAwarePrefermentSteps(lang, 'biga', 'hand', 'fresh', false, false, false).p2.steps.join(' ');
+  const withFinalYeast = prefermentModule.exports.getYeastAwarePrefermentSteps(lang, 'biga', 'hand', 'fresh', false, false, true).p2.steps.join(' ');
+  assert.match(withoutFinalYeast, noExtraYeastCopy[lang], `${lang}: zero final yeast is explicit`);
+  assert.doesNotMatch(withoutFinalYeast, /(?<![\d.,])0(?:[,.]0+)?\s*g/i, `${lang}: zero-gram yeast action is absent`);
+  assert.doesNotMatch(withFinalYeast, noExtraYeastCopy[lang], `${lang}: positive final yeast keeps the yeast action`);
+}
 
 console.log('PRO Biga yeast model golden values and recipe integration passed.');
