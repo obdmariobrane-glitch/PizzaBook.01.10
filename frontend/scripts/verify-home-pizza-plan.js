@@ -118,7 +118,7 @@ assert.match(bigaUiSource, /parsePreferredYeastType\(settings\.preferredYeastTyp
 assert.match(bigaUiSource, /preferredYeastType:\s*globalPreferredYeastType/);
 assert.match(bigaUiSource, /^\s+adaptDirectMixingSteps,/m);
 assert.match(prefermentStepsSource, /export function adaptDirectMixingSteps\(/);
-assert.match(bigaUiSource, /getYeastAwarePrefermentSteps\(lang, 'biga', mixingForExperience, activeYeastType, weight\(dough\.main\.yeast, true\), isRomanTeglia, dough\.main\.oil > 0, flour, isProEffectivelyGlutenFree, remainingFlourDescription, fridgeTemp, proSpiralRecipe\)/);
+assert.match(bigaUiSource, /getYeastAwarePrefermentSteps\(lang, 'biga', mixingForExperience, activeYeastType, weight\(dough\.main\.yeast, true\), isRomanTeglia, dough\.main\.oil > 0, flour, isProEffectivelyGlutenFree, remainingFlourDescription, fridgeTemp, proSpiralRecipe, dough\.main\.yeast > 0\)/);
 assert.match(bigaUiSource, /getYeastAwarePrefermentSteps\(lang, 'poolish', mixingForExperience, activeYeastType, weight\(dough\.main\.yeast, true\), isRomanTeglia, dough\.main\.oil > 0, flour, isProEffectivelyGlutenFree, undefined, fridgeTemp, proSpiralRecipe\)/);
 assert.match(plannerUiSource, /plannerStepCopy\.yeastHandling\[plannerYeastType\]/);
 assert.doesNotMatch(plannerUiSource, /testID=\{`planner-style-/);
