@@ -13,13 +13,25 @@ type PhaseB = {
 export function adaptProGlutenFreeMixingPhaseA<T extends PhaseB>(
   phase: T,
   mixing: 'hand' | 'mixer' | 'spiral',
+  lang: Lang,
 ): T {
   const postMixRestTimerIds = ['post-mix-rest', 'post-mix-rest15m'];
   const timers = phase.timers;
   if (!timers?.some((timer) => postMixRestTimerIds.includes(timer.id))) {
     throw new Error('PRO gluten-free mixing phase is missing its post-mix rest timer.');
   }
-  return phase;
+  const timerLabel = ({
+    hr: 'Hidratacija psylliuma',
+    en: 'Psyllium hydration',
+    de: 'Psyllium-Hydratation',
+    sl: 'Hidracija psylliuma',
+  } satisfies Record<Lang, string>)[lang];
+  return {
+    ...phase,
+    timers: timers.map((timer) => postMixRestTimerIds.includes(timer.id)
+      ? { ...timer, label: timerLabel }
+      : timer),
+  };
 }
 
 const copy = {

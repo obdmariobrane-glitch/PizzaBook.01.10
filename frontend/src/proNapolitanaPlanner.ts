@@ -96,16 +96,16 @@ export function resolveProNapolitanaFinalRestHours(input: {
   method: Method;
   style: PizzaStyle;
   combinedBigaPoolish: boolean;
+  fridgeHours: number;
   selectedHours: number;
   fallbackHours: number;
 }): number {
-  return !input.isBeginner
+  const useSelectedRest = !input.isBeginner
     && input.ovenType !== 'kamado'
-    && input.method === 'biga'
-    && input.style === 'ny_style'
-    && input.combinedBigaPoolish
-    ? input.selectedHours
-    : input.fallbackHours;
+    && input.fridgeHours > 0
+    && (input.style === 'neapolitan'
+      || (input.method === 'biga' && input.style === 'ny_style' && input.combinedBigaPoolish));
+  return useSelectedRest ? input.selectedHours : input.fallbackHours;
 }
 
 export type ProNapolitanaPlannerEvent = {
@@ -115,16 +115,15 @@ export type ProNapolitanaPlannerEvent = {
   phaseId?: string;
 };
 
-export function ensureProRomanaTondaBakeEvent(
+export function ensureProTargetBakeEvent(
   steps: readonly ProNapolitanaPlannerEvent[],
   isTargetPlan: boolean,
   bakeAt: Date,
   bakeEvent: { title: string; desc: string; phaseId: string },
 ): ProNapolitanaPlannerEvent[] {
-  if (!isTargetPlan || steps.some((step) => step.phaseId === bakeEvent.phaseId || step.title === bakeEvent.title)) {
-    return [...steps];
-  }
-  return [...steps, { ...bakeEvent, at: new Date(bakeAt) }]
+  if (!isTargetPlan) return [...steps];
+  const withoutBake = steps.filter((step) => step.phaseId !== bakeEvent.phaseId && step.title !== bakeEvent.title);
+  return [...withoutBake, { ...bakeEvent, at: new Date(bakeAt) }]
     .sort((left, right) => left.at.getTime() - right.at.getTime());
 }
 

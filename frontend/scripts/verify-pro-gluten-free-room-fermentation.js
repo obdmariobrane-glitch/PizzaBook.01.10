@@ -168,7 +168,7 @@ for (const lang of languages) {
 assert.match(indexSource, /const proInitialRoomFermentationSeconds = proFermentationSchedule\?\.phases[\s\S]*?phase\.kind === 'final' && phase\.environment === 'room'/);
 assert.match(indexSource, /!isBeginner[\s\S]*?method === 'direct'[\s\S]*?flour === 'glutenFree'[\s\S]*?adaptProGlutenFreeRoomPhaseB/);
 assert.match(indexSource, /setMethod\(saved\.flour === 'glutenFree' \? 'direct' : saved\.method\)/);
-assert.match(indexSource, /phaseIndex === 0\) return adaptProGlutenFreeMixingPhaseA\(phase, mixingForExperience\)/);
+assert.match(indexSource, /phaseIndex === 0\) return adaptProGlutenFreeMixingPhaseA\(phase, mixingForExperience, lang\)/);
 assert.match(indexSource, /adaptProGlutenFreeRoomPhaseB\(/);
 for (const flour of ['glutenFree', 'custom']) {
   const blend = flour === 'custom' ? ['glutenFree', 'glutenFree', 70] : ['caputo00', 'wholeWheat', 70];

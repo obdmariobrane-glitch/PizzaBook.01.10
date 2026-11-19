@@ -21,7 +21,7 @@ const {
   buildProNapolitanaFermentationSchedule,
   buildProNapolitanaInitialPlannerEvents,
   buildProTegliaSpongePlannerEvents,
-  ensureProRomanaTondaBakeEvent,
+  ensureProTargetBakeEvent,
   getProNapolitanaInitialIntervals,
   getProNapolitanaPlannerWindow,
   resolveProNapolitanaFinalRestHours,
@@ -76,15 +76,27 @@ for (const [method, methodKey, isCombined, hasPreferment] of methods) {
 
   let priorWindow = null;
   for (const roomHours of [2, 4]) {
+    const fallbackHours = getPlannerRoomAfterFridgeHours(methodKey, 'neapolitan', 'tonda', roomHours, fridgeHours, 22);
+    const selectedFinalRestHours = resolveProNapolitanaFinalRestHours({
+      isBeginner: false,
+      ovenType: 'ooni',
+      method: methodKey,
+      style: 'neapolitan',
+      combinedBigaPoolish: isCombined,
+      fridgeHours,
+      selectedHours: roomHours,
+      fallbackHours,
+    });
+    assert.equal(selectedFinalRestHours, roomHours, `${method} ${roomHours} h: Napolitana uses the selected final rest`);
     const sourceSchedule = {
       phases: [
         ...(hasPreferment ? [{ kind: 'preferment', environment: 'room', hours: 8, temperature: 22 }] : []),
-        { kind: 'final', environment: 'room', hours: roomHours, temperature: 22 },
+        { kind: 'final', environment: 'room', hours: selectedFinalRestHours, temperature: 22 },
         { kind: 'final', environment: 'fridge', hours: fridgeHours, temperature: 4 },
-        { kind: 'final-rest', environment: 'room', hours: roomHours, temperature: 22 },
+        { kind: 'final-rest', environment: 'room', hours: selectedFinalRestHours, temperature: 22 },
       ],
     };
-    const schedule = buildProNapolitanaFermentationSchedule(sourceSchedule, intervals, roomHours, fridgeHours, 22, 4);
+    const schedule = buildProNapolitanaFermentationSchedule(sourceSchedule, intervals, selectedFinalRestHours, fridgeHours, 22, 4);
     const initialRoomPhases = schedule.phases.filter((phase) => phase.kind === 'final' && phase.environment === 'room');
     const fridgePhases = schedule.phases.filter((phase) => phase.kind === 'final' && phase.environment === 'fridge');
     const finalRestPhases = schedule.phases.filter((phase) => phase.kind === 'final-rest' && phase.environment === 'room');
@@ -94,7 +106,7 @@ for (const [method, methodKey, isCombined, hasPreferment] of methods) {
     assert.equal(finalRestPhases.reduce((total, phase) => total + phase.hours, 0), roomHours, `${method} ${roomHours} h: final room rest matches selection`);
     assert.equal(schedule.phases.filter((phase) => phase.kind === 'preferment').length, hasPreferment ? 1 : 0, `${method}: preferment phases are preserved`);
 
-    const window = getProNapolitanaPlannerWindow(bakeAt, roomHours, fridgeHours, intervals);
+    const window = getProNapolitanaPlannerWindow(bakeAt, selectedFinalRestHours, fridgeHours, intervals);
     const mixDurationMinutes = method === 'Poolish' ? getPoolishFinalMixDurationMinutes('hand') : 0;
     const finalMixAt = new Date(window.finalMixAt.getTime() - mixDurationMinutes * 60000);
     const initialSequenceAt = new Date(finalMixAt.getTime() + mixDurationMinutes * 60000);
@@ -165,6 +177,7 @@ const selectedRestScenario = {
   method: 'biga',
   style: 'ny_style',
   combinedBigaPoolish: true,
+  fridgeHours: 24,
   selectedHours: 2,
   fallbackHours: getPlannerRoomAfterFridgeHours('biga', 'ny_style', 'tonda', 2, 24, 22),
 };
@@ -254,7 +267,7 @@ for (const selectedHours of [2, 4]) {
 }
 
 const plannerIntegrationSource = readFileSync(resolve(frontendRoot, 'app/(tabs)/planner.tsx'), 'utf8');
-assert.match(plannerIntegrationSource, /!isBeginner[\s\S]*?!isProKamadoPlan[\s\S]*?method === 'direct'[\s\S]*?effectiveStyle === 'neapolitan'[\s\S]*?addProNapolitanaDirectInitialPlannerSteps\(plannerScheduleSteps, lang\)/);
+assert.match(plannerIntegrationSource, /!isBeginner[\s\S]*?!isProKamadoPlan[\s\S]*?method === 'direct'[\s\S]*?effectiveStyle === 'neapolitan'[\s\S]*?addProNapolitanaDirectInitialPlannerSteps\(plannerScheduleSteps, lang, plannerUsesGlutenFreeFlour\)/);
 assert.match(plannerIntegrationSource, /resolveProNapolitanaFinalRestHours\(\{[\s\S]*?selectedHours: activeCalculatorPlanSettings\.roomHours[\s\S]*?fallbackHours: getPlannerRoomAfterFridgeHours/);
 assert.match(plannerIntegrationSource, /getProNapolitanaPlannerWindow\([\s\S]*?proFinalRoomHours/);
 assert.match(plannerIntegrationSource, /buildProNapolitanaFermentationSchedule\([\s\S]*?proFinalRoomHours/);
@@ -263,16 +276,48 @@ assert.match(plannerIntegrationSource, /shiftedSteps\[finalMixStepIndex\] \?\? f
 assert.match(plannerIntegrationSource, /const isProRomanaTondaCombinedColdPlan = isProNapolitanaColdPlan[\s\S]*?romanFormat === 'tonda'[\s\S]*?proNapolitanaCombined/);
 assert.match(plannerIntegrationSource, /\(isProNyCombinedColdPlan \|\| isProRomanaTondaCombinedColdPlan\)\s*&& event\.kind === 'balling'[\s\S]*?phaseId: 'pro\.initial\.ball-rest'/);
 assert.match(plannerIntegrationSource, /step\.phaseId === 'pro\.initial\.balling'[\s\S]*?step\.phaseId === 'pro\.initial\.ball-rest'/);
-assert.match(plannerIntegrationSource, /ensureProRomanaTondaBakeEvent\(\s*allSteps,\s*isProRomanaTondaCombinedColdPlan/);
+assert.match(plannerIntegrationSource, /ensureProTargetBakeEvent\(\s*allSteps,\s*isProRomanaTondaCombinedColdPlan \|\| isProNeapolitanCombinedColdPlan/);
 assert.match(plannerIntegrationSource, /title: plannerStepCopy\.bakeTitle \?\? plannerStepCopy\.ovenTitle,[\s\S]*?desc: plannerStepCopy\.bakeDesc \?\? plannerStepCopy\.ovenDesc/);
 
 const plannerLocalDateTime = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+const neapolitanBakeAt = new Date(2026, 10, 18, 19, 0, 0, 0);
+const neapolitanPreheat = {
+  phaseId: 'neapolitan.preheat',
+  at: new Date(neapolitanBakeAt.getTime() - 60 * 60000),
+  title: 'Upali pećnicu / kamen',
+  desc: '',
+};
+const neapolitanBakeEvent = {
+  phaseId: 'neapolitan.bake',
+  title: 'Ispeci pizzu',
+  desc: 'Lansiraj pizzu u pećnicu točno u planirano vrijeme pečenja.',
+};
+const neapolitanSteps = ensureProTargetBakeEvent(
+  [neapolitanPreheat],
+  true,
+  neapolitanBakeAt,
+  neapolitanBakeEvent,
+);
+const neapolitanBakeSteps = neapolitanSteps.filter((step) => step.phaseId === neapolitanBakeEvent.phaseId);
+assert.equal(neapolitanBakeSteps.length, 1, 'combined Napolitana emits exactly one final bake step');
+assert.equal(plannerLocalDateTime(neapolitanSteps.find((step) => step.phaseId === 'neapolitan.preheat').at), '2026-11-18 18:00');
+assert.equal(plannerLocalDateTime(neapolitanBakeSteps[0].at), '2026-11-18 19:00');
+assert.ok(neapolitanSteps.indexOf(neapolitanPreheat) < neapolitanSteps.indexOf(neapolitanBakeSteps[0]), 'preheating is listed before baking');
+assert.equal(ensureProTargetBakeEvent(neapolitanSteps, true, neapolitanBakeAt, neapolitanBakeEvent)
+  .filter((step) => step.phaseId === neapolitanBakeEvent.phaseId).length, 1, 'restoring an existing Napolitana bake event is idempotent');
+
 const directBakeAt = new Date(2026, 10, 18, 19, 0, 0, 0);
 const directLanguages = {
   hr: ['Završetak zamjesa', 'Početni odmor tijesta', 'Podjela i oblikovanje kuglica'],
   en: ['Mixing complete', 'Initial dough rest', 'Divide and shape dough balls'],
   de: ['Ende des Knetens', 'Erste Teigruhe', 'Teig teilen und Teiglinge formen'],
   sl: ['Konec mešanja testa', 'Začetni počitek testa', 'Delitev in oblikovanje kroglic'],
+};
+const glutenFreeRestTitles = {
+  hr: 'Hidratacija psylliuma',
+  en: 'Psyllium hydration',
+  de: 'Psyllium-Hydratation',
+  sl: 'Hidracija psylliuma',
 };
 for (const selectedHours of [2, 4]) {
   const fridgeAt = new Date(directBakeAt.getTime() - (24 + selectedHours) * 3600000);
@@ -285,6 +330,12 @@ for (const selectedHours of [2, 4]) {
     { phaseId: 'direct.bake', at: directBakeAt, title: 'Bake', desc: '' },
   ];
   const alignedSteps = addProNapolitanaDirectInitialPlannerSteps(baseSteps, 'hr');
+  const glutenFreeSteps = addProNapolitanaDirectInitialPlannerSteps(baseSteps, 'hr', true);
+  const glutenFreeRest = glutenFreeSteps.find((step) => step.phaseId === 'direct.initial.mix-rest');
+  assert.equal(glutenFreeRest.title, glutenFreeRestTitles.hr);
+  assert.equal(glutenFreeRest.desc, 'Pokrijte smjesu i ostavite je 5 minuta da psyllium upije vodu.');
+  assert.equal(fridgeAt.getTime() - glutenFreeRest.at.getTime(), 5 * 60000, 'GF Planner hydration uses the existing five-minute interval');
+  assert.equal(glutenFreeSteps.filter((step) => step.phaseId === 'direct.initial.mix-rest').length, 1);
   const keyedSteps = assignPlannerPhaseKeys(alignedSteps, 'pro', true);
   const preheatStep = keyedSteps.find((step) => step.phaseId === 'direct.preheat');
   const finalSteps = applyPlannerPhaseOverrides(keyedSteps, {
@@ -314,9 +365,13 @@ for (const selectedHours of [2, 4]) {
 
   for (const [lang, labels] of Object.entries(directLanguages)) {
     const localizedSteps = addProNapolitanaDirectInitialPlannerSteps(baseSteps, lang);
+    const localizedGlutenFreeSteps = addProNapolitanaDirectInitialPlannerSteps(baseSteps, lang, true);
     assert.ok(localizedSteps.some((step) => step.phaseId === 'direct.mix' && step.title === labels[0]), `${lang}: mixing completion is localized`);
     assert.ok(localizedSteps.some((step) => step.phaseId === 'direct.initial.mix-rest' && step.title === labels[1]), `${lang}: initial rest is localized`);
     assert.ok(localizedSteps.some((step) => step.phaseId === 'direct.initial.balling' && step.title === labels[2]), `${lang}: shaping is localized`);
+    const localizedGlutenFreeRest = localizedGlutenFreeSteps.find((step) => step.phaseId === 'direct.initial.mix-rest');
+    assert.equal(localizedGlutenFreeRest.title, glutenFreeRestTitles[lang], `${lang}: GF Planner rest label is localized`);
+    assert.match(localizedGlutenFreeRest.desc, /5/);
   }
   assert.match(mixStep.desc, /ne procjenjuje njegovo trajanje/);
   console.log(`Direct ${selectedHours} h: mix complete ${plannerLocalDateTime(mixStep.at)}, fridge ${plannerLocalDateTime(fridgeStep.at)}, removal ${plannerLocalDateTime(removalStep.at)}`);
@@ -376,7 +431,7 @@ for (const selectedHours of [2, 4]) {
     ...initialSteps,
     { phaseId: 'romana.preheat', at: new Date(romanaBakeAt.getTime() - 60 * 60000), title: 'Upali pećnicu / kamen', desc: '' },
   ];
-  const completedSteps = ensureProRomanaTondaBakeEvent(
+  const completedSteps = ensureProTargetBakeEvent(
     alignedAndFilteredSteps,
     true,
     romanaBakeAt,
@@ -407,12 +462,12 @@ for (const selectedHours of [2, 4]) {
   assert.equal(plannerLocalDateTime(bakeSteps[0].at), '2026-11-18 19:00');
   const preheatStep = stepById.get('romana.preheat');
   assert.equal(plannerSteps.indexOf(preheatStep) < plannerSteps.indexOf(bakeSteps[0]), true, 'preheating is listed before baking');
-  assert.equal(ensureProRomanaTondaBakeEvent(completedSteps, true, romanaBakeAt, {
+  assert.equal(ensureProTargetBakeEvent(completedSteps, true, romanaBakeAt, {
     phaseId: 'romanaTonda.bake',
     title: 'Ispeci pizzu',
     desc: 'Lansiraj pizzu u pećnicu točno u planirano vrijeme pečenja.',
   }).filter((step) => step.phaseId === 'romanaTonda.bake').length, 1, 'restoring an existing bake event is idempotent');
-  assert.equal(ensureProRomanaTondaBakeEvent(alignedAndFilteredSteps, false, romanaBakeAt, {
+  assert.equal(ensureProTargetBakeEvent(alignedAndFilteredSteps, false, romanaBakeAt, {
     phaseId: 'romanaTonda.bake',
     title: 'Ispeci pizzu',
     desc: 'Lansiraj pizzu u pećnicu točno u planirano vrijeme pečenja.',

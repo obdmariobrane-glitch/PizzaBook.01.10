@@ -12,7 +12,7 @@ require.extensions['.ts'] = (module, filename) => {
   }).outputText;
   module._compile(output, filename);
 };
-const { adaptProGlutenFreeMixingPhaseA } = require('../src/i18n/proGlutenFreeBulk.ts');
+const { adaptProGlutenFreeMixingPhaseA, adaptProGlutenFreeRoomPhaseB } = require('../src/i18n/proGlutenFreeBulk.ts');
 const {
   adaptProDirectBulkPhase,
   getProNapolitanaBulkRestSeconds,
@@ -70,12 +70,13 @@ function makePreferment(method) {
       : undefined;
 }
 
-function generateHrPhase({ style, mixing, flour, method = 'direct', beginner = false, fridgeHours = 0, yeast = 'fresh' }) {
+function generateHrPhase({ style, mixing, flour, method = 'direct', beginner = false, fridgeHours = 0, yeast = 'fresh', yeastGrams = ingredients.yeast }) {
   const variant = styleVariants.find(([name]) => name === style);
   const [ , romanTonda, romanTeglia, newYork, napolitana] = variant;
+  const testIngredients = { ...ingredients, yeast: yeastGrams };
   const phase = generateHr(
     mixing,
-    ingredients,
+    testIngredients,
     1742,
     2,
     300,
@@ -107,11 +108,12 @@ function generateHrPhase({ style, mixing, flour, method = 'direct', beginner = f
   return phase;
 }
 
-function generateLocalizedPhase({ lang, style, mixing, flour, beginner = false }) {
+function generateLocalizedPhase({ lang, style, mixing, flour, beginner = false, yeastGrams = ingredients.yeast }) {
   const variant = styleVariants.find(([name]) => name === style)[0];
+  const testIngredients = { ...ingredients, yeast: yeastGrams };
   return generateLocalized(
     lang,
-    ingredients,
+    testIngredients,
     1742,
     2,
     300,
@@ -157,10 +159,17 @@ function assertRestMatchesTimer(phase, expectedMinutes, context) {
   return restStep;
 }
 
-function assertMixingRestAdaptation(phase, mixing, context) {
-  const adapted = adaptProGlutenFreeMixingPhaseA(phase, mixing);
+function assertMixingRestAdaptation(phase, mixing, context, lang = 'hr') {
+  const adapted = adaptProGlutenFreeMixingPhaseA(phase, mixing, lang);
+  const timerLabels = {
+    hr: 'Hidratacija psylliuma',
+    en: 'Psyllium hydration',
+    de: 'Psyllium-Hydratation',
+    sl: 'Hidracija psylliuma',
+  };
   assert.ok(adapted.steps.at(-1).match(/\b5\s*(?:minutes?|minuta|minut|Minuten)\b/i), `${context}: separate Psyllium rest instruction remains for ${mixing} mixing`);
   assert.equal(adapted.timers.find((timer) => timer.kind === 'rest')?.seconds, 5 * 60, `${context}: separate Psyllium rest timer remains for ${mixing} mixing`);
+  assert.equal(adapted.timers.find((timer) => timer.kind === 'rest')?.label, timerLabels[lang], `${context}: timer label is localized`);
 }
 
 for (const [style] of styleVariants) {
@@ -222,7 +231,7 @@ for (const lang of ['en', 'de', 'sl']) {
     for (const mixing of ['hand', 'mixer']) {
       const phase = generateLocalizedPhase({ lang, style, mixing, flour: 'glutenFree' });
       assertRestMatchesTimer(phase, 5, `${lang}/direct/${style}/glutenFree/${mixing} before PRO phase adaptation`);
-      assertMixingRestAdaptation(phase, mixing, `${lang}/direct/${style}/glutenFree/${mixing}`);
+      assertMixingRestAdaptation(phase, mixing, `${lang}/direct/${style}/glutenFree/${mixing}`, lang);
     }
   }
   for (const [style] of styleVariants) {
@@ -237,6 +246,46 @@ for (const lang of ['en', 'de', 'sl']) {
     }
   }
 }
+
+const noInitialRoomPhase = adaptProGlutenFreeRoomPhaseB({
+  title: 'Phase B',
+  steps: ['Mix complete', 'Continue'],
+  timers: [],
+}, 'en', 'neapolitan', 0, '22 °C', true);
+assert.equal(noInitialRoomPhase.timers.length, 0, 'zero initial room time adds no extra gluten-free rest timer');
+assert.ok(noInitialRoomPhase.steps.some((step) => step.includes('No initial room period is selected')));
+
+const rawYeastGrams = 0.126789;
+const yeastIngredients = { ...ingredients, yeast: rawYeastGrams };
+const hrYeastPhase = generateHrPhase({
+  style: 'napolitana',
+  mixing: 'hand',
+  flour: 'caputo00',
+  yeastGrams: yeastIngredients.yeast,
+});
+const hrYeastText = hrYeastPhase.steps.join('\n');
+assert.ok(hrYeastText.includes('0,13 g'), 'PRO Croatian yeast instructions use the locale decimal separator and two decimals');
+assert.equal(yeastIngredients.yeast, rawYeastGrams, 'formatting does not mutate the calculated yeast amount');
+for (const lang of ['en', 'de', 'sl']) {
+  const yeastText = generateLocalizedPhase({
+    lang,
+    style: 'napolitana',
+    mixing: 'hand',
+    flour: 'caputo00',
+    yeastGrams: yeastIngredients.yeast,
+  }).steps.join('\n');
+  const formattedYeast = new Intl.NumberFormat(lang, { maximumFractionDigits: 2 }).format(rawYeastGrams);
+  assert.ok(yeastText.includes(`${formattedYeast} g`), `PRO ${lang} yeast instructions use locale formatting`);
+  assert.ok(!yeastText.includes(String(rawYeastGrams)), `PRO ${lang} yeast instructions omit raw precision`);
+}
+const beginnerYeastText = generateHrPhase({
+  style: 'napolitana',
+  mixing: 'hand',
+  flour: 'caputo00',
+  beginner: true,
+  yeastGrams: rawYeastGrams,
+}).steps.join('\n');
+assert.ok(beginnerYeastText.includes(`${rawYeastGrams} g`), 'Beginner yeast display remains unchanged');
 
 for (const lang of ['hr', 'en', 'de', 'sl']) {
   for (const totalMinutes of [0, 20, 60, 90, 120]) {

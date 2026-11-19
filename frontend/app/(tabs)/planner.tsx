@@ -46,7 +46,7 @@ import {
   buildProTegliaSpongePlannerEvents,
   getProNapolitanaInitialIntervals,
   getProNapolitanaPlannerWindow,
-  ensureProRomanaTondaBakeEvent,
+  ensureProTargetBakeEvent,
   resolveProNapolitanaFinalRestHours,
 } from '../../src/proNapolitanaPlanner';
 import { getProKamadoBigaMixDurationMinutes, buildProKamadoPlannerSteps, buildProKamadoPrefermentBranchSteps } from '../../src/proKamadoPlanner';
@@ -268,6 +268,7 @@ export default function Planner() {
   const [style, setStyle] = useState<PizzaStyle>('neapolitan');
   const [selectedMethod, setSelectedMethod] = useState<Method>('direct');
   const [hasSavedCalculatorRecipe, setHasSavedCalculatorRecipe] = useState(false);
+  const [plannerUsesGlutenFreeFlour, setPlannerUsesGlutenFreeFlour] = useState(false);
   const [calculatorPlanSettings, setCalculatorPlanSettings] = useState(DEFAULT_CALCULATOR_PLAN_SETTINGS);
   const [plannerTegliaSettings, setPlannerTegliaSettings] = useState(DEFAULT_PLANNER_TEGLIA_SETTINGS);
   const [plannerMixing, setPlannerMixing] = useState<'hand' | 'home' | 'spiral'>('hand');
@@ -487,6 +488,7 @@ export default function Planner() {
     let current = true;
     setRoomTempLoaded(false);
     setHasSavedCalculatorRecipe(false);
+    setPlannerUsesGlutenFreeFlour(false);
     void Promise.all([
       AsyncStorage.getItem('calculatorSettings'),
       AsyncStorage.getItem(SPONGE_PREPARATION_STORAGE_KEY).catch((error: unknown) => {
@@ -502,6 +504,7 @@ export default function Planner() {
         if (!value) {
           if (current) {
             setHasSavedCalculatorRecipe(false);
+            setPlannerUsesGlutenFreeFlour(false);
             setCalculatorPlanSettings(DEFAULT_CALCULATOR_PLAN_SETTINGS);
             setPlannerTegliaSettings(DEFAULT_PLANNER_TEGLIA_SETTINGS);
           }
@@ -512,6 +515,7 @@ export default function Planner() {
           console.warn('Saved calculator settings are invalid; Planner will use its default fermentation settings.');
           if (current) {
             setHasSavedCalculatorRecipe(false);
+            setPlannerUsesGlutenFreeFlour(false);
             setCalculatorPlanSettings(DEFAULT_CALCULATOR_PLAN_SETTINGS);
             setPlannerTegliaSettings(DEFAULT_PLANNER_TEGLIA_SETTINGS);
           }
@@ -570,7 +574,7 @@ export default function Planner() {
         }
         const savedStyle = settings.pizzaStyle;
         const savedMethod = settings.method;
-        const savedSpongeUsesGlutenFreeFlour = settings.flour === 'glutenFree'
+        const savedRecipeUsesGlutenFreeFlour = settings.flour === 'glutenFree'
           || (settings.flour === 'custom'
             && (!isBlendFlourType(settings.blendA)
               || !isBlendFlourType(settings.blendB)
@@ -578,7 +582,7 @@ export default function Planner() {
               || isEffectivelyGlutenFreeBlend(settings.blendA, settings.blendB, settings.blendPctA)));
         const hasValidSavedRecipe = (savedStyle === 'neapolitan' || savedStyle === 'romana' || savedStyle === 'ny_style')
           && (savedMethod === 'direct' || savedMethod === 'biga' || savedMethod === 'poolish' || savedMethod === 'sponge')
-          && (savedMethod !== 'sponge' || !savedSpongeUsesGlutenFreeFlour);
+          && (savedMethod !== 'sponge' || !savedRecipeUsesGlutenFreeFlour);
         const spongePreparationByLanguage = savedMethod === 'sponge'
           ? parseSpongePreparation(savedSpongePreparation)
           : null;
@@ -586,6 +590,7 @@ export default function Planner() {
         const restoredPoolish = restorePoolishPhaseSettings(settings);
         if (current) {
             setHasSavedCalculatorRecipe(hasValidSavedRecipe);
+          setPlannerUsesGlutenFreeFlour(savedRecipeUsesGlutenFreeFlour);
             if (savedStyle === 'neapolitan' || savedStyle === 'romana' || savedStyle === 'ny_style') {
               setStyle(savedStyle);
             }
@@ -636,6 +641,7 @@ export default function Planner() {
         if (current) {
           setCalculatorPlanSettings(DEFAULT_CALCULATOR_PLAN_SETTINGS);
           setPlannerTegliaSettings(DEFAULT_PLANNER_TEGLIA_SETTINGS);
+          setPlannerUsesGlutenFreeFlour(false);
         }
       })
       .finally(() => {
@@ -757,12 +763,17 @@ export default function Planner() {
     && effectiveStyle === 'romana'
     && activePlannerTegliaSettings.romanFormat === 'tonda'
     && proNapolitanaCombined;
+  const isProNeapolitanCombinedColdPlan = isProNapolitanaColdPlan
+    && method === 'biga'
+    && effectiveStyle === 'neapolitan'
+    && proNapolitanaCombined;
   const proFinalRoomHours = resolveProNapolitanaFinalRestHours({
     isBeginner,
     ovenType: plannerOvenType,
     method,
     style: effectiveStyle,
     combinedBigaPoolish: proNapolitanaCombined,
+    fridgeHours: activeCalculatorPlanSettings.fridgeHours,
     selectedHours: activeCalculatorPlanSettings.roomHours,
     fallbackHours: getPlannerRoomAfterFridgeHours(
       method,
@@ -970,7 +981,7 @@ export default function Planner() {
         && method === 'direct'
         && effectiveStyle === 'neapolitan'
         && (plannerDirectHomeSchedule?.fridgeHours ?? 0) > 0) {
-        return addProNapolitanaDirectInitialPlannerSteps(plannerScheduleSteps, lang);
+        return addProNapolitanaDirectInitialPlannerSteps(plannerScheduleSteps, lang, plannerUsesGlutenFreeFlour);
       }
       if (isBeginner || isProKamadoPlan || method !== 'sponge' || activeCalculatorPlanSettings.fridgeHours <= 0) {
         return plannerScheduleSteps;
@@ -1214,9 +1225,9 @@ export default function Planner() {
       ...phases,
       ...tegliaSpongeEvents,
     ];
-    const completeSteps = ensureProRomanaTondaBakeEvent(
+    const completeSteps = ensureProTargetBakeEvent(
       allSteps,
-      isProRomanaTondaCombinedColdPlan,
+      isProRomanaTondaCombinedColdPlan || isProNeapolitanCombinedColdPlan,
       bakeAt,
       {
         phaseId: 'romanaTonda.bake',

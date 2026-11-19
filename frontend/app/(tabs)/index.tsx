@@ -3950,7 +3950,7 @@ export default function CalculatorHome() {
     && isWorkflowGlutenFree
     && proPhaseESteps
     ? proPhaseESteps.map((phase, phaseIndex) => {
-      if (phaseIndex === 0) return adaptProGlutenFreeMixingPhaseA(phase, mixingForExperience);
+      if (phaseIndex === 0) return adaptProGlutenFreeMixingPhaseA(phase, mixingForExperience, lang);
       if (phaseIndex !== 1 || proInitialRoomFermentationSeconds === undefined || proHasColdFermentation === undefined) return phase;
       return adaptProGlutenFreeRoomPhaseB(
           phase,
@@ -8126,6 +8126,9 @@ function getDetailedDirectSteps(
   if (!beginnerMode) {
     ingredients = { ...ingredients, yeast: Math.round(ingredients.yeast * 100) / 100 };
   }
+  const yeastDisplay = beginnerMode
+    ? String(ingredients.yeast)
+    : new Intl.NumberFormat('hr', { maximumFractionDigits: 2 }).format(ingredients.yeast);
   const hand = mixing === 'hand';
   const instructionFlour = flourType === 'custom' ? 'caputo00' : flourType;
   const phaseAFlourBehavior = beginnerPhaseAFlourBehavior
@@ -8682,7 +8685,9 @@ function getDetailedDirectSteps(
         ...(isGlutenFree ? [`Obavezno dodajte ${psylliumAmount} g psylliuma (2% od ukupne količine brašna) kako bi smjesa zadržala strukturu.`] : []),
         ...(!isGlutenFree && hand && !beginnerMode ? [isSpelt ? 'Mijesite kratko i nježno, samo dok se tijesto ne poveže i postane ujednačeno; ne premijesite.' : isWholeWheat ? 'Mijesite umjereno i bez agresivnog rastezanja dok se tijesto ne poveže i razvije dovoljnu strukturu.' : 'Prebacite tijesto na radnu površinu i mijesite dlanovima 10–15 minuta dok površina ne postane glatka.'] : []),
         ...(!beginnerMode ? ['Zamjes je gotov kada je tijesto glatko, elastično i homogeno.'] : []),
-        !isGlutenFree && hand && !isSpelt && !isWholeWheat
+        isGlutenFree
+          ? `Pokrijte smjesu i ostavite je ${mixRestLabel} kako bi psyllium upio vodu.`
+          : !isGlutenFree && hand && !isSpelt && !isWholeWheat
           ? `Pokrijte tijesto i ostavite ga ${mixRestLabel} da se gluten opusti.`
           : hand
             ? `Pokrijte tijesto i ostavite ga da odmori ${mixRestLabel}.`
@@ -8901,7 +8906,10 @@ function getDetailedDirectSteps(
         ...(beginnerMode && !isKamado ? getBeginnerOvenTimers(oven, ovenTemp, isRomanTeglia) : []),
       ],
     },
-  ];
+  ].map((phase) => beginnerMode ? phase : {
+    ...phase,
+    steps: phase.steps.map((step) => step.split(`${ingredients.yeast} g`).join(`${yeastDisplay} g`)),
+  });
 }
 
 function getBeginnerNewYorkInstantMixerInstructions(
@@ -8961,6 +8969,9 @@ function getDetailedDirectStepsLocalized(
   if (!beginnerMode) {
     ingredients = { ...ingredients, yeast: Math.round(ingredients.yeast * 100) / 100 };
   }
+  const yeastDisplay = beginnerMode
+    ? String(ingredients.yeast)
+    : new Intl.NumberFormat(lang, { maximumFractionDigits: 2 }).format(ingredients.yeast);
   const hand = mixing === 'hand';
   const isGlutenFree = flourType === 'glutenFree';
   const coldTemperature = formatTemperature(fridgeTemp, 'celsius');
@@ -9720,7 +9731,10 @@ function getDetailedDirectStepsLocalized(
         ...(beginnerMode && !isKamado ? getBeginnerOvenTimers(oven, ovenTemp, isRomanTeglia) : []),
       ],
     },
-  ];
+  ].map((phase) => beginnerMode ? phase : {
+    ...phase,
+    steps: phase.steps.map((step) => step.split(`${ingredients.yeast} g`).join(`${yeastDisplay} g`)),
+  });
 }
 
 const DURATION_PATTERN = /\b\d+(?:\s*(?:do|to|bis|[-–])\s*\d+)?\s*(?:sat|sata|sati|ur|ura|ure|hours?|hrs?|stunden?|h)\b/gi;
