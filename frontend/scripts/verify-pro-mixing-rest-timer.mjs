@@ -13,7 +13,15 @@ require.extensions['.ts'] = (module, filename) => {
   module._compile(output, filename);
 };
 const { adaptProGlutenFreeMixingPhaseA } = require('../src/i18n/proGlutenFreeBulk.ts');
+const {
+  adaptProDirectBulkPhase,
+  getProNapolitanaBulkRestSeconds,
+  PRO_NAPOLITANA_MIX_REST_SECONDS,
+} = require('../src/i18n/proDirectBulk.ts');
 const source = await readFile(new URL('../app/(tabs)/index.tsx', import.meta.url), 'utf8');
+assert.match(source, /adaptProDirectBulkPhase\(phase, lang, totalSeconds, getProNapolitanaBulkRestSeconds\(roomTemp\)\)/);
+assert.match(source, /if \(phaseIndex === 1\) return \(phase\.timers \?\? \[\]\)\.filter\(\(timer\) => timer\.seconds > 0\)/);
+assert.match(source, /if \(phaseIndex === finalPhaseIndex\) return \(phase\.timers \?\? \[\]\)\.filter\(\(timer\) => timer\.seconds > 0\)/);
 const sourceFile = ts.createSourceFile('index.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 
 function loadGenerator(name) {
@@ -32,9 +40,13 @@ function loadGenerator(name) {
     formatTemperature: (temperature) => `${temperature} °C`,
     getBeginnerNewYorkInstantMixerInstructions: () => undefined,
     getBeginnerOvenTimers: () => [],
+    getProNapolitanaBulkRestSeconds,
+    PRO_NAPOLITANA_MIX_REST_SECONDS,
     getTegliaFinalProofPlan: () => ({ totalMinutes: 0, proofMinutes: 0, pressRelaxationMinutes: 0 }),
     getTemperingWindow: () => ({ minimumMinutes: 15, maximumMinutes: 30, initialMinutes: 15 }),
     phaseBBulkRestMinutes: () => 30,
+    getOvenBehaviorType: (oven) => oven,
+    usesPizzaOvenBehavior: () => false,
   });
   vm.runInContext(`${code}\nglobalThis.generator = ${name};`, runtime);
   return runtime.generator;
@@ -145,17 +157,10 @@ function assertRestMatchesTimer(phase, expectedMinutes, context) {
   return restStep;
 }
 
-function assertNoSeparateHydrationRest(phase, context) {
-  assert.equal(
-    phase.timers?.some((timer) => timer.id.startsWith('post-mix-rest')),
-    false,
-    `${context}: PRO Phase A has no separate post-mix hydration timer`,
-  );
-  assert.doesNotMatch(
-    phase.steps.join(' '),
-    /\b5\s*(?:minutes?|minuta|minut|Minuten)\b/i,
-    `${context}: PRO Phase A has no separate five-minute hydration instruction`,
-  );
+function assertMixingRestAdaptation(phase, mixing, context) {
+  const adapted = adaptProGlutenFreeMixingPhaseA(phase, mixing);
+  assert.ok(adapted.steps.at(-1).match(/\b5\s*(?:minutes?|minuta|minut|Minuten)\b/i), `${context}: separate Psyllium rest instruction remains for ${mixing} mixing`);
+  assert.equal(adapted.timers.find((timer) => timer.kind === 'rest')?.seconds, 5 * 60, `${context}: separate Psyllium rest timer remains for ${mixing} mixing`);
 }
 
 for (const [style] of styleVariants) {
@@ -164,10 +169,7 @@ for (const [style] of styleVariants) {
       for (const mixing of ['hand', 'mixer']) {
         const phase = generateHrPhase({ style, mixing, flour: 'glutenFree', fridgeHours, yeast });
         assertRestMatchesTimer(phase, 5, `hr/direct/${style}/glutenFree/${mixing}/${fridgeHours}h/${yeast} before PRO phase adaptation`);
-        assertNoSeparateHydrationRest(
-          adaptProGlutenFreeMixingPhaseA(phase, mixing),
-          `hr/direct/${style}/glutenFree/${mixing}/${fridgeHours}h/${yeast}`,
-        );
+        assertMixingRestAdaptation(phase, mixing, `hr/direct/${style}/glutenFree/${mixing}/${fridgeHours}h/${yeast}`);
       }
     }
   }
@@ -176,7 +178,7 @@ for (const [style] of styleVariants) {
 for (const style of ['napolitana', 'romanaTonda', 'newYork']) {
   assertRestMatchesTimer(
     generateHrPhase({ style, mixing: 'hand', flour: 'caputo00' }),
-    15,
+    5,
     `hr/direct/${style}/caputo00/hand control`,
   );
 }
@@ -190,7 +192,7 @@ const nonGlutenFreeFlours = ['caputo00', 'manitoba', 'spelt', 'wholeWheat', 'cus
 for (const [style] of styleVariants) {
   for (const flour of nonGlutenFreeFlours) {
     for (const mixing of ['hand', 'mixer']) {
-      const expectedMinutes = style === 'romanaTeglia' || mixing === 'mixer' ? 5 : 15;
+      const expectedMinutes = 5;
       assertRestMatchesTimer(
         generateHrPhase({ style, mixing, flour }),
         expectedMinutes,
@@ -204,7 +206,7 @@ for (const style of ['napolitana', 'romanaTonda', 'romanaTeglia', 'newYork']) {
   for (const method of ['biga', 'poolish']) {
     for (const flour of ['glutenFree', ...nonGlutenFreeFlours]) {
       for (const mixing of ['hand', 'mixer']) {
-        const expectedMinutes = style !== 'romanaTeglia' && mixing === 'hand' ? 15 : 5;
+        const expectedMinutes = 5;
         assertRestMatchesTimer(
           generateHrPhase({ style, mixing, flour, method }),
           expectedMinutes,
@@ -220,10 +222,7 @@ for (const lang of ['en', 'de', 'sl']) {
     for (const mixing of ['hand', 'mixer']) {
       const phase = generateLocalizedPhase({ lang, style, mixing, flour: 'glutenFree' });
       assertRestMatchesTimer(phase, 5, `${lang}/direct/${style}/glutenFree/${mixing} before PRO phase adaptation`);
-      assertNoSeparateHydrationRest(
-        adaptProGlutenFreeMixingPhaseA(phase, mixing),
-        `${lang}/direct/${style}/glutenFree/${mixing}`,
-      );
+      assertMixingRestAdaptation(phase, mixing, `${lang}/direct/${style}/glutenFree/${mixing}`);
     }
   }
   for (const [style] of styleVariants) {
@@ -235,6 +234,32 @@ for (const lang of ['en', 'de', 'sl']) {
           `${lang}/direct/${style}/${flour}/${mixing} control`,
         );
       }
+    }
+  }
+}
+
+for (const lang of ['hr', 'en', 'de', 'sl']) {
+  for (const totalMinutes of [0, 20, 60, 90, 120]) {
+    const phase = adaptProDirectBulkPhase(
+      { title: 'Phase B: Bulk fermentation', steps: [], timers: [] },
+      lang,
+      totalMinutes * 60,
+      30 * 60,
+    );
+    assert.equal(
+      phase.timers.reduce((total, timer) => total + timer.seconds, 0),
+      totalMinutes * 60,
+      `${lang}/direct/${totalMinutes}m bulk timers preserve the selected schedule`,
+    );
+    assert.ok(phase.timers.every((timer) => timer.seconds > 0), `${lang}/direct/${totalMinutes}m has no zero-duration timer`);
+    const timedSteps = phase.steps.filter((step) => /\d+\s*(?:min|minute|minuta|minut|Minuten|h|hours?|Stunden|ur|sati|Stunde)\b/i.test(step));
+    assert.equal(timedSteps.length, phase.timers.length, `${lang}/direct/${totalMinutes}m has one instruction for each timer`);
+    if (totalMinutes === 120) {
+      assert.deepEqual(
+        Array.from(phase.timers, (timer) => timer.seconds),
+        [30 * 60, 30 * 60, 60 * 60],
+        `${lang}/direct/120m keeps two 30-minute fold intervals and allocates the remaining selected time`,
+      );
     }
   }
 }

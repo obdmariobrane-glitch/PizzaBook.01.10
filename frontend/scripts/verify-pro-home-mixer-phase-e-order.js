@@ -28,6 +28,7 @@ vm.runInNewContext(compiled, {
   module: moduleRef,
   formatDuration: (seconds) => `${Math.round(seconds / 60)} min`,
   getBeginnerPreheatMinutes: () => 20,
+  getRomanTegliaPressRestTimer: () => ({ id: 'teglia-press-rest', seconds: 900, kind: 'rest' }),
   getTegliaFinalProofPlan: () => ({ proofMinutes: 60, pressRelaxationMinutes: 15, totalMinutes: 75 }),
   usesPizzaOvenBehavior: (oven) => oven === 'ooni',
   getKamadoBakeBlockedText: () => 'Kamado bake settings are not defined.',
@@ -46,6 +47,9 @@ const temperCopy = {
   de: /Nehmen Sie .* im Kühlschrank heraus/,
   sl: /Po .* v hladilniku/,
 };
+const temperInfo = { hr: 'Temperiranje', en: 'Tempering', de: 'Temperieren', sl: 'Temperiranje' };
+const preheatInfo = { hr: 'Prethodno zagrijavanje', en: 'Preheating', de: 'Vorheizen', sl: 'Segrevanje' };
+const bakeCopy = { hr: /Pecite/, en: /Bake for/, de: /Backen Sie/, sl: /Pecite/ };
 const langs = ['hr', 'en', 'de', 'sl'];
 const styles = ['napolitana', 'romanaTonda', 'newYork'];
 const methods = [
@@ -94,9 +98,13 @@ for (const lang of langs) {
       const handPhase = replaceProPhaseE(input, options(lang, style, 'hand')).at(-1);
       const spiralPhase = replaceProPhaseE(input, options(lang, style, 'spiral')).at(-1);
 
-      assert.match(mixerPhase.steps[0], preheatCopy[lang], `${lang}/${style}/${method.id}: home-mixer step 1 is oven preheating`);
-      assert.match(mixerPhase.steps[1], temperCopy[lang], `${lang}/${style}/${method.id}: home-mixer step 2 is dough tempering`);
+      assert.match(mixerPhase.steps[0], temperCopy[lang], `${lang}/${style}/${method.id}: home-mixer step 1 removes and tempers the dough`);
+      assert.match(mixerPhase.steps[1], preheatCopy[lang], `${lang}/${style}/${method.id}: home-mixer step 2 is oven preheating`);
+      assert.equal(mixerPhase.stepInfo[0].title, temperInfo[lang], `${lang}/${style}/${method.id}: first help label describes tempering`);
+      assert.equal(mixerPhase.stepInfo[1].title, preheatInfo[lang], `${lang}/${style}/${method.id}: second help label describes preheating`);
+      assert.equal(mixerPhase.steps.filter((step) => bakeCopy[lang].test(step)).length, 1, `${lang}/${style}/${method.id}: exactly one bake action`);
       assert.deepEqual(mixerPhase.steps.slice(2), handPhase.steps.slice(2), 'only the home-mixer step order changes');
+      assert.deepEqual(mixerPhase.steps.slice(0, 2), handPhase.steps.slice(0, 2), 'hand and home-mixer order remains aligned');
       assert.deepEqual(handPhase.steps.slice(0, 2), spiralPhase.steps.slice(0, 2), 'hand and spiral order remains unchanged');
       assert.match(handPhase.steps[0], temperCopy[lang]);
       assert.match(handPhase.steps[1], preheatCopy[lang]);
@@ -118,7 +126,7 @@ for (const lang of langs) {
 
 assert.match(source, /const proPhaseEStepsBase = !isBeginner && detailedDirectSteps/);
 assert.match(source, /mixing: mixingForExperience,/);
-assert.match(source, /steps: isKamado[\s\S]*?mixing === 'mixer'[\s\S]*?\[copy\.preheat, copy\.temper/);
+assert.match(source, /steps: isKamado[\s\S]*?\[copy\.temper, copy\.preheat/);
 assert.equal(
   (source.match(/const proPhaseEStepsBase = !isBeginner && detailedDirectSteps/g) ?? []).length,
   1,

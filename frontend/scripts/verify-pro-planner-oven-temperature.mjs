@@ -1,13 +1,39 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import {
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import ts from 'typescript';
+import vm from 'node:vm';
+
+const root = path.resolve(import.meta.dirname, '..');
+const loadTypeScriptModule = (relativePath) => {
+  const source = readFileSync(path.join(root, relativePath), 'utf8');
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  const moduleRef = { exports: {} };
+  const moduleRequire = (specifier) => {
+    if (relativePath === 'src/calculator.ts' && specifier === './proMethods/bigaPoolish') {
+      return loadTypeScriptModule('src/proMethods/bigaPoolish.ts');
+    }
+    throw new Error(`Unexpected dependency "${specifier}" in ${relativePath}.`);
+  };
+  vm.runInNewContext(compiled, {
+    module: moduleRef,
+    exports: moduleRef.exports,
+    require: moduleRequire,
+  }, { filename: relativePath });
+  return moduleRef.exports;
+};
+
+const {
   formatBakingTimeRange,
   getFermentationSchedule,
   getSharedCalculatorPlanSettings,
   reversePlan,
   setSharedCalculatorPlanSettings,
-} from '../src/calculator.ts';
-import { formatTemperature } from '../src/units.ts';
+} = loadTypeScriptModule('src/calculator.ts');
+const { formatTemperature } = loadTypeScriptModule('src/units.ts');
 
 const copy = {
   yeastHandling: { fresh: '', dry: '' },

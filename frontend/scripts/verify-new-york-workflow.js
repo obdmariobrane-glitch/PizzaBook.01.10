@@ -12,7 +12,16 @@ function loadTypeScript(relativePath) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   }).outputText;
   const moduleRef = { exports: {} };
-  vm.runInNewContext(compiled, { module: moduleRef, exports: moduleRef.exports }, { filename: relativePath });
+  vm.runInNewContext(compiled, {
+    module: moduleRef,
+    exports: moduleRef.exports,
+    require: (specifier) => {
+      if (specifier === './proMethods/bigaPoolish') {
+        return loadTypeScript(path.join('src', 'proMethods', 'bigaPoolish.ts'));
+      }
+      throw new Error(`Unexpected dependency in ${relativePath}: ${specifier}`);
+    },
+  }, { filename: relativePath });
   return moduleRef.exports;
 }
 
@@ -87,8 +96,10 @@ assert.match(formatUS('500 g flour, 10 g salt, and 18 g oil.'), /0\.6 oz/);
 assert.equal(units.formatUnitText('300 g water', 'celsius', 'metric'), '300 g water');
 
 assert.equal((translations.match(/directNyBakeDesc:/g) ?? []).length, 4);
-assert.equal((translations.match(/\{OVEN_TEMP_DISPLAY\}/g) ?? []).length, 4);
-assert.match(uiSource, /const bakingTimeRange = formatBakingTimeRange\(oven, ovenTemp, lang\)/, 'Recipe card, detailed steps, and timer share the selected oven/temperature bake range');
+const newYorkBakeCopy = translations.split('\n').filter((line) => /\bdirectNyBakeDesc:/.test(line));
+assert.equal(newYorkBakeCopy.length, 4);
+assert.ok(newYorkBakeCopy.every((line) => (line.match(/\{OVEN_TEMP_DISPLAY\}/g) ?? []).length === 1));
+assert.match(uiSource, /const bakingTimeRange = oven === 'kamado'[\s\S]*formatBakingTimeRange\(oven, ovenTemp, lang\)/, 'Recipe card, detailed steps, and timer share the selected oven/temperature bake range');
 assert.match(uiSource, /Bake \$\{bakingTimeRange\} at \$\{ovenTemp\} °C/);
 assert.match(uiSource, /t\.calc\.styleInfo\.baking\}: \{formatTemperature\(ovenTemp, temperatureUnit\)\} · \{bakingTimeRange\}/, 'Style information uses the same selected-oven bake values as the detailed steps');
 assert.match(uiSource, /!isRomanTonda && !isNewYork/);

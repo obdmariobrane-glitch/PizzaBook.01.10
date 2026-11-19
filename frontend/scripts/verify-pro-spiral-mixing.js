@@ -314,7 +314,7 @@ for (const lang of languages) {
 
 assert.match(uiSource, /const proSpiralRecipe: SpiralMixingRecipe/);
 assert.match(uiSource, /const proDirectSpiralSteps = !isBeginner && method === 'direct' && mixingForExperience === 'spiral'/);
-assert.match(uiSource, /proHomeMixerDetailedSteps \?\? proSpiralDirectInstructions \?\?/);
+assert.match(uiSource, /proHomeMixerDetailedSteps \?\? proSpiralDirectInstructions/);
 assert.match(uiSource, /getProIceWaterInfoStepIndex\(phase\.steps\)/);
 assert.match(uiSource, /getProIceWaterInfoStepIndex\(path\.p2\.steps\)/);
 assert.match(uiSource, /getYeastAwarePrefermentSteps[\s\S]*?fridgeTemp, proSpiralRecipe\)/);
@@ -323,7 +323,8 @@ assert.match(uiSource, /const generatedMixingSteps = !isBeginner && mixingForExp
 assert.match(uiSource, /adaptSpiralMixerSourceSteps\(\s*phase\.steps\.map/);
 assert.match(uiSource, /const proSpiralDirectInstructions = !isBeginner && method === 'direct' && mixingForExperience === 'spiral' && detailedDirectSteps/);
 assert.match(uiSource, /phaseIndex === 0 \? phase : yeastAwareDetailedDirectSteps\?\.\[phaseIndex\] \?\? phase/);
-assert.match(uiSource, /proSpiralDirectInstructions \?\? beginnerDirectHomeSteps \?\? beginnerUnscheduledDirectSteps \?\? beginnerDirectRecipeSteps \?\? yeastAwareDetailedDirectSteps \?\? detailedDirectSteps/);
+assert.match(uiSource, /proSpiralDirectInstructions[\s\S]{0,200}beginnerDirectHomeSteps/);
+assert.match(uiSource, /beginnerDirectHomeSteps[\s\S]{0,300}beginnerDirectRecipeSteps[\s\S]{0,160}detailedDirectSteps/);
 assert.match(uiSource, /stepInfo: proSpiralRecipe \? getProSpiralMixingStepInfo\(lang, proSpiralRecipe, steps\) : phase\.stepInfo/);
 assert.match(uiSource, /getProSpiralMixingStepInfo\(lang, proSpiralRecipe, path\.p2\.steps\)/);
 assert.match(uiSource, /const customStepInfos = customStepInfo === undefined/);

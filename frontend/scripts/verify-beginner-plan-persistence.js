@@ -17,6 +17,9 @@ function loadTypeScriptModule(relativePath, dependencies = {}) {
     exports: moduleRef.exports,
     require: (specifier) => {
       if (Object.prototype.hasOwnProperty.call(dependencies, specifier)) return dependencies[specifier];
+      if (specifier === './proMethods/bigaPoolish') {
+        return loadTypeScriptModule('src/proMethods/bigaPoolish.ts');
+      }
       throw new Error(`Unexpected dependency ${specifier} in ${relativePath}`);
     },
   }, { filename: relativePath });
@@ -39,10 +42,10 @@ const restoreCoordinator = loadTypeScriptModule('src/beginnerPlanRestoreCoordina
 const appSource = fs.readFileSync(path.join(__dirname, '..', 'app', '(tabs)', 'index.tsx'), 'utf8');
 const plannerSource = fs.readFileSync(path.join(__dirname, '..', 'app', '(tabs)', 'planner.tsx'), 'utf8');
 
-assert.match(appSource, /preferredYeastType,\s*\},\s*pizzas,/);
+assert.match(appSource, /preferredYeastType:\s*globalPreferredYeastType,\s*\},\s*pizzas,/);
 assert.match(appSource, /parsePreferredYeastType\(settings\.preferredYeastType\)/);
 assert.match(plannerSource, /useSyncExternalStore\(subscribePreferredYeastType,\s*getCachedPreferredYeastType/);
-assert.match(plannerSource, /plannerStepCopy\.yeastHandling\[preferredYeastType\]/);
+assert.match(plannerSource, /plannerStepCopy\.yeastHandling\[plannerYeastType\]/);
 
 function makeSchedule(bakeAt, mode) {
   const roomBeforeFridgeHours = (20 + 90 + 5) / 60;

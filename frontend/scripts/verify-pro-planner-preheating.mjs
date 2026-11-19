@@ -1,13 +1,36 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import {
-  formatBakingTimeRange,
-  getBeginnerPreheatMinutes,
-  getFermentationSchedule,
-  reversePlan,
-} from '../src/calculator.ts';
-import { formatTemperature } from '../src/units.ts';
-import { translations } from '../src/i18n/translations.ts';
+import path from 'node:path';
+import ts from 'typescript';
+import vm from 'node:vm';
+
+const root = path.resolve(import.meta.dirname, '..');
+const loadTypeScriptModule = (relativePath) => {
+  const filename = path.basename(relativePath);
+  const source = readFileSync(path.join(root, relativePath), 'utf8');
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  const moduleRef = { exports: {} };
+  const moduleRequire = (specifier) => {
+    if (relativePath === 'src/calculator.ts' && specifier === './proMethods/bigaPoolish') {
+      return loadTypeScriptModule('src/proMethods/bigaPoolish.ts');
+    }
+    throw new Error(`Unexpected dependency "${specifier}" in ${relativePath}.`);
+  };
+  vm.runInNewContext(compiled, {
+    module: moduleRef,
+    exports: moduleRef.exports,
+    require: moduleRequire,
+  }, { filename });
+  return moduleRef.exports;
+};
+
+const { formatBakingTimeRange, getBeginnerPreheatMinutes, getFermentationSchedule, reversePlan } = loadTypeScriptModule('src/calculator.ts');
+const { formatTemperature } = loadTypeScriptModule('src/units.ts');
+const { translations } = loadTypeScriptModule('src/i18n/translations.ts');
+
 
 const bakeAt = new Date('2026-10-14T18:00:00.000Z');
 const ovenTemperatures = {
@@ -140,6 +163,50 @@ for (const strategy of [undefined, 'fridgeRoom']) {
   );
   assert.match(preheatStep.desc, /450°C/);
   assert.match(preheatStep.desc, /20/);
+}
+
+for (const fridgeHours of [0, 24]) {
+  const napolitanaSchedule = {
+    startAt: new Date(bakeAt.getTime() - (fridgeHours + 2) * 3600000),
+    bakeAt,
+    roomBeforeFridgeHours: 0,
+    fridgeHours,
+    roomAfterFridgeHours: 2,
+    fridgeTemp: 4,
+    ovenType: 'ooni',
+    ovenTemp: 400,
+  };
+  const steps = reversePlan(
+    bakeAt,
+    'direct',
+    'neapolitan',
+    beginnerCopy,
+    napolitanaSchedule,
+    null,
+    null,
+    'en',
+    '400°C',
+    22,
+    undefined,
+    null,
+    'ooni',
+    400,
+    20,
+  );
+  const phaseIds = Array.from(steps, (step) => step.phaseId);
+  assert.deepEqual(
+    phaseIds,
+    fridgeHours > 0
+      ? ['direct.mix', 'direct.fridge', 'direct.fridgeRemoval', 'direct.finalRoom', 'direct.preheat', 'direct.bake']
+      : ['direct.mix', 'direct.finalRoom', 'direct.preheat', 'direct.bake'],
+    `PRO Napolitana Planner ordering for ${fridgeHours}h fridge`,
+  );
+  assert.equal(steps.find((step) => step.phaseId === 'direct.finalRoom').at.getTime(), bakeAt.getTime() - 2 * 3600000);
+  assert.equal(steps.find((step) => step.phaseId === 'direct.preheat').at.getTime(), bakeAt.getTime() - 20 * 60000);
+  assert.equal(steps.find((step) => step.phaseId === 'direct.bake').at.getTime(), bakeAt.getTime());
+  if (fridgeHours === 0) {
+    assert.ok(!phaseIds.includes('direct.fridgeRemoval'), 'zero fridge duration must not create a fridge-removal event');
+  }
 }
 
 const unchangedBeginnerSteps = reversePlan(

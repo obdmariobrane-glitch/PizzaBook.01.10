@@ -12,6 +12,14 @@ const plannerUi = fs.readFileSync(path.join(frontend, 'app', '(tabs)', 'planner.
 const settingsUi = fs.readFileSync(path.join(frontend, 'app', 'settings.tsx'), 'utf8');
 const proRecipesSource = fs.readFileSync(path.join(frontend, 'src', 'proSavedRecipes.ts'), 'utf8');
 const translationsSource = fs.readFileSync(path.join(frontend, 'src', 'i18n', 'translations.ts'), 'utf8');
+const bigaPoolishModule = { exports: {} };
+vm.runInNewContext(ts.transpileModule(
+  fs.readFileSync(path.join(frontend, 'src', 'proMethods', 'bigaPoolish.ts'), 'utf8'),
+  { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } },
+).outputText, {
+  module: bigaPoolishModule,
+  exports: bigaPoolishModule.exports,
+});
 const calculatorModule = { exports: {} };
 vm.runInNewContext(ts.transpileModule(
   fs.readFileSync(path.join(frontend, 'src', 'calculator.ts'), 'utf8'),
@@ -19,6 +27,10 @@ vm.runInNewContext(ts.transpileModule(
 ).outputText, {
   module: calculatorModule,
   exports: calculatorModule.exports,
+  require: (specifier) => {
+    if (specifier === './proMethods/bigaPoolish') return bigaPoolishModule.exports;
+    throw new Error(`Unexpected dependency in calculator test: ${specifier}`);
+  },
 });
 const {
   bakingCalc,
@@ -57,7 +69,8 @@ const beginnerKamado = normalizeBeginnerSavedState({ pizzaStyle: 'neapolitan', o
 assert.equal(beginnerKamado.oven, 'kamado', 'Beginner normalization preserves the separate Kamado selection');
 assert.equal(beginnerKamado.ovenTemp, 450, 'Beginner normalization preserves the saved calculator temperature without using it as the Kamado maximum');
 assert.doesNotMatch(calculatorUi, /getBakingTimeRange\('kamado'|formatBakingTimeRange\('kamado'/);
-assert.match(calculatorUi, /if \(isBeginner\) return oven === 'kamado' \? insertKamadoPreheatPhase\(phases, lang, kamadoProfileForExperience\)/, 'Beginner Biga Kamado recipe includes the dedicated preheat phase without exposing the PRO-only default maximum');
+assert.match(calculatorUi, /const kamadoProfileForExperience = isBeginner && kamadoProfile\?\.isDefault \? null : kamadoProfile;/, 'Beginner recipes do not inherit the PRO-only default Kamado maximum');
+assert.match(calculatorUi, /const bigaHomeRecipePhases = beginnerNeapolitanBigaHome \? \(\(\) => \{[\s\S]*?return oven === 'kamado' \? insertKamadoPreheatPhase\(phases, lang, kamadoProfileForExperience\) : phases;/, 'Beginner Biga Kamado recipe inserts the dedicated preheat phase');
 assert.match(calculatorUi, /kamadoProHomeMixerSteps \?\? kamadoProDirectSteps/, 'PRO Kamado direct recipes prioritize the safe phase adaptation');
 assert.match(calculatorUi, /<OvenCard cardStyle=\{styles\.ovenCardTwoColumns\} active=\{oven === 'kamado'\}/, 'Kamado is available in the shared Beginner and Pro oven picker');
 assert.match(calculatorUi, /<View style=\{\[styles\.ovenRow, !isRomanTeglia && styles\.ovenRowWrap\]\}>/, 'round-pizza ovens use the responsive two-column grid in both modes');
@@ -153,7 +166,7 @@ assert.deepEqual(
 );
 assert.match(calculatorUi, /testID="mix-hand" onPress=\{\(\) => step\(\(\) => \{ setMixing\('hand'\)/);
 assert.match(calculatorUi, /testID="mix-mixer" onPress=\{\(\) => step\(\(\) => \{ setMixing\('mixer'\)/);
-assert.match(calculatorUi, /testID="mix-toggle" onPress=\{\(\) => setShowMixSteps\(!showMixSteps\)\}/, 'Pro exposes the Show/Hide steps control');
+assert.match(calculatorUi, /testID="mix-toggle"[^>]*onPress=\{\(\) => setShowMixSteps\(!showMixSteps\)\}/, 'Pro exposes the Show/Hide steps control');
 assert.match(calculatorUi, /showMixSteps \? t\.calc\.hideSteps : t\.calc\.showSteps/, 'Pro labels the step control Show or Hide');
 assert.match(calculatorUi, /showMixSteps \|\| isBeginner/, 'Pro displays detailed steps when requested');
 assert.match(calculatorUi, /completed=\{completedSteps\}[\s\S]{0,200}onToggle=\{toggleStep\}[\s\S]{0,180}activeTimers=\{activeTimers\}[\s\S]{0,180}onStartTimer=\{startTimer\}[\s\S]{0,120}onStopTimer=\{stopTimer\}/, 'step completion and active timer state remain wired to each recipe phase');
@@ -167,7 +180,7 @@ assert.match(calculatorUi, /if \(isFlourType\(saved\.flour\)\) setFlour\(saved\.
 assert.match(calculatorUi, /if \(saved\.pizzaStyle === 'neapolitan' \|\| saved\.pizzaStyle === 'romana' \|\| saved\.pizzaStyle === 'ny_style'\)/);
 assert.match(calculatorUi, /localOnly=\{OFFLINE_ONLY_MODE \|\| !user\}/);
 assert.match(calculatorUi, /if \(!OFFLINE_ONLY_MODE && !user && isBeginner\) \{ router\.push\('\/login'\); return; \}/);
-assert.match(calculatorUi, /if \(settings\.method\) setMethod\(settings\.flour === 'glutenFree' \? 'direct' : settings\.method\)/);
+assert.match(calculatorUi, /setMethod\(isBeginner \|\| settings\.flour === 'glutenFree' \? 'direct' : settings\.method\)/);
 
 const compiled = ts.transpileModule(proRecipesSource, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, esModuleInterop: true },

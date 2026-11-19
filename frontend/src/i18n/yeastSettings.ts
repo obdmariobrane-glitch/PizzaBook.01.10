@@ -13,10 +13,8 @@ export const YEAST_SETTINGS_COPY: Record<Lang, {
   instantDry: string;
   quantity: string;
   manualQuantity: string;
-  percentage: string;
-  automaticHelp: string;
-  conversionHelp: string;
-  spongeHelp: string;
+  bigaBudgetSummary: string;
+  bigaBudgetWarning: string;
   errors: Record<YeastSettingError, string>;
 }> = {
   hr: {
@@ -28,12 +26,10 @@ export const YEAST_SETTINGS_COPY: Record<Lang, {
     fresh: 'Svježi kvasac',
     activeDry: 'Aktivni suhi kvasac',
     instantDry: 'Instant suhi kvasac',
-    quantity: 'Količina kvasca',
+    quantity: 'Idealna količina kvasca',
     manualQuantity: 'Ručno uneseni kvasac (g)',
-    percentage: 'Postotak pekara',
-    automaticHelp: 'Automatska količina koristi postojeći izračun fermentacije za odabranu metodu.',
-    conversionHelp: 'Automatski izračun pretvara svježi kvasac u suhu vrstu faktorom 0,40 (aktivni) ili 0,33 (instant). Ručni unos je točna količina odabrane vrste kvasca.',
-    spongeHelp: 'Ova količina ide u Sponge; kvasac za završno tijesto prikazan je zasebno.',
+    bigaBudgetSummary: 'Ukupni budžet: {BUDGET} g · Biga: {BIGA} g · završni zamjes: {FINAL} g',
+    bigaBudgetWarning: 'Informacija: Biga zahtijeva {REQUIRED} g, a u Bigu ide {BIGA} g. Razlika prema ukupnom Direct budžetu iznosi {EXCESS} g, ali ne smanjuje količinu Bige. Završnom zamjesu dodaje se {FINAL} g. Ako je Biga osigurala svu potrebnu količinu, završni zamjes dobiva 0 g.',
     errors: {
       empty: 'Unesite količinu kvasca.',
       invalid: 'Unesite valjanu količinu kvasca u gramima.',
@@ -51,12 +47,10 @@ export const YEAST_SETTINGS_COPY: Record<Lang, {
     fresh: 'Fresh yeast',
     activeDry: 'Active dry yeast',
     instantDry: 'Instant dry yeast',
-    quantity: 'Yeast quantity',
+    quantity: 'Ideal yeast quantity',
     manualQuantity: 'Manual yeast quantity (g)',
-    percentage: "Baker's percentage",
-    automaticHelp: 'Automatic quantity uses the existing fermentation calculation for the selected method.',
-    conversionHelp: 'Automatic calculation converts fresh yeast to dry yeast using 0.40 (active dry) or 0.33 (instant). Manual entry is the exact quantity of the selected yeast type.',
-    spongeHelp: 'This quantity goes into the Sponge; final-dough yeast is shown separately.',
+    bigaBudgetSummary: 'Total budget: {BUDGET} g · Biga: {BIGA} g · final dough: {FINAL} g',
+    bigaBudgetWarning: 'Information: Biga requires {REQUIRED} g, and {BIGA} g goes into the Biga. The difference from the total Direct budget is {EXCESS} g, but it does not reduce the Biga quantity. The final dough receives an additional {FINAL} g. If the Biga already provides the full required amount, the final dough receives 0 g.',
     errors: {
       empty: 'Enter the yeast quantity.',
       invalid: 'Enter a valid yeast quantity in grams.',
@@ -74,12 +68,10 @@ export const YEAST_SETTINGS_COPY: Record<Lang, {
     fresh: 'Frischhefe',
     activeDry: 'Aktiv-Trockenhefe',
     instantDry: 'Instant-Trockenhefe',
-    quantity: 'Hefemenge',
+    quantity: 'Ideale Hefemenge',
     manualQuantity: 'Manuelle Hefemenge (g)',
-    percentage: 'Bäckerprozentsatz',
-    automaticHelp: 'Die automatische Menge verwendet die vorhandene Gärungsberechnung der ausgewählten Methode.',
-    conversionHelp: 'Die automatische Berechnung rechnet Frischhefe mit dem Faktor 0,40 (aktiv) oder 0,33 (Instant) in Trockenhefe um. Die manuelle Eingabe ist die genaue Menge der ausgewählten Hefeart.',
-    spongeHelp: 'Diese Menge kommt in den Sponge; die Hefe für den Hauptteig wird separat angezeigt.',
+    bigaBudgetSummary: 'Gesamtbudget: {BUDGET} g · Biga: {BIGA} g · Hauptteig: {FINAL} g',
+    bigaBudgetWarning: 'Information: Die Biga benötigt {REQUIRED} g, und {BIGA} g kommen in die Biga. Die Differenz zum gesamten Direct-Budget beträgt {EXCESS} g, reduziert aber nicht die Biga-Menge. Der Hauptteig erhält zusätzlich {FINAL} g. Wenn die Biga bereits die gesamte benötigte Menge liefert, erhält der Hauptteig 0 g.',
     errors: {
       empty: 'Geben Sie die Hefemenge ein.',
       invalid: 'Geben Sie eine gültige Hefemenge in Gramm ein.',
@@ -97,12 +89,10 @@ export const YEAST_SETTINGS_COPY: Record<Lang, {
     fresh: 'Sveži kvas',
     activeDry: 'Aktivni suhi kvas',
     instantDry: 'Instant suhi kvas',
-    quantity: 'Količina kvasa',
+    quantity: 'Idealna količina kvasa',
     manualQuantity: 'Ročno vnesena količina kvasa (g)',
-    percentage: 'Pekovski odstotek',
-    automaticHelp: 'Samodejna količina uporablja obstoječi izračun fermentacije za izbrano metodo.',
-    conversionHelp: 'Samodejni izračun pretvori sveži kvas v suhi kvas s faktorjem 0,40 (aktivni) ali 0,33 (instant). Ročni vnos je natančna količina izbrane vrste kvasa.',
-    spongeHelp: 'Ta količina gre v Sponge; kvas za končno testo je prikazan ločeno.',
+    bigaBudgetSummary: 'Skupni proračun: {BUDGET} g · Biga: {BIGA} g · končno testo: {FINAL} g',
+    bigaBudgetWarning: 'Informacija: biga potrebuje {REQUIRED} g, v bigo pa gre {BIGA} g. Razlika glede na skupni Direct proračun je {EXCESS} g, vendar ne zmanjša količine bige. Končno testo prejme dodatnih {FINAL} g. Če biga že zagotovi celotno potrebno količino, končno testo prejme 0 g.',
     errors: {
       empty: 'Vnesite količino kvasa.',
       invalid: 'Vnesite veljavno količino kvasa v gramih.',

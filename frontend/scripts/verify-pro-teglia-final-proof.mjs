@@ -1,12 +1,25 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import {
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import ts from 'typescript';
+const require = createRequire(import.meta.url);
+require.extensions['.ts'] = (module, filename) => {
+  const source = readFileSync(filename, 'utf8');
+  const output = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  module._compile(output, filename);
+};
+
+const {
   getFermentationSchedule,
   getPlannerRoomAfterFridgeHours,
+  getProTegliaToppingAmounts,
   getTegliaFinalProofPlan,
   getTegliaFinalProofWindowMinutes,
   reversePlan,
-} from '../src/calculator.ts';
+} = require('../src/calculator.ts');
 
 function makeSchedule(method, { roomHours, fridgeHours, roomAfterFridgeHours }) {
   return getFermentationSchedule({
@@ -77,17 +90,19 @@ const plannerCopy = {
 };
 
 const bakeAt = new Date('2026-10-15T19:00:00.000Z');
+assert.deepEqual(getProTegliaToppingAmounts(30, 40), { sauce: 85, cheese: 90 });
+assert.deepEqual(getProTegliaToppingAmounts(20, 40), { sauce: 57, cheese: 60 });
 const plannerRoomHours = getPlannerRoomAfterFridgeHours('direct', 'romana', 'teglia', 2, 24, 22);
 assert.equal(plannerRoomHours, 2, 'Direct Romana Teglia must preserve the selected two-hour final room phase');
 assert.equal(
   getPlannerRoomAfterFridgeHours('direct', 'romana', 'tonda', 2, 24, 22),
-  38 / 60,
-  'Romana Tonda must retain the existing generic tempering window',
+  2,
+  'Romana Tonda must preserve the selected final room phase',
 );
 assert.equal(
   getPlannerRoomAfterFridgeHours('biga', 'romana', 'teglia', 2, 24, 22),
-  38 / 60,
-  'Biga must retain the existing generic tempering window',
+  2,
+  'Biga Romana Teglia must preserve the selected final room phase',
 );
 
 const plannerSchedule = makeSchedule('direct', {
@@ -183,7 +198,7 @@ for (const method of ['direct', 'biga', 'poolish']) {
   );
 }
 
-for (const hours of [0.25, 1, 2, 3]) {
+for (const hours of [0.25, 1, 2, 3, 4]) {
   const schedule = makeSchedule('direct', {
     roomHours: hours,
     fridgeHours: 0,
@@ -201,14 +216,17 @@ const plannerScreen = await readFile(new URL('../app/(tabs)/planner.tsx', import
 const translations = await readFile(new URL('../src/i18n/translations.ts', import.meta.url), 'utf8');
 assert.match(screen, /getTegliaFinalProofWindowMinutes\(proFermentationSchedule\)/);
 assert.match(screen, /if \(isBeginner \|\| !isRomanTeglia\) return steps;/);
-assert.match(screen, /const proPhaseESteps = !isBeginner && detailedDirectSteps/);
+assert.match(screen, /const proPhaseEStepsBase = !isBeginner && detailedDirectSteps/);
+assert.match(screen, /sauceAmount: !isBeginner && isRomanTeglia \? proTegliaToppingAmounts\.sauce : dims\.sauce/);
+assert.match(screen, /cheeseAmount: !isBeginner && isRomanTeglia \? proTegliaToppingAmounts\.cheese : dims\.cheese/);
+assert.match(screen, /label=\{t\.calc\.sauce\} value=\{weight\(!isBeginner && isRomanTeglia \? proTegliaToppingAmounts\.sauce : dims\.sauce\)\}/);
 assert.equal(
-  [...screen.matchAll(/steps=\{isRomanTeglia \? proTegliaPrefermentP3Steps\(path\.p3\.steps\)/g)].length,
+  [...screen.matchAll(/\? proTegliaPrefermentP3Steps\(path\.p3\.steps\)/g)].length,
   2,
   'only the Biga and Poolish P3 paths should use the adapter',
 );
-assert.match(screen, /timers=\{isRomanTeglia \|\| bigaHomeSchedule \? \[\] : undefined\}/);
-assert.match(screen, /timers=\{isRomanTeglia \|\| poolishHomeSchedule \? \[\] : undefined\}/);
+assert.match(screen, /timers=\{bigaHomeSchedule \? proTegliaPressRestTimers/);
+assert.match(screen, /timers=\{isSponge \? spongeP3Timers : isRomanTeglia \? proTegliaPressRestTimers/);
 assert.match(
   plannerScreen,
   /const plannerStepCopy = isBeginner[\s\S]*directHomeTegliaCopy: \{[\s\S]*temperingAsMass: t\.planner\.proTegliaTiming\.temperingAsMass,[\s\S]*finalRoom: t\.planner\.proTegliaTiming\.finalRoom/,

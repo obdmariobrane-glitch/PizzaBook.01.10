@@ -72,11 +72,11 @@ for (const lang of languages) {
       assert.match(glutenFreeSteps[glutenFreeSteps.length - 1], noGlutenKneading[lang], `${lang}/${style} avoids kneading gluten-free dough to develop gluten`);
       const adaptedMixingPhase = adaptProGlutenFreeMixingPhaseA({
         title: 'Phase A: Spiral Mixing',
-        steps: glutenFreeSteps,
+        steps: [...glutenFreeSteps, 'Let the mass rest for 5 minutes so the psyllium absorbs moisture.'],
         timers: [{ id: 'post-mix-rest', seconds: 300, kind: 'rest' }],
       }, 'spiral');
-      assert.equal(adaptedMixingPhase.timers.length, 0, `${lang}/${style} does not retain a separate post-mix hydration timer`);
-      assert.deepEqual(adaptedMixingPhase.steps, glutenFreeSteps, `${lang}/${style} keeps the spiral mixing instructions intact`);
+      assert.equal(adaptedMixingPhase.timers[0]?.seconds, 300, `${lang}/${style} retains the spiral post-mix rest timer`);
+      assert.match(adaptedMixingPhase.steps.at(-1), /5 minutes/, `${lang}/${style} retains the spiral post-mix rest instruction`);
 
       const ordinarySpiralSteps = getSpiralMixingSteps(lang, yeastType, {
         method: 'direct',

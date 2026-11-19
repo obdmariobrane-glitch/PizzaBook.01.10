@@ -19,12 +19,7 @@ export function adaptProGlutenFreeMixingPhaseA<T extends PhaseB>(
   if (!timers?.some((timer) => postMixRestTimerIds.includes(timer.id))) {
     throw new Error('PRO gluten-free mixing phase is missing its post-mix rest timer.');
   }
-
-  return {
-    ...phase,
-    steps: mixing === 'spiral' ? phase.steps : phase.steps.slice(0, -1),
-    timers: timers.filter((timer) => !postMixRestTimerIds.includes(timer.id)),
-  };
+  return phase;
 }
 
 const copy = {

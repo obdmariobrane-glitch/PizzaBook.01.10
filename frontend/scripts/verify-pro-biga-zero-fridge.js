@@ -6,11 +6,23 @@ const path = require('node:path');
 const ts = require('typescript');
 
 const frontendRoot = path.join(__dirname, '..');
+const localRequire = (request) => request === './proMethods/bigaPoolish'
+  ? (() => {
+    const filePath = path.join(frontendRoot, 'src', 'proMethods', 'bigaPoolish.ts');
+    const source = fs.readFileSync(filePath, 'utf8');
+    const moduleRef = { exports: {} };
+    const compiled = ts.transpileModule(source, {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+    }).outputText;
+    new Function('module', 'exports', 'require', compiled)(moduleRef, moduleRef.exports, require);
+    return moduleRef.exports;
+  })()
+  : require(request);
 const calculatorSource = fs.readFileSync(path.join(frontendRoot, 'src', 'calculator.ts'), 'utf8');
 const calculator = { exports: {} };
 new Function('module', 'exports', 'require', `${ts.transpileModule(calculatorSource, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
-}).outputText}\nreturn module.exports;`)(calculator, calculator.exports, require);
+}).outputText}\nreturn module.exports;`)(calculator, calculator.exports, localRequire);
 
 const { getFermentationSchedule } = calculator.exports;
 const uiSource = fs.readFileSync(path.join(frontendRoot, 'app', '(tabs)', 'index.tsx'), 'utf8');

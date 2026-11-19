@@ -29,7 +29,7 @@ const { getYeastAwarePrefermentSteps } = loadTypeScriptModule(
   path.join(frontendRoot, 'src', 'i18n', 'prefermentSteps.ts'),
 );
 const indexSource = fs.readFileSync(path.join(frontendRoot, 'app', '(tabs)', 'index.tsx'), 'utf8');
-assert.match(indexSource, /const remainingFlourDescription = isCustom/);
+assert.match(indexSource, /const remainingFlourDescription = combinedInstructions\s*\?\s*combinedRemainingFlourDescription\s*:\s*isCustom/);
 assert.match(indexSource, /remainingFlourDescription, fridgeTemp, proSpiralRecipe\);/);
 
 const languages = ['hr', 'en', 'de', 'sl'];

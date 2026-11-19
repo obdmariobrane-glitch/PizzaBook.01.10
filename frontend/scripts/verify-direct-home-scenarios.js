@@ -10,7 +10,22 @@ const compiled = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
 const moduleRef = { exports: {} };
-vm.runInNewContext(compiled, { module: moduleRef, exports: moduleRef.exports }, { filename: 'calculator.ts' });
+const moduleRequire = (specifier) => {
+  if (specifier !== './proMethods/bigaPoolish') {
+    throw new Error(`Unexpected dependency "${specifier}" in calculator.ts.`);
+  }
+  const dependencySource = fs.readFileSync(path.join(__dirname, '..', 'src', 'proMethods', 'bigaPoolish.ts'), 'utf8');
+  const dependencyCompiled = ts.transpileModule(dependencySource, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  const dependencyModule = { exports: {} };
+  vm.runInNewContext(dependencyCompiled, {
+    module: dependencyModule,
+    exports: dependencyModule.exports,
+  }, { filename: 'proMethods/bigaPoolish.ts' });
+  return dependencyModule.exports;
+};
+vm.runInNewContext(compiled, { module: moduleRef, exports: moduleRef.exports, require: moduleRequire }, { filename: 'calculator.ts' });
 
 const {
   generateDirectHomeCandidates,

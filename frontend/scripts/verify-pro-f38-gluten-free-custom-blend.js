@@ -21,6 +21,7 @@ const {
 } = require(path.join(frontendRoot, 'src', 'calculator.ts'));
 const { translations } = require(path.join(frontendRoot, 'src', 'i18n', 'translations.ts'));
 const indexSource = fs.readFileSync(path.join(frontendRoot, 'app', '(tabs)', 'index.tsx'), 'utf8');
+const plannerSource = fs.readFileSync(path.join(frontendRoot, 'app', '(tabs)', 'planner.tsx'), 'utf8');
 
 const cases = [
   ['glutenFree', 'glutenFree', 70, true, 'pure GF blend at a mixed percentage'],
@@ -112,13 +113,19 @@ assert.equal(glutenFree.total.psyllium, Math.round(glutenFree.total.flour * 0.02
 assert.ok(Math.abs(glutenFree.total.water / glutenFree.total.flour - 0.75) < 0.01, 'GF classification does not alter the selected hydration');
 assert.notEqual(glutenFree.total.flour, standard.total.flour, 'existing baker-percentage totals account for psyllium');
 
-assert.match(indexSource, /const isProGlutenFreeBlend = !isBeginner && isCustom && isEffectivelyGlutenFreeBlend\(blendA, blendB, blendPctA\)/);
+assert.match(indexSource, /const isProGlutenFreeBlend = !isBeginner && isCustom && blendPercentageReady && isEffectivelyGlutenFreeBlend\(blendA, blendB, blendPctA\)/);
 assert.match(indexSource, /flourType: isProEffectivelyGlutenFree \? 'glutenFree' : flour/);
+assert.match(indexSource, /const changeFlour = \(f: FlourType\) => \{\s*setFlour\(f\);\s*if \(f === 'glutenFree'\) \{\s*setMethod\('direct'\);\s*if \(!isBeginner\) \{\s*setBigaEnabled\(false\);\s*setPoolishEnabled\(false\);/);
 assert.match(indexSource, /isProMethodAllowedForFlour\(selectedMethod, flour, blendA, blendB, blendPctA\)/);
+assert.match(indexSource, /if \(isProEffectivelyGlutenFree\) \{\s*\/\/ eslint-disable-next-line react-hooks\/set-state-in-effect[^\n]*\n\s*if \(selectedMethod !== 'direct'\) setMethod\('direct'\);[\s\S]*?if \(bigaEnabled\) setBigaEnabled\(false\);[\s\S]*?if \(poolishEnabled\) setPoolishEnabled\(false\);\s*return;/);
+assert.match(indexSource, /\}, \[isBeginner, isProEffectivelyGlutenFree, selectedMethod, bigaEnabled, poolishEnabled, flour, blendA, blendB, blendPctA, pizzaStyle\]\);/);
+assert.match(indexSource, /setSharedCalculatorPlanSettings\(\{\s*pizzaStyle,\s*romanFormat,\s*method,\s*bigaEnabled,\s*poolishEnabled,/);
+assert.match(plannerSource, /if \(isBeginner \|\| method !== 'biga'\) return \[\];/);
+assert.match(plannerSource, /if \(sharedCalculatorPlanSettings\?\.poolishEnabled\)/);
 assert.match(indexSource, /if \(!isProMethodAllowedForFlour\(selectedMethod, flour, a, b, p\)\) setMethod\('direct'\)/);
 assert.match(indexSource, /isProMethodAllowedForFlour\(m\.k, flour, blendA, blendB, blendPctA\)/);
 assert.match(indexSource, /isProMethodAllowedForFlour\(selectedMethod, flour, blendA, blendB, blendPctA\)\s*\?\s*selectedMethod\s*:\s*'direct'/);
-assert.match(indexSource, /const dough = useMemo\(\(\) => doughCalc\(\{[\s\S]*?saltPct, oilPct, method,/);
+assert.match(indexSource, /const \{ dough, idealYeastQuantity \} = useMemo\([\s\S]*?const options = \{[\s\S]*?saltPct, oilPct, method,[\s\S]*?doughCalc\(options\)/);
 assert.match(indexSource, /isProEffectivelyGlutenFree \? <Text style=\{styles\.hint\}>/);
 assert.match(indexSource, /alignProDirectSteps\(generatedDetailedDirectSteps, proTextReferenceSteps, \{\s*isProGlutenFreeBlend,\s*isProEffectivelyGlutenFree,/);
 assert.match(indexSource, /getDetailedDirectSteps\([\s\S]*?!beginnerTextMode && isProEffectivelyGlutenFree \? 'glutenFree' : flour/);

@@ -15,7 +15,8 @@ import { formatTemperature, formatUnitText } from '../../src/units';
 import { getCachedPreferredYeastType, subscribePreferredYeastType } from '../../src/preferences';
 import { getPlannerNotificationRestoreStatus, shouldReconcilePlannerNotifications, subscribePlannerNotificationRestoreStatus } from '../../src/beginnerPlanRestoreCoordinator';
 import {
-  getDirectHomeFermentationSchedule, getFermentationSchedule, getSpongeFermentationSchedule, getPlannerRoomAfterFridgeHours, reversePlan, selectPlannerHomeSchedules, Method, PizzaStyle,
+  getDirectHomeFermentationSchedule, getFermentationSchedule, getSpongeFermentationSchedule, getPlannerRoomAfterFridgeHours, getBakingTimeRange, reversePlan, selectPlannerHomeSchedules, Method, PizzaStyle, PoolishFermentationMode, restorePoolishPhaseSettings, getPoolishPlannerFallbackSchedule,
+  getPoolishFinalMixDurationMinutes,
   OvenType, PlannerTegliaSettings,
   SPONGE_YEAST_REFERENCE,
   BEGINNER_DIRECT_MIN_WINDOW_HOURS,
@@ -34,7 +35,21 @@ import {
 } from '../../src/calculator';
 import { cancelLocal, cancelObsoletePlannerNotifications, cancelPlannerNotificationsForMethods, cancelPlannerNotificationsForMethodsExcept, cancelPlannerNotificationsForPlan, isPushSupported, requestNotificationPermissions, scheduleNotificationBatch, scheduleLocal } from '../../src/notifications';
 import { getSpiralPlannerNote } from '../../src/i18n/spiralMixing';
+import { YEAST_SETTINGS_COPY } from '../../src/i18n/yeastSettings';
+import { formatDuration } from '../../src/i18n/prefermentSteps';
 import { addProNapolitanaDirectInitialPlannerSteps } from '../../src/proNapolitanaDirectPlanner';
+import {
+  alignProNapolitanaSpongePlannerSteps,
+  alignProSpongeBallingBeforeFridge,
+  buildProNapolitanaFermentationSchedule,
+  buildProNapolitanaInitialPlannerEvents,
+  buildProTegliaSpongePlannerEvents,
+  getProNapolitanaInitialIntervals,
+  getProNapolitanaPlannerWindow,
+  ensureProRomanaTondaBakeEvent,
+  resolveProNapolitanaFinalRestHours,
+} from '../../src/proNapolitanaPlanner';
+import { getProKamadoBigaMixDurationMinutes, buildProKamadoPlannerSteps, buildProKamadoPrefermentBranchSteps } from '../../src/proKamadoPlanner';
 import {
   applyPlannerPhaseOverrides,
   assignPlannerPhaseKeys,
@@ -95,12 +110,19 @@ type CalculatorPlanSettings = {
   fridgeTemp: number;
   fridgeHours: number;
   bigaHours: number;
+  bigaStartHours: number;
   bigaPct: number;
   bigaHydrationPct: number;
   poolishHours: number;
+  poolishStartHours: number;
   poolishPct: number;
   poolishHydrationPct: number;
   poolishFermentationTempC: number;
+  poolishFermentationMode: PoolishFermentationMode | null;
+  poolishRtHours: number;
+  poolishCtHours: number;
+  poolishRtTemperatureC: number;
+  poolishCtTemperatureC: number;
   spongeFlourPct: number;
   spongeHydrationPct: number;
   spongeFermentationTempC: number;
@@ -108,7 +130,7 @@ type CalculatorPlanSettings = {
   spongePreparationByLanguage: Record<Lang, { title: string; steps: string[] }> | null;
   yeastSummary: CalculatorYeastSummary | null;
 };
-type NumericCalculatorPlanSetting = Exclude<keyof CalculatorPlanSettings, 'oven' | 'ovenTemp' | 'spongePreparationByLanguage' | 'yeastSummary'>;
+type NumericCalculatorPlanSetting = Exclude<keyof CalculatorPlanSettings, 'oven' | 'ovenTemp' | 'poolishFermentationMode' | 'spongePreparationByLanguage' | 'yeastSummary' | 'bigaFermentationSchedule' | 'poolishFermentationSchedule'>;
 
 const DEFAULT_CALCULATOR_PLAN_SETTINGS: CalculatorPlanSettings = {
   roomTemp: 22,
@@ -116,12 +138,19 @@ const DEFAULT_CALCULATOR_PLAN_SETTINGS: CalculatorPlanSettings = {
   fridgeTemp: 4,
   fridgeHours: 24,
   bigaHours: 24,
+  bigaStartHours: 0,
   bigaPct: 50,
   bigaHydrationPct: 62,
   poolishHours: 24,
+  poolishStartHours: 0,
   poolishPct: 35,
   poolishHydrationPct: 100,
   poolishFermentationTempC: 22,
+  poolishFermentationMode: null,
+  poolishRtHours: 24,
+  poolishCtHours: 24,
+  poolishRtTemperatureC: 22,
+  poolishCtTemperatureC: 4,
   spongeFlourPct: SPONGE_YEAST_REFERENCE.flourShare,
   spongeHydrationPct: 62,
   spongeFermentationTempC: SPONGE_YEAST_REFERENCE.fermentationTempC,
@@ -160,6 +189,13 @@ function parseCalculatorYeastSummary(value: string | null): CalculatorYeastSumma
       && Number.isFinite(parsed.bakerPercentage)
       && (parsed.finalDoughQuantityGrams === undefined
         || (typeof parsed.finalDoughQuantityGrams === 'number' && Number.isFinite(parsed.finalDoughQuantityGrams)))
+      && (parsed.yeastBudgetGrams === undefined || (typeof parsed.yeastBudgetGrams === 'number' && Number.isFinite(parsed.yeastBudgetGrams)))
+      && (parsed.bigaYeastGrams === undefined || (typeof parsed.bigaYeastGrams === 'number' && Number.isFinite(parsed.bigaYeastGrams)))
+      && (parsed.bigaYeastRequiredGrams === undefined || (typeof parsed.bigaYeastRequiredGrams === 'number' && Number.isFinite(parsed.bigaYeastRequiredGrams)))
+      && (parsed.bigaYeastExcessGrams === undefined || (typeof parsed.bigaYeastExcessGrams === 'number' && Number.isFinite(parsed.bigaYeastExcessGrams)))
+      && (parsed.bigaYeastBudgetExceeded === undefined || typeof parsed.bigaYeastBudgetExceeded === 'boolean')
+      && (parsed.finalDoughYeastGrams === undefined || (typeof parsed.finalDoughYeastGrams === 'number' && Number.isFinite(parsed.finalDoughYeastGrams)))
+      && (parsed.poolishYeastGrams === undefined || (typeof parsed.poolishYeastGrams === 'number' && Number.isFinite(parsed.poolishYeastGrams)))
     ) {
       return parsed as CalculatorYeastSummary;
     }
@@ -228,6 +264,7 @@ export default function Planner() {
     getSharedCalculatorPlanSettings,
     getSharedCalculatorPlanSettings,
   );
+  const hasSharedCalculatorPlanSettings = !!sharedCalculatorPlanSettings;
   const [style, setStyle] = useState<PizzaStyle>('neapolitan');
   const [selectedMethod, setSelectedMethod] = useState<Method>('direct');
   const [hasSavedCalculatorRecipe, setHasSavedCalculatorRecipe] = useState(false);
@@ -299,12 +336,19 @@ export default function Planner() {
       fridgeTemp: sharedCalculatorPlanSettings.fridgeTemp,
       fridgeHours: sharedCalculatorPlanSettings.fridgeHours,
       bigaHours: sharedCalculatorPlanSettings.bigaHours,
+      bigaStartHours: sharedCalculatorPlanSettings.bigaStartHours ?? 0,
       bigaPct: sharedCalculatorPlanSettings.bigaPct,
       bigaHydrationPct: sharedCalculatorPlanSettings.bigaHydrationPct,
       poolishHours: sharedCalculatorPlanSettings.poolishHours,
+      poolishStartHours: sharedCalculatorPlanSettings.poolishStartHours ?? 0,
       poolishPct: sharedCalculatorPlanSettings.poolishPct,
       poolishHydrationPct: sharedCalculatorPlanSettings.poolishHydrationPct,
       poolishFermentationTempC: sharedCalculatorPlanSettings.poolishFermentationTempC,
+      poolishFermentationMode: sharedCalculatorPlanSettings.poolishFermentationMode,
+      poolishRtHours: sharedCalculatorPlanSettings.poolishRtHours,
+      poolishCtHours: sharedCalculatorPlanSettings.poolishCtHours,
+      poolishRtTemperatureC: sharedCalculatorPlanSettings.poolishRtTemperatureC,
+      poolishCtTemperatureC: sharedCalculatorPlanSettings.poolishCtTemperatureC,
       spongeFlourPct: sharedCalculatorPlanSettings.spongeFlourPct,
       spongeHydrationPct: sharedCalculatorPlanSettings.spongeHydrationPct,
       spongeFermentationTempC: sharedCalculatorPlanSettings.spongeFermentationTempC,
@@ -341,12 +385,39 @@ export default function Planner() {
       const mainQuantity = activeYeastSummary.finalDoughQuantityGrams === undefined
         ? ''
         : new Intl.NumberFormat(lang, { maximumFractionDigits: 2 }).format(activeYeastSummary.finalDoughQuantityGrams);
-      return ({
-        hr: `Kvasac: ${quantity} g (${yeastType}) · ${percentage}% brašna${mainQuantity ? `; završno tijesto: ${mainQuantity} g` : ''}`,
-        en: `Yeast: ${quantity} g (${yeastType}) · ${percentage}% flour${mainQuantity ? `; final dough: ${mainQuantity} g` : ''}`,
-        de: `Hefe: ${quantity} g (${yeastType}) · ${percentage}% Mehl${mainQuantity ? `; Hauptteig: ${mainQuantity} g` : ''}`,
-        sl: `Kvas: ${quantity} g (${yeastType}) · ${percentage}% moke${mainQuantity ? `; končno testo: ${mainQuantity} g` : ''}`,
+      const poolishQuantity = activeYeastSummary.poolishYeastGrams === undefined
+        ? ''
+        : new Intl.NumberFormat(lang, { maximumFractionDigits: 2 }).format(activeYeastSummary.poolishYeastGrams);
+      const requiredBigaQuantity = activeYeastSummary.bigaYeastRequiredGrams
+        ?? (activeYeastSummary.bigaYeastGrams ?? 0) + (activeYeastSummary.bigaYeastExcessGrams ?? 0);
+      const bigaDetails = activeYeastSummary.bigaYeastGrams === undefined
+        || activeYeastSummary.yeastBudgetGrams === undefined
+        || activeYeastSummary.finalDoughYeastGrams === undefined
+        ? ''
+        : (() => {
+          const copy = YEAST_SETTINGS_COPY[lang];
+          const format = (value: number) => new Intl.NumberFormat(lang, { maximumFractionDigits: 2 }).format(value);
+          const summary = copy.bigaBudgetSummary
+            .replace('{BUDGET}', format(activeYeastSummary.yeastBudgetGrams!))
+            .replace('{BIGA}', format(activeYeastSummary.bigaYeastGrams!))
+            .replace('{REQUIRED}', format(requiredBigaQuantity))
+            .replace('{FINAL}', format(activeYeastSummary.finalDoughYeastGrams!));
+          return activeYeastSummary.bigaYeastBudgetExceeded && (activeYeastSummary.bigaYeastExcessGrams ?? 0) > 0
+            ? `${summary}\n${copy.bigaBudgetWarning
+              .replace('{BUDGET}', format(activeYeastSummary.yeastBudgetGrams!))
+              .replace('{BIGA}', format(activeYeastSummary.bigaYeastGrams!))
+              .replace('{REQUIRED}', format(requiredBigaQuantity))
+              .replace('{FINAL}', format(activeYeastSummary.finalDoughYeastGrams!))
+              .replace('{EXCESS}', format(activeYeastSummary.bigaYeastExcessGrams!))}`
+            : summary;
+        })();
+      const summary = ({
+        hr: `Kvasac: ${quantity} g (${yeastType}) · ${percentage}% brašna${poolishQuantity ? `; Poolish: ${poolishQuantity} g` : ''}${mainQuantity ? `; završno tijesto: ${mainQuantity} g` : ''}`,
+        en: `Yeast: ${quantity} g (${yeastType}) · ${percentage}% flour${poolishQuantity ? `; Poolish: ${poolishQuantity} g` : ''}${mainQuantity ? `; final dough: ${mainQuantity} g` : ''}`,
+        de: `Hefe: ${quantity} g (${yeastType}) · ${percentage}% Mehl${poolishQuantity ? `; Poolish: ${poolishQuantity} g` : ''}${mainQuantity ? `; Hauptteig: ${mainQuantity} g` : ''}`,
+        sl: `Kvas: ${quantity} g (${yeastType}) · ${percentage}% moke${poolishQuantity ? `; Poolish: ${poolishQuantity} g` : ''}${mainQuantity ? `; končno testo: ${mainQuantity} g` : ''}`,
       }[lang]);
+      return bigaDetails ? `${summary}\n${bigaDetails}` : summary;
     })()
     : null;
   const plannerPrefermentSettingsText = !isBeginner
@@ -360,13 +431,29 @@ export default function Planner() {
           sl: `Biga: ${percent(activeCalculatorPlanSettings.bigaPct)}% moke · ${percent(activeCalculatorPlanSettings.bigaHydrationPct)}% hidracije · ${activeCalculatorPlanSettings.bigaHours} h`,
         }[lang]);
       }
-      if (method === 'poolish') {
+      if (method === 'poolish' && activeCalculatorPlanSettings.poolishFermentationMode === null) {
         const temp = formatTemperature(activeCalculatorPlanSettings.poolishFermentationTempC, temperatureUnit);
         return ({
           hr: `Poolish: ${percent(activeCalculatorPlanSettings.poolishPct)}% brašna · hidratacija ${percent(activeCalculatorPlanSettings.poolishHydrationPct)}% · fermentacija ${temp} / ${activeCalculatorPlanSettings.poolishHours} h`,
           en: `Poolish: ${percent(activeCalculatorPlanSettings.poolishPct)}% of flour · ${percent(activeCalculatorPlanSettings.poolishHydrationPct)}% hydration · fermentation ${temp} / ${activeCalculatorPlanSettings.poolishHours} h`,
           de: `Poolish: ${percent(activeCalculatorPlanSettings.poolishPct)}% Mehl · ${percent(activeCalculatorPlanSettings.poolishHydrationPct)}% Hydration · Fermentation ${temp} / ${activeCalculatorPlanSettings.poolishHours} Std.`,
           sl: `Poolish: ${percent(activeCalculatorPlanSettings.poolishPct)}% moke · hidracija ${percent(activeCalculatorPlanSettings.poolishHydrationPct)}% · fermentacija ${temp} / ${activeCalculatorPlanSettings.poolishHours} h`,
+        }[lang]);
+      }
+      if (method === 'poolish' && activeCalculatorPlanSettings.poolishFermentationMode !== null) {
+        const mode = activeCalculatorPlanSettings.poolishFermentationMode;
+        const hourUnit = lang === 'de' ? 'Std.' : 'h';
+        const hasRoom = mode !== 'ct';
+        const hasCold = mode !== 'rt';
+        const roomPhase = hasRoom ? `RT ${activeCalculatorPlanSettings.poolishRtHours} ${hourUnit} @ ${formatTemperature(activeCalculatorPlanSettings.poolishRtTemperatureC, temperatureUnit)}` : '';
+        const coldPhase = hasCold ? `CT ${activeCalculatorPlanSettings.poolishCtHours} ${hourUnit} @ ${formatTemperature(activeCalculatorPlanSettings.poolishCtTemperatureC, temperatureUnit)}` : '';
+        const phaseText = mode === 'ct-rt' ? `${coldPhase} → ${roomPhase}` : [roomPhase, coldPhase].filter(Boolean).join(' → ');
+        const totalHours = (hasRoom ? activeCalculatorPlanSettings.poolishRtHours : 0) + (hasCold ? activeCalculatorPlanSettings.poolishCtHours : 0);
+        return ({
+          hr: `Poolish: ${percent(activeCalculatorPlanSettings.poolishPct)}% brašna · hidratacija ${percent(activeCalculatorPlanSettings.poolishHydrationPct)}% · ${phaseText} · ukupno ${totalHours} h`,
+          en: `Poolish: ${percent(activeCalculatorPlanSettings.poolishPct)}% of flour · ${percent(activeCalculatorPlanSettings.poolishHydrationPct)}% hydration · ${phaseText} · ${totalHours} h total`,
+          de: `Poolish: ${percent(activeCalculatorPlanSettings.poolishPct)}% Mehl · ${percent(activeCalculatorPlanSettings.poolishHydrationPct)}% Hydration · ${phaseText} · insgesamt ${totalHours} Std.`,
+          sl: `Poolish: ${percent(activeCalculatorPlanSettings.poolishPct)}% moke · hidracija ${percent(activeCalculatorPlanSettings.poolishHydrationPct)}% · ${phaseText} · skupaj ${totalHours} h`,
         }[lang]);
       }
       if (method === 'sponge') {
@@ -393,6 +480,9 @@ export default function Planner() {
       ?? activeCalculatorPlanSettings.ovenTemp
       ?? plannerDirectHomeSchedule?.ovenTemp
       ?? 250;
+  const beginnerKamadoPlanBlocked = isBeginner
+    && (plannerDirectHomeSchedule?.ovenType === 'kamado' || sharedCalculatorPlanSettings?.oven === 'kamado')
+    && getBakingTimeRange('kamado', plannerOvenTemp) === null;
   useFocusEffect(useCallback(() => {
     let current = true;
     setRoomTempLoaded(false);
@@ -493,6 +583,7 @@ export default function Planner() {
           ? parseSpongePreparation(savedSpongePreparation)
           : null;
         const yeastSummary = parseCalculatorYeastSummary(savedYeastSummary);
+        const restoredPoolish = restorePoolishPhaseSettings(settings);
         if (current) {
             setHasSavedCalculatorRecipe(hasValidSavedRecipe);
             if (savedStyle === 'neapolitan' || savedStyle === 'romana' || savedStyle === 'ny_style') {
@@ -511,12 +602,19 @@ export default function Planner() {
             fridgeTemp: readNumber('fridgeTemp'),
             fridgeHours: readNumber('fridgeHours'),
             bigaHours: readNumber('bigaHours'),
+            bigaStartHours: readNumber('bigaStartHours'),
             bigaPct: readBoundedSetting('bigaPct', 50, 20, 100),
             bigaHydrationPct: readBoundedSetting('bigaHydrationPct', 62, 10, 200),
             poolishHours: readNumber('poolishHours'),
+            poolishStartHours: readNumber('poolishStartHours'),
             poolishPct: readBoundedSetting('poolishPct', 35, 20, 100),
             poolishHydrationPct: readBoundedSetting('poolishHydrationPct', 100, 10, 200),
             poolishFermentationTempC: readBoundedSetting('poolishFermentationTempC', 22, 4, 35),
+            poolishFermentationMode: restoredPoolish?.mode ?? null,
+            poolishRtHours: restoredPoolish?.rtHours ?? 24,
+            poolishCtHours: restoredPoolish?.ctHours ?? 24,
+            poolishRtTemperatureC: restoredPoolish?.rtTemperatureC ?? 22,
+            poolishCtTemperatureC: restoredPoolish?.ctTemperatureC ?? 4,
             spongeFlourPct: readBoundedSetting('spongeFlourPct', SPONGE_YEAST_REFERENCE.flourShare, 1, 100),
             spongeHydrationPct: readBoundedSetting('spongeHydrationPct', 62, 1, 200),
             spongeFermentationTempC: readBoundedSetting('spongeFermentationTempC', SPONGE_YEAST_REFERENCE.fermentationTempC, 4, 35),
@@ -552,13 +650,16 @@ export default function Planner() {
     if (returnSection === 'style' || returnSection === 'plan') beginnerReturnSection.current = returnSection;
   }, [returnTo, returnSection, returnToken]);
   useEffect(() => {
-    if (experienceLoaded && isBeginner) {
+    if (experienceLoaded && isBeginner && hasSharedCalculatorPlanSettings && !beginnerKamadoPlanBlocked) {
       void cancelPlannerNotificationsForMethods(['biga', 'poolish']).catch((error) => {
         console.error('Unable to cancel unsupported Beginner Planner alarms:', error);
       });
     }
-  }, [experienceLoaded, isBeginner]);
+  }, [experienceLoaded, isBeginner, beginnerKamadoPlanBlocked, hasSharedCalculatorPlanSettings]);
   const hasCurrentBeginnerDirectSchedule = !isBeginner || !!plannerDirectHomeSchedule;
+  const plannerRoomBeforeFridgeHours = effectiveStyle === 'romana' && activeCalculatorPlanSettings.fridgeHours > 0
+    ? 0
+    : activeCalculatorPlanSettings.roomHours;
   const plannerFermentationSchedule = (() => {
     if (isBeginner) {
       if (method === 'direct' && plannerDirectHomeSchedule) {
@@ -588,7 +689,7 @@ export default function Planner() {
       return getSpongeFermentationSchedule(
         activeCalculatorPlanSettings.spongeFermentationHours,
         activeCalculatorPlanSettings.spongeFermentationTempC,
-        activeCalculatorPlanSettings.roomHours,
+        plannerRoomBeforeFridgeHours,
         activeCalculatorPlanSettings.roomTemp,
         activeCalculatorPlanSettings.fridgeHours,
         activeCalculatorPlanSettings.fridgeTemp,
@@ -610,18 +711,86 @@ export default function Planner() {
       activeCalculatorPlanSettings.fridgeHours,
       activeCalculatorPlanSettings.roomTemp,
     );
+    if (method === 'poolish') {
+      return getPoolishPlannerFallbackSchedule({
+        poolishFermentationMode: activeCalculatorPlanSettings.poolishFermentationMode,
+        poolishHours: activeCalculatorPlanSettings.poolishHours,
+        poolishFermentationTempC: activeCalculatorPlanSettings.poolishFermentationTempC,
+        rtHours: activeCalculatorPlanSettings.poolishRtHours,
+        ctHours: activeCalculatorPlanSettings.poolishCtHours,
+        rtTemperatureC: activeCalculatorPlanSettings.poolishRtTemperatureC,
+        ctTemperatureC: activeCalculatorPlanSettings.poolishCtTemperatureC,
+        roomHours: plannerRoomBeforeFridgeHours,
+        roomTemp: activeCalculatorPlanSettings.roomTemp,
+        fridgeHours: activeCalculatorPlanSettings.fridgeHours,
+        fridgeTemp: activeCalculatorPlanSettings.fridgeTemp,
+      }, roomAfterFridgeHours);
+    }
     return getFermentationSchedule({
       method,
-      roomHours: activeCalculatorPlanSettings.roomHours,
+      roomHours: plannerRoomBeforeFridgeHours,
       roomTemp: activeCalculatorPlanSettings.roomTemp,
       fridgeHours: activeCalculatorPlanSettings.fridgeHours,
       fridgeTemp: activeCalculatorPlanSettings.fridgeTemp,
       roomAfterFridgeHours,
       ...(method === 'biga' ? { prefermentHours: activeCalculatorPlanSettings.bigaHours } : {}),
-      ...(method === 'poolish' ? { prefermentHours: activeCalculatorPlanSettings.poolishHours } : {}),
-      ...(method === 'poolish' ? { prefermentTempC: activeCalculatorPlanSettings.poolishFermentationTempC } : {}),
     });
   })();
+  const isProNapolitanaColdPlan = !isBeginner
+    && plannerOvenType !== 'kamado'
+    && activeCalculatorPlanSettings.fridgeHours > 0
+    && !(method === 'direct' && plannerDirectHomeSchedule)
+    && !(method === 'biga' && plannerBigaHomeSchedule)
+    && !(method === 'poolish' && plannerPoolishHomeSchedule);
+  const proNapolitanaCombined = method === 'biga'
+    && (sharedCalculatorPlanSettings?.bigaEnabled ?? true)
+    && !!sharedCalculatorPlanSettings?.poolishEnabled;
+  const proNapolitanaInitialIntervals = isProNapolitanaColdPlan
+    ? getProNapolitanaInitialIntervals(method, proNapolitanaCombined, activeCalculatorPlanSettings.roomTemp)
+    : [];
+  const isProNyCombinedColdPlan = isProNapolitanaColdPlan
+    && method === 'biga'
+    && effectiveStyle === 'ny_style'
+    && proNapolitanaCombined;
+  const isProRomanaTondaCombinedColdPlan = isProNapolitanaColdPlan
+    && method === 'biga'
+    && effectiveStyle === 'romana'
+    && activePlannerTegliaSettings.romanFormat === 'tonda'
+    && proNapolitanaCombined;
+  const proFinalRoomHours = resolveProNapolitanaFinalRestHours({
+    isBeginner,
+    ovenType: plannerOvenType,
+    method,
+    style: effectiveStyle,
+    combinedBigaPoolish: proNapolitanaCombined,
+    selectedHours: activeCalculatorPlanSettings.roomHours,
+    fallbackHours: getPlannerRoomAfterFridgeHours(
+      method,
+      effectiveStyle,
+      activePlannerTegliaSettings.romanFormat,
+      activeCalculatorPlanSettings.roomHours,
+      activeCalculatorPlanSettings.fridgeHours,
+      activeCalculatorPlanSettings.roomTemp,
+    ),
+  });
+  const proNapolitanaWindow = isProNapolitanaColdPlan && bakeAt
+    ? getProNapolitanaPlannerWindow(
+      bakeAt,
+      proFinalRoomHours,
+      activeCalculatorPlanSettings.fridgeHours,
+      proNapolitanaInitialIntervals,
+    )
+    : null;
+  const proNapolitanaFermentationSchedule = isProNapolitanaColdPlan
+    ? buildProNapolitanaFermentationSchedule(
+      plannerFermentationSchedule,
+      proNapolitanaInitialIntervals,
+      proFinalRoomHours,
+      activeCalculatorPlanSettings.fridgeHours,
+      activeCalculatorPlanSettings.roomTemp,
+      activeCalculatorPlanSettings.fridgeTemp,
+    )
+    : plannerFermentationSchedule;
   const plannerMixTitles = [
     plannerStepCopy.directMixTitle,
     plannerStepCopy.directTitle,
@@ -632,49 +801,438 @@ export default function Planner() {
     plannerStepCopy.finalMixTitle.replace('{PREFERMENT}', plannerStepCopy.bigaName),
     plannerStepCopy.finalMixTitle.replace('{PREFERMENT}', plannerStepCopy.poolishName),
   ];
-  const generatedSteps = assignPlannerPhaseKeys((() => {
-    const planSteps = bakeAt && hasCurrentBeginnerDirectSchedule && (roomTempLoaded || !!sharedCalculatorPlanSettings) && hasCurrentCalculatorRecipe ? reversePlan(
-    bakeAt,
-    method,
-    effectiveStyle,
-    plannerStepCopy,
-    plannerDirectHomeSchedule,
-    plannerBigaHomeSchedule,
-    plannerPoolishHomeSchedule,
-    lang,
-    formatTemperature(plannerOvenTemp, temperatureUnit),
-    activeCalculatorPlanSettings.roomTemp,
-    isBeginner ? undefined : plannerFermentationSchedule,
-    activePlannerTegliaSettings,
-    plannerOvenType,
-    plannerOvenTemp,
-    isBeginner ? undefined : getBeginnerPreheatMinutes(plannerOvenType),
-    isBeginner ? undefined : activeMixing,
-    isBeginner
-      ? null
-      : activeCalculatorPlanSettings.spongePreparationByLanguage?.[lang]
-        ?? sharedCalculatorPlanSettings?.spongePreparation
-        ?? null,
-    isBeginner ? undefined : activeCalculatorPlanSettings.bigaHydrationPct,
+  const isProKamadoPlan = !isBeginner && plannerOvenType === 'kamado';
+  const isProTegliaSponge = !isBeginner
+    && method === 'sponge'
+    && effectiveStyle === 'romana'
+    && activePlannerTegliaSettings.romanFormat === 'teglia'
+    && !isProKamadoPlan;
+  const kamadoInitialIntervals = isProKamadoPlan
+    ? getProNapolitanaInitialIntervals(method, proNapolitanaCombined, activeCalculatorPlanSettings.roomTemp)
+    : [];
+  const plannerBaseSteps = !beginnerKamadoPlanBlocked && bakeAt && hasCurrentBeginnerDirectSchedule && (roomTempLoaded || !!sharedCalculatorPlanSettings) && hasCurrentCalculatorRecipe ? (
+    isProKamadoPlan
+      ? buildProKamadoPlannerSteps(
+        bakeAt,
+        method,
+        effectiveStyle,
+        isProNapolitanaColdPlan ? proNapolitanaFermentationSchedule : plannerFermentationSchedule,
+        lang,
+        getBeginnerPreheatMinutes(plannerOvenType),
+        activeCalculatorPlanSettings.spongePreparationByLanguage?.[lang]
+          ?? sharedCalculatorPlanSettings?.spongePreparation
+          ?? null,
+        kamadoInitialIntervals,
+        proNapolitanaCombined,
+        method === 'poolish'
+          ? getPoolishFinalMixDurationMinutes(activeMixing)
+          : method === 'biga'
+            ? getProKamadoBigaMixDurationMinutes(activeMixing)
+            : method === 'sponge'
+              ? getPoolishFinalMixDurationMinutes(activeMixing)
+            : 0,
+      )
+      : reversePlan(
+        bakeAt,
+        method,
+        effectiveStyle,
+        plannerStepCopy,
+        isProNapolitanaColdPlan ? null : plannerDirectHomeSchedule,
+        isProNapolitanaColdPlan ? null : plannerBigaHomeSchedule,
+        isProNapolitanaColdPlan ? null : plannerPoolishHomeSchedule,
+        lang,
+        formatTemperature(plannerOvenTemp, temperatureUnit),
+        activeCalculatorPlanSettings.roomTemp,
+        isBeginner ? undefined : proNapolitanaFermentationSchedule,
+        activePlannerTegliaSettings,
+        plannerOvenType,
+        plannerOvenTemp,
+        isBeginner ? undefined : getBeginnerPreheatMinutes(plannerOvenType),
+        isBeginner ? undefined : activeMixing,
+        isBeginner
+          ? null
+          : activeCalculatorPlanSettings.spongePreparationByLanguage?.[lang]
+            ?? sharedCalculatorPlanSettings?.spongePreparation
+            ?? null,
+        isBeginner ? undefined : activeCalculatorPlanSettings.bigaHydrationPct,
+      )
   ).map((step) => ({
     ...step,
     desc: formatUnitText(
-      plannerMixTitles.includes(step.title)
+      plannerMixTitles.includes(step.title) || step.phaseId === 'poolish.phase.1'
         ? `${step.desc}\n\n${plannerStepCopy.yeastHandling[plannerYeastType]}${activeMixing === 'spiral' ? `\n\n${getSpiralPlannerNote(lang)}` : ''}`
         : step.desc,
       temperatureUnit,
       measurementSystem,
     ),
-    })) : [];
-    if (!isBeginner
-      && plannerOvenType !== 'kamado'
-      && method === 'direct'
-      && effectiveStyle === 'neapolitan'
-      && (plannerDirectHomeSchedule?.fridgeHours ?? 0) > 0) {
-      return addProNapolitanaDirectInitialPlannerSteps(planSteps, lang);
+  })) : [];
+  const combinedBranchAlarmSteps = (() => {
+    if (isBeginner || method !== 'biga') return [];
+    const roomAfterFridgeHours = getPlannerRoomAfterFridgeHours(
+      method,
+      effectiveStyle,
+      activePlannerTegliaSettings.romanFormat,
+      activeCalculatorPlanSettings.roomHours,
+      activeCalculatorPlanSettings.fridgeHours,
+      activeCalculatorPlanSettings.roomTemp,
+    );
+    const branchSchedules = [
+      {
+        name: plannerStepCopy.bigaName,
+        phaseId: 'biga',
+        schedule: { ...plannerFermentationSchedule, startAtHours: activeCalculatorPlanSettings.bigaStartHours },
+      },
+    ];
+    if (sharedCalculatorPlanSettings?.poolishEnabled) {
+      const poolishSchedule = getPoolishPlannerFallbackSchedule({
+        poolishFermentationMode: activeCalculatorPlanSettings.poolishFermentationMode,
+        poolishHours: activeCalculatorPlanSettings.poolishHours,
+        poolishFermentationTempC: activeCalculatorPlanSettings.poolishFermentationTempC,
+        rtHours: activeCalculatorPlanSettings.poolishRtHours,
+        ctHours: activeCalculatorPlanSettings.poolishCtHours,
+        rtTemperatureC: activeCalculatorPlanSettings.poolishRtTemperatureC,
+        ctTemperatureC: activeCalculatorPlanSettings.poolishCtTemperatureC,
+        roomHours: plannerRoomBeforeFridgeHours,
+        roomTemp: activeCalculatorPlanSettings.roomTemp,
+        fridgeHours: activeCalculatorPlanSettings.fridgeHours,
+        fridgeTemp: activeCalculatorPlanSettings.fridgeTemp,
+      }, roomAfterFridgeHours);
+      branchSchedules.push({
+        name: plannerStepCopy.poolishName,
+        phaseId: 'poolish',
+        schedule: { ...poolishSchedule, startAtHours: activeCalculatorPlanSettings.poolishStartHours },
+      });
     }
-    return planSteps;
-  })(),
+    const branchEnds = branchSchedules.map(({ schedule }) => {
+      const phases = schedule.phases.filter((phase) => phase.kind === 'preferment');
+      return (schedule.startAtHours ?? 0) + phases.reduce((total, phase) => total + phase.hours, 0);
+    });
+    const finalMixStartHours = Math.max(...branchEnds);
+    const finalMixTitle = plannerStepCopy.finalMixTitle.replace('{PREFERMENT}', plannerStepCopy.bigaName);
+    const baseFinalMix = plannerBaseSteps.find((step) => step.title === finalMixTitle)
+      ?? (isProKamadoPlan ? plannerBaseSteps.find((step) => step.phaseId === 'biga.finalMix') : undefined);
+    if (!baseFinalMix) return [];
+    const baseBigaEndHours = plannerFermentationSchedule.phases
+      .filter((phase) => phase.kind === 'preferment')
+      .reduce((total, phase) => total + phase.hours, 0);
+    const laterBranchShiftMs = isProKamadoPlan
+      ? 0
+      : Math.max(0, finalMixStartHours - baseBigaEndHours) * 60 * 60 * 1000;
+    const finalMixAt = baseFinalMix.at.getTime() + laterBranchShiftMs;
+    const phaseSteps: typeof plannerBaseSteps = [];
+    if (isProKamadoPlan) {
+      phaseSteps.push(...buildProKamadoPrefermentBranchSteps(
+        new Date(finalMixAt),
+        branchSchedules.map(({ name, phaseId, schedule }) => ({
+          name,
+          phaseId: phaseId as 'biga' | 'poolish',
+          phases: schedule.phases.filter((phase) => phase.kind === 'preferment'),
+          startAtHours: schedule.startAtHours ?? 0,
+        })),
+        lang,
+      ));
+    } else {
+      branchSchedules.forEach(({ name, phaseId, schedule }) => {
+        const phases = schedule.phases.filter((phase) => phase.kind === 'preferment');
+        let elapsed = schedule.startAtHours ?? 0;
+        const phaseCopy = ({
+          hr: { phase: 'Faza', at: 'na', ready: 'Spremno za završni zamjes.' },
+          en: { phase: 'Phase', at: 'at', ready: 'Ready for the final mix.' },
+          de: { phase: 'Phase', at: 'bei', ready: 'Bereit für den Hauptteig.' },
+          sl: { phase: 'Faza', at: 'pri', ready: 'Pripravljeno za končno mešanje testa.' },
+        } as const)[lang];
+        phases.forEach((phase, index) => {
+          elapsed += phase.hours;
+          const environment = phase.environment === 'room' ? 'RT' : 'CT';
+          const duration = formatDuration(phase.hours * 3600, lang);
+          phaseSteps.push({
+            at: new Date(finalMixAt + (elapsed - finalMixStartHours) * 60 * 60 * 1000),
+            title: `${name} · ${environment} ${index + 1}`,
+            desc: `${phaseCopy.phase} ${index + 1}/${phases.length}: ${duration} ${phaseCopy.at} ${phase.temperature}°C.${index === phases.length - 1 ? ` ${phaseCopy.ready}` : ''}`,
+            phaseId: `${phaseId}.phase.${index + 1}`,
+          });
+        });
+      });
+    }
+    const shiftedBaseSteps = laterBranchShiftMs === 0
+      ? plannerBaseSteps
+      : plannerBaseSteps.map((step) => step === baseFinalMix
+        ? { ...step, at: new Date(step.at.getTime() + laterBranchShiftMs) }
+        : step);
+    return [...shiftedBaseSteps, ...phaseSteps];
+  })();
+  const plannerScheduleSteps = combinedBranchAlarmSteps.length > 0 ? combinedBranchAlarmSteps : plannerBaseSteps;
+  const proNapolitanaPlannerSteps = (() => {
+    if (!bakeAt) return plannerScheduleSteps;
+    if (!isProNapolitanaColdPlan) {
+      if (!isBeginner
+        && !isProKamadoPlan
+        && method === 'direct'
+        && effectiveStyle === 'neapolitan'
+        && (plannerDirectHomeSchedule?.fridgeHours ?? 0) > 0) {
+        return addProNapolitanaDirectInitialPlannerSteps(plannerScheduleSteps, lang);
+      }
+      if (isBeginner || isProKamadoPlan || method !== 'sponge' || activeCalculatorPlanSettings.fridgeHours <= 0) {
+        return plannerScheduleSteps;
+      }
+      const roomRestDuration = formatDuration(proFinalRoomHours * 3600, lang);
+      const fridgeDuration = formatDuration(activeCalculatorPlanSettings.fridgeHours * 3600, lang);
+      const spongeColdCopy = ({
+        hr: {
+          fridge: `Oblikovane kuglice pokrijte i ostavite u hladnjaku pri ${activeCalculatorPlanSettings.fridgeTemp}°C tijekom ${fridgeDuration}.`,
+          removalTitle: 'Izvadi oblikovane kuglice iz hladnjaka',
+          removal: `Izvadite oblikovane kuglice iz hladnjaka i ostavite ih ${roomRestDuration} na sobnoj temperaturi kao završni odmor.`,
+        },
+        en: {
+          fridge: `Cover the shaped dough balls and refrigerate them at ${activeCalculatorPlanSettings.fridgeTemp}°C for ${fridgeDuration}.`,
+          removalTitle: 'Remove the shaped dough balls from the fridge',
+          removal: `Remove the shaped dough balls from the fridge and leave them at room temperature for ${roomRestDuration} as their final rest.`,
+        },
+        de: {
+          fridge: `Decken Sie die geformten Teigkugeln ab und stellen Sie sie bei ${activeCalculatorPlanSettings.fridgeTemp}°C für ${fridgeDuration} in den Kühlschrank.`,
+          removalTitle: 'Geformte Teigkugeln aus dem Kühlschrank nehmen',
+          removal: `Nehmen Sie die geformten Teigkugeln aus dem Kühlschrank und lassen Sie sie ${roomRestDuration} als abschließende Ruhezeit bei Raumtemperatur stehen.`,
+        },
+        sl: {
+          fridge: `Oblikovane kroglice pokrijte in jih pri ${activeCalculatorPlanSettings.fridgeTemp}°C postavite v hladilnik za ${fridgeDuration}.`,
+          removalTitle: 'Oblikovane kroglice vzemi iz hladilnika',
+          removal: `Oblikovane kroglice vzemi iz hladilnika in jih pusti ${roomRestDuration} pri sobni temperaturi za končni počitek.`,
+        },
+      } as const)[lang];
+      const alignedSteps = alignProSpongeBallingBeforeFridge(plannerScheduleSteps).map((step) => {
+        if (step.phaseId === 'sponge.fridge') return { ...step, desc: spongeColdCopy.fridge };
+        if (step.phaseId === 'sponge.fridgeRemoval') {
+          return { ...step, title: spongeColdCopy.removalTitle, desc: spongeColdCopy.removal };
+        }
+        return step;
+      });
+      const tiePriority = (step: { phaseId?: string }) => step.phaseId === 'sponge.finalMix'
+        ? -2
+        : step.phaseId === 'sponge.balling'
+          ? -1
+          : 0;
+      return alignedSteps.sort((left, right) => left.at.getTime() - right.at.getTime() || tiePriority(left) - tiePriority(right));
+    }
+    const finalMixStep = method === 'sponge'
+      ? plannerScheduleSteps.find((step) => step.phaseId === 'sponge.finalMix')
+      : method === 'direct'
+        ? plannerScheduleSteps.find((step) => step.phaseId === 'direct.mix' || step.title === plannerStepCopy.directTitle)
+        : plannerScheduleSteps.find((step) => step.phaseId === `${method}.finalMix`)
+          ?? plannerScheduleSteps.find((step) => step.title === plannerStepCopy.finalMixTitle.replace('{PREFERMENT}', method === 'biga' ? plannerStepCopy.bigaName : plannerStepCopy.poolishName));
+    if (!finalMixStep) return plannerScheduleSteps;
+    const finalMixStepIndex = plannerScheduleSteps.indexOf(finalMixStep);
+
+    const spongePrefermentHours = plannerFermentationSchedule.phases
+      .filter((phase) => phase.kind === 'preferment')
+      .reduce((total, phase) => total + phase.hours, 0);
+    const finalMixDurationMinutes = method === 'biga'
+      ? getProKamadoBigaMixDurationMinutes(activeMixing)
+      : method === 'poolish' || method === 'sponge'
+        ? getPoolishFinalMixDurationMinutes(activeMixing)
+        : 0;
+    const finalMixTargetAt = proNapolitanaWindow && method !== 'direct' && method !== 'sponge'
+      ? new Date(proNapolitanaWindow.finalMixAt.getTime() - finalMixDurationMinutes * 60000)
+      : null;
+    const earlierPhaseShiftMs = finalMixTargetAt
+      ? finalMixTargetAt.getTime() - finalMixStep.at.getTime()
+      : 0;
+    const alignedSteps = method === 'sponge' && proNapolitanaWindow && !isProKamadoPlan
+      ? alignProNapolitanaSpongePlannerSteps(plannerScheduleSteps, proNapolitanaWindow, spongePrefermentHours, finalMixDurationMinutes)
+      : plannerScheduleSteps;
+    const shiftedSteps = alignedSteps.map((step) => {
+      if (finalMixTargetAt && step.at.getTime() <= finalMixStep.at.getTime()) {
+        return { ...step, at: new Date(step.at.getTime() + earlierPhaseShiftMs) };
+      }
+      if (method === 'sponge' && step.phaseId === 'sponge.fridgeRemoval') {
+        const roomRestDuration = formatDuration(activeCalculatorPlanSettings.roomHours * 3600, lang);
+        const takeOutCopy = ({
+          hr: {
+            title: isProTegliaSponge ? 'Izvadi masu tijesta iz hladnjaka' : 'Izvadi oblikovane kuglice iz hladnjaka',
+            desc: isProTegliaSponge
+              ? `Izvadite cijelu masu tijesta iz hladnjaka i držite je pokrivenu tijekom završnog odmora od ${roomRestDuration}; priprema tepsija počinje u zasebnom koraku.`
+              : `Izvadite već oblikovane kuglice iz hladnjaka i ostavite ih ${roomRestDuration} na sobnoj temperaturi kao završni odmor.`,
+          },
+          en: {
+            title: isProTegliaSponge ? 'Remove the dough mass from the fridge' : 'Remove the shaped dough balls from the fridge',
+            desc: isProTegliaSponge
+              ? `Remove the complete dough mass from the fridge and keep it covered during its ${roomRestDuration} final rest; tray preparation starts in a separate step.`
+              : `Remove the already-shaped dough balls from the fridge and leave them at room temperature for ${roomRestDuration} as their final rest.`,
+          },
+          de: {
+            title: isProTegliaSponge ? 'Teigmasse aus dem Kühlschrank nehmen' : 'Geformte Teigkugeln aus dem Kühlschrank nehmen',
+            desc: isProTegliaSponge
+              ? `Nehmen Sie die gesamte Teigmasse aus dem Kühlschrank und lassen Sie sie während der abschließenden Ruhezeit von ${roomRestDuration} abgedeckt; die Blechvorbereitung beginnt in einem eigenen Schritt.`
+              : `Nehmen Sie die bereits geformten Teigkugeln aus dem Kühlschrank und lassen Sie sie ${roomRestDuration} als abschließende Ruhezeit bei Raumtemperatur stehen.`,
+          },
+          sl: {
+            title: isProTegliaSponge ? 'Maso testa vzemi iz hladilnika' : 'Oblikovane kroglice vzemi iz hladilnika',
+            desc: isProTegliaSponge
+              ? `Celotno maso testa vzemi iz hladilnika in jo med končnim počitkom ${roomRestDuration} pusti pokrito; priprava pekačev se začne v ločenem koraku.`
+              : `Že oblikovane kroglice vzemi iz hladilnika in jih pusti ${roomRestDuration} pri sobni temperaturi za končni počitek.`,
+          },
+        })[lang];
+        return { ...step, ...takeOutCopy };
+      }
+      if (method === 'sponge' && step.phaseId === 'sponge.fridge') {
+        const coldDesc = (isProTegliaSponge ? ({
+          hr: `Pokrijte cijelu masu završnog tijesta i ostavite je u hladnjaku pri ${activeCalculatorPlanSettings.fridgeTemp}°C tijekom ${formatDuration(activeCalculatorPlanSettings.fridgeHours * 3600, lang)}.`,
+          en: `Cover the complete final dough mass and refrigerate it at ${activeCalculatorPlanSettings.fridgeTemp}°C for ${formatDuration(activeCalculatorPlanSettings.fridgeHours * 3600, lang)}.`,
+          de: `Decken Sie die gesamte fertige Teigmasse ab und stellen Sie sie bei ${activeCalculatorPlanSettings.fridgeTemp}°C für ${formatDuration(activeCalculatorPlanSettings.fridgeHours * 3600, lang)} in den Kühlschrank.`,
+          sl: `Celotno maso končnega testa pokrij in jo pri ${activeCalculatorPlanSettings.fridgeTemp}°C postavi v hladilnik za ${formatDuration(activeCalculatorPlanSettings.fridgeHours * 3600, lang)}.`,
+        }) : ({
+          hr: `Oblikovane kuglice pokrijte i ostavite u hladnjaku pri ${activeCalculatorPlanSettings.fridgeTemp}°C tijekom ${formatDuration(activeCalculatorPlanSettings.fridgeHours * 3600, lang)}.`,
+          en: `Cover the shaped dough balls and refrigerate them at ${activeCalculatorPlanSettings.fridgeTemp}°C for ${formatDuration(activeCalculatorPlanSettings.fridgeHours * 3600, lang)}.`,
+          de: `Decken Sie die geformten Teigkugeln ab und stellen Sie sie bei ${activeCalculatorPlanSettings.fridgeTemp}°C für ${formatDuration(activeCalculatorPlanSettings.fridgeHours * 3600, lang)} in den Kühlschrank.`,
+          sl: `Oblikovane kroglice pokrijte in jih pri ${activeCalculatorPlanSettings.fridgeTemp}°C postavite v hladilnik za ${formatDuration(activeCalculatorPlanSettings.fridgeHours * 3600, lang)}.`,
+        }))[lang];
+        return { ...step, desc: coldDesc };
+      }
+      return step;
+    });
+    if (isProKamadoPlan) return shiftedSteps;
+    const adjustedFinalMix = method === 'sponge'
+      ? shiftedSteps.find((step) => step.phaseId === 'sponge.finalMix')
+      : (isProNyCombinedColdPlan || isProRomanaTondaCombinedColdPlan)
+        ? shiftedSteps[finalMixStepIndex] ?? finalMixStep
+        : finalMixStep;
+    const mixAt = adjustedFinalMix?.at ?? finalMixStep.at;
+    const initialSequenceAt = new Date(mixAt.getTime() + finalMixDurationMinutes * 60000);
+    const intervalLabel = (seconds: number) => formatDuration(seconds, lang);
+    const copy = {
+      hr: {
+        mixRest: 'Odmor nakon završnog zamjesa',
+        roomRest: (index: number) => `Sobni odmor ${index}`,
+        fold: (index: number) => `Stretch & Fold ${index}`,
+        balling: 'Podjela i oblikovanje kuglica',
+        ballRest: (duration: string) => `Odmor kuglica – ${duration}`,
+      },
+      en: {
+        mixRest: 'Rest after final mix',
+        roomRest: (index: number) => `Room rest ${index}`,
+        fold: (index: number) => `Stretch & Fold ${index}`,
+        balling: 'Divide and shape dough balls',
+        ballRest: (duration: string) => `Dough-ball rest – ${duration}`,
+      },
+      de: {
+        mixRest: 'Ruhe nach dem Endkneten',
+        roomRest: (index: number) => `Raumruhe ${index}`,
+        fold: (index: number) => `Stretch & Fold ${index}`,
+        balling: 'Teiglinge teilen und formen',
+        ballRest: (duration: string) => `Ruhe der Teigkugeln – ${duration}`,
+      },
+      sl: {
+        mixRest: 'Počitek po končnem mešanju',
+        roomRest: (index: number) => `Počitek pri sobni temperaturi ${index}`,
+        fold: (index: number) => `Stretch & Fold ${index}`,
+        balling: 'Razdeli in oblikuj kroglice',
+        ballRest: (duration: string) => `Počitek kroglic – ${duration}`,
+      },
+    }[lang];
+    const description = {
+      hr: {
+        mixRest: (duration: string) => `Ostavite tijesto pokriveno ${duration} nakon završnog zamjesa.`,
+        roomRest: (duration: string) => `Nakon preklapanja ostavite tijesto pokriveno ${duration} na sobnoj temperaturi.`,
+        fold: 'Napravite Stretch & Fold prije sljedećeg sobnog odmora.',
+        balling: (duration: string) => `Oblikujte kuglice prije hladnjaka${duration ? `; odmor kuglica traje ${duration}.` : '.'}`,
+        ballRest: (duration: string) => `Nakon oblikovanja ostavite kuglice da odmore ${duration} prije hladnjaka.`,
+      },
+      en: {
+        mixRest: (duration: string) => `Keep the dough covered for ${duration} after the final mix.`,
+        roomRest: (duration: string) => `After folding, keep the dough covered at room temperature for ${duration}.`,
+        fold: 'Perform Stretch & Fold before the next room rest.',
+        balling: (duration: string) => `Shape the dough balls before refrigeration${duration ? `; rest them for ${duration}.` : '.'}`,
+        ballRest: (duration: string) => `After shaping, leave the dough balls to rest for ${duration} before refrigeration.`,
+      },
+      de: {
+        mixRest: (duration: string) => `Lassen Sie den Teig nach dem Endkneten ${duration} abgedeckt ruhen.`,
+        roomRest: (duration: string) => `Lassen Sie den Teig nach dem Falten ${duration} abgedeckt bei Raumtemperatur ruhen.`,
+        fold: 'Falten Sie den Teig vor der nächsten Ruhephase.',
+        balling: (duration: string) => `Formen Sie die Teigkugeln vor dem Kühlen${duration ? `; lassen Sie sie ${duration} ruhen.` : '.'}`,
+        ballRest: (duration: string) => `Lassen Sie die Teigkugeln nach dem Formen vor dem Kühlen ${duration} ruhen.`,
+      },
+      sl: {
+        mixRest: (duration: string) => `Testo po končnem mešanju pustite pokrito ${duration}.`,
+        roomRest: (duration: string) => `Po prepogibu pustite testo pokrito ${duration} pri sobni temperaturi.`,
+        fold: 'Testo prepognite pred naslednjim sobnim počitkom.',
+        balling: (duration: string) => `Kroglice oblikujte pred hlajenjem${duration ? `; počivajo naj ${duration}.` : '.'}`,
+        ballRest: (duration: string) => `Po oblikovanju naj kroglice pred hlajenjem počivajo ${duration}.`,
+      },
+    }[lang];
+    const phases = buildProNapolitanaInitialPlannerEvents(
+      method,
+      proNapolitanaCombined,
+      initialSequenceAt,
+      proNapolitanaInitialIntervals,
+    ).filter((event) => !(isProTegliaSponge && event.kind === 'balling')).flatMap((event) => {
+      const separateBallRest = (isProNyCombinedColdPlan || isProRomanaTondaCombinedColdPlan)
+        && event.kind === 'balling'
+        && (event.seconds ?? 0) > 0;
+      const title = event.kind === 'mix-rest'
+        ? copy.mixRest
+        : event.kind === 'room-rest'
+          ? copy.roomRest(event.index ?? 1)
+          : event.kind === 'fold'
+            ? copy.fold(event.index ?? 1)
+            : copy.balling;
+      const desc = event.kind === 'mix-rest'
+        ? description.mixRest(intervalLabel(event.seconds ?? 0))
+        : event.kind === 'room-rest'
+          ? description.roomRest(intervalLabel(event.seconds ?? 0))
+          : event.kind === 'fold'
+            ? description.fold
+            : description.balling(separateBallRest ? '' : event.seconds ? intervalLabel(event.seconds) : '');
+      const phaseId = event.kind === 'mix-rest'
+        ? 'pro.initial.mix-rest'
+        : event.kind === 'room-rest'
+          ? `pro.initial.room-rest-${event.index}`
+          : event.kind === 'fold'
+            ? `pro.initial.fold-${event.index}`
+            : 'pro.initial.balling';
+      const shapingStep = { at: event.at, title, desc, phaseId };
+      if (!separateBallRest) return [shapingStep];
+      const duration = intervalLabel(event.seconds ?? 0);
+      return [
+        shapingStep,
+        {
+          at: event.at,
+          title: copy.ballRest(duration),
+          desc: description.ballRest(duration),
+          phaseId: 'pro.initial.ball-rest',
+        },
+      ];
+    });
+    const tegliaSpongeEvents = isProTegliaSponge && proNapolitanaWindow
+      ? buildProTegliaSpongePlannerEvents(
+        proNapolitanaWindow.fridgeEndAt,
+        bakeAt,
+        proFinalRoomHours,
+        lang,
+      )
+      : [];
+    const allSteps = [
+      ...shiftedSteps.filter((step) => !(isProTegliaSponge && step.phaseId === 'sponge.finalRoom')),
+      ...phases,
+      ...tegliaSpongeEvents,
+    ];
+    const completeSteps = ensureProRomanaTondaBakeEvent(
+      allSteps,
+      isProRomanaTondaCombinedColdPlan,
+      bakeAt,
+      {
+        phaseId: 'romanaTonda.bake',
+        title: plannerStepCopy.bakeTitle ?? plannerStepCopy.ovenTitle,
+        desc: plannerStepCopy.bakeDesc ?? plannerStepCopy.ovenDesc,
+      },
+    );
+    const tiePriority = (step: { phaseId?: string }) => step.phaseId === 'pro.initial.balling'
+      ? -2
+      : step.phaseId === 'pro.initial.ball-rest' || step.phaseId === 'sponge.balling'
+        ? -1
+        : 0;
+    return completeSteps.sort((left, right) => left.at.getTime() - right.at.getTime() || tiePriority(left) - tiePriority(right));
+  })();
+  const generatedSteps = assignPlannerPhaseKeys(
+    proNapolitanaPlannerSteps,
   isBeginner
     ? JSON.stringify(['beginner', effectiveStyle, activePlannerTegliaSettings.romanFormat, method, activeMixing])
     : 'pro',
@@ -790,6 +1348,7 @@ export default function Planner() {
     effectiveStyle,
     preferredYeastType,
     activeMixing,
+    plannerOvenType,
     bakeAt.getTime(),
     steps.map((step) => step.at.getTime()),
     plannerDirectHomeSchedule,
@@ -798,7 +1357,7 @@ export default function Planner() {
     activeCalculatorPlanSettings,
     activePlannerTegliaSettings,
   ]) : '';
-  const canReconcilePlannerNotifications = shouldReconcilePlannerNotifications(
+  const canReconcilePlannerNotifications = !beginnerKamadoPlanBlocked && (!isBeginner || hasSharedCalculatorPlanSettings) && shouldReconcilePlannerNotifications(
     plannerRestoreStatus,
     isBeginner,
     !!bakeAt,
@@ -820,7 +1379,7 @@ export default function Planner() {
   }, [isBeginner, bakeAt, plannerDirectHomeSchedule, router]);
 
   const openPhaseEditor = (phase: PlannerPhaseStep) => {
-    if (!plannerPhaseOverridesStorageKey || plannerPhaseOverridesLoadedFor !== plannerPhaseOverridesStorageKey) return;
+    if (beginnerKamadoPlanBlocked || !plannerPhaseOverridesStorageKey || plannerPhaseOverridesLoadedFor !== plannerPhaseOverridesStorageKey) return;
     setEditingPhase(phase);
     setEditingPhaseDraft(new Date(phase.at));
     setEditingPhaseInput(formatLocalDateTimeInput(phase.at));
@@ -831,7 +1390,7 @@ export default function Planner() {
     setEditingPhasePickerMode(null);
   };
   const savePhaseEdit = () => {
-    if (!editingPhase) return;
+    if (beginnerKamadoPlanBlocked || !editingPhase) return;
     const at = Platform.OS === 'web' ? parseLocalDateTimeInput(editingPhaseInput) : editingPhaseDraft;
     if (!at || Number.isNaN(at.getTime())) {
       Alert.alert(t.planner.invalidDate);
@@ -879,7 +1438,7 @@ export default function Planner() {
   initial.setDate(initial.getDate() + 1);
   const [webDateDraft, setWebDateDraft] = useState<string | null>(null);
   const [webTimeDraft, setWebTimeDraft] = useState<string | null>(null);
-  const plannerBakeTargetReady = isBeginner || plannerBakeTargetLoadedFor === 'pro';
+  const plannerBakeTargetReady = !beginnerKamadoPlanBlocked && (isBeginner || plannerBakeTargetLoadedFor === 'pro');
   const displayedBakeAt = bakeAt ?? (plannerBakeTargetReady ? initial : null);
   const webDate = webDateDraft
     ?? (displayedBakeAt
@@ -934,7 +1493,7 @@ export default function Planner() {
   ];
 
   const generate = async (d: Date) => {
-    if (!isBeginner && !plannerBakeTargetReady) return false;
+    if (!plannerBakeTargetReady) return false;
     if (Number.isNaN(d.getTime())) {
       Alert.alert(t.planner.invalidDate);
       return false;
@@ -1035,7 +1594,7 @@ export default function Planner() {
   };
 
   const scheduleAll = async () => {
-    if (schedulingAlarms.current || isDeletingPlan) return;
+    if (beginnerKamadoPlanBlocked || schedulingAlarms.current || isDeletingPlan) return;
     schedulingAlarms.current = true;
     setIsSchedulingAlarms(true);
     let createdIdentifiers: string[] = [];
@@ -1069,6 +1628,9 @@ export default function Planner() {
         },
         cancelLocal,
       );
+      if (createdIdentifiers.length !== futureSteps.length) {
+        throw new Error(`Planner alarm scheduling returned ${createdIdentifiers.length} of ${futureSteps.length} identifiers.`);
+      }
       await cancelPlannerNotificationsForMethodsExcept(
         ['direct', 'biga', 'poolish'],
         new Set(createdIdentifiers),
@@ -1151,6 +1713,16 @@ export default function Planner() {
         <Text style={styles.title}>{t.planner.title}</Text>
       </View>
       <ScrollView contentContainerStyle={{ padding: SPACING.lg, paddingBottom: SPACING.xxxl, gap: SPACING.lg }}>
+        {beginnerKamadoPlanBlocked ? (
+          <View testID="beginner-kamado-plan-warning" accessibilityRole="alert" style={styles.staleOverrideNotice}>
+            <Text style={styles.staleOverrideNoticeText}>{({
+              hr: 'Plan za Kamado trenutačno nije dostupan jer vrijeme pečenja nije odobreno. Odaberite drugu peć za izradu plana.',
+              en: 'A Kamado plan is currently unavailable because its baking time has not been approved. Choose another oven to create a plan.',
+              de: 'Ein Kamado-Plan ist derzeit nicht verfügbar, da die Backzeit nicht freigegeben ist. Wählen Sie einen anderen Ofen, um einen Plan zu erstellen.',
+              sl: 'Načrt za Kamado trenutno ni na voljo, ker čas peke ni odobren. Za izdelavo načrta izberite drugo peč.',
+            }[lang])}</Text>
+          </View>
+        ) : null}
         {deletePlanFailure ? (
           <View testID="delete-plan-notice" accessibilityRole="alert" style={styles.staleOverrideNotice}>
             <Text style={styles.staleOverrideNoticeText}>
@@ -1324,7 +1896,7 @@ export default function Planner() {
               </View>
             ))}
           </View>
-        ) : (
+        ) : beginnerKamadoPlanBlocked ? null : (
           <View style={styles.empty}>
             <Icon name="time-outline" size={40} color={COLORS.muted} />
             <Text style={styles.emptyText}>
@@ -1423,7 +1995,7 @@ export default function Planner() {
               <Pressable testID="phase-edit-cancel" onPress={closePhaseEditor} style={styles.phaseCancelButton}>
                 <Text style={styles.phaseCancelText}>{t.planner.cancel}</Text>
               </Pressable>
-              <Pressable testID="phase-edit-save" onPress={savePhaseEdit} style={styles.primaryBtn}>
+              <Pressable testID="phase-edit-save" onPress={savePhaseEdit} disabled={beginnerKamadoPlanBlocked} style={[styles.primaryBtn, beginnerKamadoPlanBlocked && { opacity: 0.5 }]}>
                 <Text style={styles.primaryBtnText}>{t.planner.savePhase}</Text>
               </Pressable>
             </View>

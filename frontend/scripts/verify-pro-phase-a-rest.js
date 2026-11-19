@@ -10,6 +10,20 @@ const frontendRoot = path.join(__dirname, '..');
 const indexPath = path.join(frontendRoot, 'app', '(tabs)', 'index.tsx');
 const indexSource = fs.readFileSync(indexPath, 'utf8');
 const sourceFile = ts.createSourceFile(indexPath, indexSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+const bulkSourcePath = path.join(frontendRoot, 'src', 'i18n', 'proDirectBulk.ts');
+const bulkSource = fs.readFileSync(bulkSourcePath, 'utf8');
+const bulkRestModule = { exports: {} };
+vm.runInNewContext(ts.transpileModule(bulkSource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText, {
+  module: bulkRestModule,
+  exports: bulkRestModule.exports,
+  require: (specifier) => {
+    assert.equal(specifier, './prefermentSteps');
+    return { formatDuration: (seconds) => `${Math.round(seconds / 60)} min` };
+  },
+});
+assert.equal(typeof bulkRestModule.exports.getProNapolitanaBulkRestSeconds, 'function');
 
 function loadGenerator(name) {
   const declaration = sourceFile.statements.find(
@@ -24,11 +38,15 @@ function loadGenerator(name) {
     croatianMinutes: (minutes) => `${minutes} minuta`,
     formatDuration: (seconds) => `${Math.round(seconds / 60)} min`,
     formatTemperature: (temperature) => `${temperature} °C`,
+    getProNapolitanaBulkRestSeconds: bulkRestModule.exports.getProNapolitanaBulkRestSeconds,
+    PRO_NAPOLITANA_MIX_REST_SECONDS: bulkRestModule.exports.PRO_NAPOLITANA_MIX_REST_SECONDS,
     getBeginnerNewYorkInstantMixerInstructions: () => undefined,
     getBeginnerOvenTimers: () => [],
     getTegliaFinalProofPlan: () => ({ totalMinutes: 0, proofMinutes: 0, pressRelaxationMinutes: 0 }),
     getTemperingWindow: () => ({ minimumMinutes: 15, maximumMinutes: 30, initialMinutes: 15 }),
     phaseBBulkRestMinutes: () => 30,
+    getOvenBehaviorType: (oven) => oven,
+    usesPizzaOvenBehavior: () => false,
   });
   vm.runInContext(`${compiled}\nglobalThis.generator = ${name};`, context);
   return context.generator;
@@ -151,7 +169,7 @@ for (const lang of ['en', 'de', 'sl']) {
 
 assertRestMatches(
   makePhase(generateHr, 'hr', styles[0], 'hand', 'caputo00'),
-  15,
+  5,
   'PRO/HR/napolitana/caputo00/hand control',
 );
 assertRestMatches(

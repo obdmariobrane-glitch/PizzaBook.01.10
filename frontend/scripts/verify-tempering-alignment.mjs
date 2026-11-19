@@ -7,12 +7,19 @@ import vm from 'node:vm';
 const root = path.resolve(import.meta.dirname, '..');
 const calculatorSource = fs.readFileSync(path.join(root, 'src/calculator.ts'), 'utf8');
 const translationsSource = fs.readFileSync(path.join(root, 'src/i18n/translations.ts'), 'utf8');
+const screenSource = fs.readFileSync(path.join(root, 'app/(tabs)/index.tsx'), 'utf8');
 const loadTypeScriptModule = (source, filename) => {
   const compiled = ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   }).outputText;
   const moduleRef = { exports: {} };
   const require = (specifier) => {
+    if (filename === 'calculator.ts' && specifier === './proMethods/bigaPoolish') {
+      return loadTypeScriptModule(
+        fs.readFileSync(path.join(root, 'src/proMethods/bigaPoolish.ts'), 'utf8'),
+        'proMethods/bigaPoolish.ts',
+      );
+    }
     if (filename === 'prefermentSteps.ts' && specifier === './spiralMixing') {
       return loadTypeScriptModule(
         fs.readFileSync(path.join(root, 'src/i18n/spiralMixing.ts'), 'utf8'),
@@ -44,8 +51,11 @@ const {
   doughCalc,
   getDirectHomeFermentationSchedule,
   getFermentationSchedule,
+  getSpongeFermentationSchedule,
   getHomeFlourStrengthInput,
   getTemperingWindow,
+  calculateDirectFermentationScheduleExposure,
+  calculateDirectFreshYeastPct,
   isHomeScheduleDurationValid,
   reversePlan,
   selectPlannerHomeSchedules,
@@ -165,8 +175,12 @@ function rawExposure(schedule) {
 
 function assertCalcUsesSchedule(method, schedule, yeastType, flour, mixing, bigaPct = 50, poolishPct = 35) {
   const calc = doughFor(method, schedule, yeastType, flour, mixing, bigaPct, poolishPct);
-  const expectedExposure = Math.max(0.5, rawExposure(schedule));
-  const expectedYeastPct = (0.5 / expectedExposure) * YEAST_MASS_FACTORS[yeastType];
+  const expectedExposure = method === 'direct'
+    ? calculateDirectFermentationScheduleExposure(schedule.phases)
+    : Math.max(0.5, rawExposure(schedule));
+  const expectedYeastPct = method === 'direct'
+    ? calculateDirectFreshYeastPct(expectedExposure) * YEAST_MASS_FACTORS[yeastType]
+    : (0.5 / expectedExposure) * YEAST_MASS_FACTORS[yeastType];
   assert.equal(calc.eTotal, Math.round(expectedExposure * 10) / 10);
   assert.equal(calc.yeastPct, Math.round(expectedYeastPct * 100) / 100);
   if (method !== 'direct') {
@@ -182,6 +196,513 @@ function sumHours(schedule, kind, environment) {
   return schedule.phases
     .filter((phase) => phase.kind === kind && phase.environment === environment)
     .reduce((total, phase) => total + phase.hours, 0);
+}
+
+assert.match(screenSource, /roomBeforeFridgeHours: 0,[\s\S]*?roomAfterFridgeHours: roomHours/,
+  'PRO Direct Napolitana assigns the selected room interval only after the fridge');
+assert.match(screenSource, /const proCalculationFermentationSchedule = useMemo/,
+  'the original schedule remains available to the locked dough calculation');
+assert.match(screenSource, /roomBeforeFridgeHours: roomHours,[\s\S]*?roomAfterFridgeHours: 0/,
+  'the locked dough calculation retains its previous Direct Napolitana exposure');
+assert.match(screenSource, /fermentationSchedule: proCalculationFermentationSchedule/,
+  'doughCalc receives the unchanged calculation schedule, not the presentation schedule');
+assert.match(screenSource, /getProFermentationPresentationSchedule\(/,
+  'PRO instructions and Planner use the isolated presentation schedule');
+assert.match(calculatorSource, /if \(style === 'romana' && fridgeHours > 0\)[\s\S]*?phase\.kind === 'final-rest' && phase\.environment === 'room'[\s\S]*?kind: 'final-rest'/,
+  'Romana presentation schedules place one selected final rest after the fridge');
+assert.match(screenSource, /finalRestMinutes: proFinalRestMinutes/,
+  'the Direct Napolitana instruction builder uses the presentation schedule duration');
+assert.match(screenSource, /id: 'tempering', seconds: finalRestMinutes \* 60/,
+  'the PRO Direct final-rest timer uses the same presentation duration');
+assert.match(calculatorSource, /if \(fridgeHours > 0\) \{[\s\S]*?phases: schedule\.phases\.filter\(\(phase\) => !\(phase\.kind === 'final' && phase\.environment === 'room'\)/,
+  'positive-fridge Biga presentation schedules omit the duplicate pre-fridge final-room interval');
+assert.match(calculatorSource, /if \(fridgeHours > 0\) \{[\s\S]*?phases: schedule\.phases\.filter\(\(phase\) => !\(phase\.kind === 'final' && phase\.environment === 'room'\)/,
+  'positive-fridge Poolish and Sponge presentation schedules omit the duplicate final-room interval without changing preferment phases');
+assert.match(screenSource, /adaptFermentationSteps\(path\.p3\.steps, roomHours, fridgeHours, fridgeTemp, lang, false\)/,
+  'Poolish P3 short room rests are not replaced with the selected final-room duration');
+assert.match(screenSource, /seconds: poolishFinalRoomHours \* 3600/,
+  'Poolish P3 final-room timer uses the selected schedule duration');
+assert.match(screenSource, /id: 'sponge-final-room'[\s\S]*?seconds: poolishFinalRoomHours \* 3600/,
+  'Sponge P3 final-room timer uses the selected schedule duration');
+assert.match(screenSource, /spongeP3SourceSteps = isSponge[\s\S]*?appendFinalRoomInstruction\(p3Steps\)/,
+  'Sponge P3 instructions include the selected final-room duration');
+for (const localizedTempering of [
+  'ostavite ih pokrivene ${temperingDuration ||',
+  'leave them covered for ${temperingDuration ||',
+  'lassen Sie sie ${temperingDuration ||',
+  'jih pokrite pustite ${temperingDuration ||',
+]) {
+  assert.ok(screenSource.includes(localizedTempering), `PRO Direct final-room instructions use the selected duration: ${localizedTempering}`);
+}
+
+for (const selectedRoomHours of [2, 3, 4]) {
+  for (const selectedFridgeHours of [24, 0]) {
+    const calculationSchedule = getFermentationSchedule({
+      method: 'direct',
+      roomHours: selectedRoomHours,
+      roomTemp: settings.roomTemp,
+      fridgeHours: selectedFridgeHours,
+      fridgeTemp: settings.fridgeTemp,
+    });
+    const presentationSchedule = {
+      ...calculationSchedule,
+      phases: calculationSchedule.phases.map((phase) =>
+        phase.kind === 'final' && phase.environment === 'room'
+          ? { ...phase, kind: 'final-rest' }
+          : phase,
+      ),
+    };
+    const calculationDough = doughCalc({
+      pizzas: 4,
+      ballWeight: 260,
+      hydration: 63,
+      saltPct: 2.8,
+      oilPct: 2,
+      method: 'direct',
+      roomHours: selectedRoomHours,
+      roomTemp: settings.roomTemp,
+      fridgeHours: selectedFridgeHours,
+      fridgeTemp: settings.fridgeTemp,
+      yeastType: 'fresh',
+      flourType: 'caputo00',
+      mixing: 'hand',
+      fermentationSchedule: calculationSchedule,
+    });
+    assert.equal(sumHours(calculationSchedule, 'final', 'room'), selectedRoomHours);
+    assert.equal(sumHours(calculationSchedule, 'final-rest', 'room'), 0);
+    assert.equal(sumHours(presentationSchedule, 'final', 'room'), 0);
+    assert.equal(sumHours(presentationSchedule, 'final-rest', 'room'), selectedRoomHours);
+    assert.equal(
+      calculationDough.eTotal,
+      Math.round(calculateDirectFermentationScheduleExposure(calculationSchedule.phases) * 10) / 10,
+      `Direct ${selectedRoomHours}h/${selectedFridgeHours}h leaves the calculation exposure unchanged`,
+    );
+    assert.equal(
+      presentationSchedule.phases.reduce((total, phase) => total + phase.hours, 0),
+      calculationSchedule.phases.reduce((total, phase) => total + phase.hours, 0),
+      `Direct ${selectedRoomHours}h/${selectedFridgeHours}h does not double-count the room interval`,
+    );
+
+    const planSchedule = {
+      startAt: new Date(bakeAt.getTime() - (selectedRoomHours + selectedFridgeHours) * 3600000),
+      bakeAt,
+      roomBeforeFridgeHours: 0,
+      fridgeHours: selectedFridgeHours,
+      roomAfterFridgeHours: selectedRoomHours,
+      prefermentHours: 0,
+    };
+    for (const variant of [
+      { style: 'neapolitan', romanFormat: 'tonda' },
+      { style: 'romana', romanFormat: 'tonda' },
+      { style: 'romana', romanFormat: 'teglia' },
+      { style: 'ny_style', romanFormat: 'tonda' },
+    ]) {
+      for (const lang of ['hr', 'en', 'de', 'sl']) {
+        const copy = translations[lang].planner.stepCopy;
+        const tegliaSettings = {
+          romanFormat: variant.romanFormat,
+          trayCount: 1,
+          doughPerTray: 475,
+          trayWidth: 30,
+          trayLength: 40,
+        };
+        const plannerSteps = reversePlan(
+          bakeAt,
+          'direct',
+          variant.style,
+          copy,
+          variant.style === 'neapolitan' ? planSchedule : null,
+          null,
+          null,
+          lang,
+          undefined,
+          settings.roomTemp,
+          presentationSchedule,
+          tegliaSettings,
+        );
+        const expectedDuration = ({
+          hr: `${selectedRoomHours} sati`,
+          en: `${selectedRoomHours} hours`,
+          de: `${selectedRoomHours} Stunden`,
+          sl: `${selectedRoomHours} ur`,
+        })[lang];
+        const finalRoomAt = bakeAt.getTime() - selectedRoomHours * 3600000;
+        const finalRoomStep = plannerSteps.find((step) =>
+          step.at.getTime() === finalRoomAt && step.desc.includes(expectedDuration),
+        );
+        assert.ok(finalRoomStep, `${variant.style}/${variant.romanFormat}/${lang} ${selectedRoomHours}h has a matching Planner final-room step`);
+        const coldTitles = new Set([copy.coldTitle, copy.directHomeTegliaCopy?.coldMassTitle]);
+        const fridgeStep = plannerSteps.find((step) => coldTitles.has(step.title));
+        if (selectedFridgeHours > 0) {
+          assert.ok(fridgeStep, `${variant.style}/${variant.romanFormat}/${lang} has its selected fridge phase`);
+          assert.equal((bakeAt.getTime() - fridgeStep.at.getTime()) / 3600000, selectedRoomHours + selectedFridgeHours);
+        } else {
+          assert.equal(fridgeStep, undefined, `${variant.style}/${variant.romanFormat}/${lang} zero fridge has no fridge/removal event`);
+        }
+        assert.equal(
+          (bakeAt.getTime() - planSchedule.startAt.getTime()) / 3600000,
+          selectedRoomHours + selectedFridgeHours,
+          `${variant.style}/${variant.romanFormat}/${lang} keeps the room interval in the total exactly once`,
+        );
+      }
+    }
+  }
+}
+
+for (const selectedRoomHours of [2, 3, 4]) {
+  for (const selectedFridgeHours of [24, 0]) {
+    const calculationSchedule = getFermentationSchedule({
+      method: 'biga',
+      prefermentHours: 24,
+      roomHours: selectedRoomHours,
+      roomTemp: settings.roomTemp,
+      fridgeHours: selectedFridgeHours,
+      fridgeTemp: settings.fridgeTemp,
+      roomAfterFridgeHours: selectedFridgeHours > 0 ? selectedRoomHours : 0,
+    });
+    const presentationSchedule = selectedFridgeHours > 0
+      ? {
+        ...calculationSchedule,
+        phases: calculationSchedule.phases.filter(
+          (phase) => !(phase.kind === 'final' && phase.environment === 'room'),
+        ),
+      }
+      : calculationSchedule;
+    assert.equal(sumHours(calculationSchedule, 'preferment', 'room') + sumHours(calculationSchedule, 'preferment', 'fridge'), 24);
+    assert.equal(sumHours(presentationSchedule, 'final', 'room'), selectedFridgeHours > 0 ? 0 : selectedRoomHours);
+    assert.equal(sumHours(presentationSchedule, 'final-rest', 'room'), selectedFridgeHours > 0 ? selectedRoomHours : 0);
+    assert.equal(
+      sumHours(presentationSchedule, 'final', 'room')
+        + sumHours(presentationSchedule, 'final', 'fridge')
+        + sumHours(presentationSchedule, 'final-rest', 'room'),
+      selectedRoomHours + selectedFridgeHours,
+      `Biga ${selectedRoomHours}h/${selectedFridgeHours}h has no duplicate final room interval`,
+    );
+    const calculationDough = doughCalc({
+      pizzas: 4,
+      ballWeight: 260,
+      hydration: 63,
+      saltPct: 2.8,
+      oilPct: 2,
+      method: 'biga',
+      bigaPct: 50,
+      roomHours: selectedRoomHours,
+      roomTemp: settings.roomTemp,
+      fridgeHours: selectedFridgeHours,
+      fridgeTemp: settings.fridgeTemp,
+      prefermentHours: 24,
+      yeastType: 'fresh',
+      flourType: 'caputo00',
+      mixing: 'hand',
+      fermentationSchedule: calculationSchedule,
+    });
+    assert.equal(
+      calculationDough.eTotal,
+      Math.round(Math.max(0.5, rawExposure(calculationSchedule)) * 10) / 10,
+      `Biga ${selectedRoomHours}h/${selectedFridgeHours}h keeps the locked calculation schedule`,
+    );
+
+    for (const variant of [
+      { style: 'neapolitan', romanFormat: 'tonda' },
+      { style: 'romana', romanFormat: 'tonda' },
+      { style: 'romana', romanFormat: 'teglia' },
+      { style: 'ny_style', romanFormat: 'tonda' },
+    ]) {
+      for (const lang of ['hr', 'en', 'de', 'sl']) {
+        const copy = translations[lang].planner.stepCopy;
+        const tegliaSettings = { romanFormat: variant.romanFormat, trayCount: 1, doughPerTray: 475, trayWidth: 30, trayLength: 40 };
+        const plannerSteps = reversePlan(
+          bakeAt,
+          'biga',
+          variant.style,
+          copy,
+          null,
+          null,
+          null,
+          lang,
+          undefined,
+          settings.roomTemp,
+          presentationSchedule,
+          tegliaSettings,
+        );
+        const expectedDuration = ({
+          hr: `${selectedRoomHours} sati`,
+          en: `${selectedRoomHours} hours`,
+          de: `${selectedRoomHours} Stunden`,
+          sl: `${selectedRoomHours} ur`,
+        })[lang];
+        const expectedRoomTime = bakeAt.getTime() - selectedRoomHours * 3600000;
+        const finalRoomStep = plannerSteps.find((step) =>
+          step.at.getTime() === expectedRoomTime && step.desc.includes(expectedDuration),
+        );
+        if (selectedFridgeHours > 0) {
+          assert.ok(finalRoomStep, `${variant.style}/${variant.romanFormat}/${lang} Biga has matching selected final tempering`);
+        } else {
+          const roomOnlyBulk = plannerSteps.find((step) => step.title === copy.finalBulkTitle && step.at.getTime() === expectedRoomTime);
+          assert.ok(roomOnlyBulk, `${variant.style}/${variant.romanFormat}/${lang} Biga preserves the room-only flow`);
+        }
+        const coldStep = plannerSteps.find((step) => step.title === copy.coldTitle || step.title === copy.directHomeTegliaCopy?.coldMassTitle);
+        if (selectedFridgeHours > 0) {
+          assert.ok(coldStep, `${variant.style}/${variant.romanFormat}/${lang} Biga retains its cold phase`);
+          assert.equal((bakeAt.getTime() - coldStep.at.getTime()) / 3600000, selectedRoomHours + selectedFridgeHours);
+        } else {
+          assert.equal(coldStep, undefined, `${variant.style}/${variant.romanFormat}/${lang} Biga 0h fridge has no removal step`);
+        }
+      }
+    }
+  }
+}
+
+for (const selectedRoomHours of [2, 3, 4]) {
+  for (const selectedFridgeHours of [24, 0]) {
+    const calculationSchedule = getFermentationSchedule({
+      method: 'poolish',
+      prefermentHours: 24,
+      roomHours: selectedRoomHours,
+      roomTemp: settings.roomTemp,
+      fridgeHours: selectedFridgeHours,
+      fridgeTemp: settings.fridgeTemp,
+      roomAfterFridgeHours: selectedFridgeHours > 0 ? selectedRoomHours : 0,
+    });
+    const presentationSchedule = selectedFridgeHours > 0
+      ? {
+        ...calculationSchedule,
+        phases: calculationSchedule.phases.filter(
+          (phase) => !(phase.kind === 'final' && phase.environment === 'room'),
+        ),
+      }
+      : calculationSchedule;
+    const prefermentHours = (schedule) => schedule.phases
+      .filter((phase) => phase.kind === 'preferment')
+      .reduce((total, phase) => total + phase.hours, 0);
+    assert.equal(prefermentHours(calculationSchedule), 24);
+    assert.equal(prefermentHours(presentationSchedule), 24, 'Poolish preferment fermentation remains unchanged');
+    assert.equal(sumHours(presentationSchedule, 'final', 'room'), selectedFridgeHours > 0 ? 0 : selectedRoomHours);
+    assert.equal(sumHours(presentationSchedule, 'final-rest', 'room'), selectedFridgeHours > 0 ? selectedRoomHours : 0);
+    assert.equal(
+      sumHours(presentationSchedule, 'final', 'room')
+        + sumHours(presentationSchedule, 'final', 'fridge')
+        + sumHours(presentationSchedule, 'final-rest', 'room'),
+      selectedRoomHours + selectedFridgeHours,
+      `Poolish ${selectedRoomHours}h/${selectedFridgeHours}h does not double-count final room time`,
+    );
+    const calculationDough = doughCalc({
+      pizzas: 4,
+      ballWeight: 260,
+      hydration: 63,
+      saltPct: 2.8,
+      oilPct: 2,
+      method: 'poolish',
+      poolishPct: 35,
+      roomHours: selectedRoomHours,
+      roomTemp: settings.roomTemp,
+      fridgeHours: selectedFridgeHours,
+      fridgeTemp: settings.fridgeTemp,
+      prefermentHours: 24,
+      yeastType: 'fresh',
+      flourType: 'caputo00',
+      mixing: 'hand',
+      fermentationSchedule: calculationSchedule,
+    });
+    assert.equal(
+      calculationDough.eTotal,
+      Math.round(Math.max(0.5, rawExposure(calculationSchedule)) * 10) / 10,
+      `Poolish ${selectedRoomHours}h/${selectedFridgeHours}h keeps the locked calculation schedule`,
+    );
+
+    for (const variant of [
+      { style: 'neapolitan', romanFormat: 'tonda' },
+      { style: 'romana', romanFormat: 'tonda' },
+      { style: 'romana', romanFormat: 'teglia' },
+      { style: 'ny_style', romanFormat: 'tonda' },
+    ]) {
+      for (const lang of ['hr', 'en', 'de', 'sl']) {
+        const copy = translations[lang].planner.stepCopy;
+        const tegliaSettings = { romanFormat: variant.romanFormat, trayCount: 1, doughPerTray: 475, trayWidth: 30, trayLength: 40 };
+        const plannerSteps = reversePlan(
+          bakeAt,
+          'poolish',
+          variant.style,
+          copy,
+          null,
+          null,
+          null,
+          lang,
+          undefined,
+          settings.roomTemp,
+          presentationSchedule,
+          tegliaSettings,
+        );
+        const expectedDuration = ({
+          hr: `${selectedRoomHours} sati`,
+          en: `${selectedRoomHours} hours`,
+          de: `${selectedRoomHours} Stunden`,
+          sl: `${selectedRoomHours} ur`,
+        })[lang];
+        const expectedRoomTime = bakeAt.getTime() - selectedRoomHours * 3600000;
+        const roomEvents = plannerSteps.filter((step) => step.at.getTime() === expectedRoomTime);
+        assert.ok(
+          roomEvents.some((step) => step.desc.includes(expectedDuration) || step.desc.includes(`${selectedRoomHours} h`)),
+          `${variant.style}/${variant.romanFormat}/${lang} Poolish Planner shows selected ${selectedRoomHours}h: ${JSON.stringify(roomEvents)}`,
+        );
+        const coldStep = plannerSteps.find((step) => step.title === copy.coldTitle || step.title === copy.directHomeTegliaCopy?.coldMassTitle);
+        if (selectedFridgeHours > 0) {
+          assert.ok(coldStep, `${variant.style}/${variant.romanFormat}/${lang} Poolish retains its selected cold phase`);
+          assert.equal((bakeAt.getTime() - coldStep.at.getTime()) / 3600000, selectedRoomHours + selectedFridgeHours);
+        } else {
+          assert.equal(coldStep, undefined, `${variant.style}/${variant.romanFormat}/${lang} Poolish 0h fridge has no removal step`);
+        }
+      }
+    }
+  }
+}
+
+for (const { selectedRoomHours, selectedFridgeHours } of [
+  { selectedRoomHours: 3, selectedFridgeHours: 24 },
+  { selectedRoomHours: 2, selectedFridgeHours: 24 },
+  { selectedRoomHours: 4, selectedFridgeHours: 48 },
+  { selectedRoomHours: 3, selectedFridgeHours: 0 },
+]) {
+    const calculationSchedule = getSpongeFermentationSchedule(
+      8,
+      21,
+      selectedRoomHours,
+      settings.roomTemp,
+      selectedFridgeHours,
+      settings.fridgeTemp,
+      selectedFridgeHours > 0 ? selectedRoomHours : 0,
+    );
+    const presentationSchedule = selectedFridgeHours > 0
+      ? {
+        ...calculationSchedule,
+        phases: calculationSchedule.phases.filter(
+          (phase) => !(phase.kind === 'final' && phase.environment === 'room'),
+        ),
+      }
+      : calculationSchedule;
+    const prefermentHours = (schedule) => schedule.phases
+      .filter((phase) => phase.kind === 'preferment')
+      .reduce((total, phase) => total + phase.hours, 0);
+    assert.equal(prefermentHours(calculationSchedule), 8);
+    assert.equal(prefermentHours(presentationSchedule), 8, 'Sponge fermentation duration remains unchanged');
+    assert.equal(sumHours(presentationSchedule, 'final', 'room'), selectedFridgeHours > 0 ? 0 : selectedRoomHours);
+    assert.equal(sumHours(presentationSchedule, 'final-rest', 'room'), selectedFridgeHours > 0 ? selectedRoomHours : 0);
+    assert.equal(
+      sumHours(presentationSchedule, 'final', 'room')
+        + sumHours(presentationSchedule, 'final', 'fridge')
+        + sumHours(presentationSchedule, 'final-rest', 'room'),
+      selectedRoomHours + selectedFridgeHours,
+      `Sponge ${selectedRoomHours}h/${selectedFridgeHours}h does not double-count final room time`,
+    );
+    const calculationDough = doughCalc({
+      pizzas: 4,
+      ballWeight: 260,
+      hydration: 63,
+      saltPct: 2.8,
+      oilPct: 2,
+      method: 'sponge',
+      spongeFlourPct: 35,
+      spongeHydrationPct: 100,
+      spongeFermentationHours: 8,
+      spongeFermentationTempC: 21,
+      spongeYeastMode: 'automatic',
+      spongeManualYeastGrams: 0,
+      spongeYeastType: 'fresh',
+      roomHours: selectedRoomHours,
+      roomTemp: settings.roomTemp,
+      fridgeHours: selectedFridgeHours,
+      fridgeTemp: settings.fridgeTemp,
+      prefermentHours: 8,
+      yeastType: 'fresh',
+      flourType: 'caputo00',
+      mixing: 'hand',
+      fermentationSchedule: calculationSchedule,
+    });
+    assert.equal(
+      calculationDough.eTotal,
+      Math.round(Math.max(0.5, rawExposure(calculationSchedule)) * 10) / 10,
+      `Sponge ${selectedRoomHours}h/${selectedFridgeHours}h keeps the locked calculation schedule`,
+    );
+
+    for (const lang of ['hr', 'en', 'de', 'sl']) {
+      const copy = translations[lang].planner.stepCopy;
+      const spongePreparation = { title: 'Sponge preparation', steps: ['Prepare the Sponge.'] };
+      const plannerSteps = reversePlan(
+        bakeAt,
+        'sponge',
+        'neapolitan',
+        copy,
+        null,
+        null,
+        null,
+        lang,
+        undefined,
+        settings.roomTemp,
+        calculationSchedule,
+        { romanFormat: 'tonda', trayCount: 1, doughPerTray: 475, trayWidth: 30, trayLength: 40 },
+        undefined,
+        undefined,
+        20,
+        undefined,
+        spongePreparation,
+      );
+      const getPhase = (phaseId) => plannerSteps.find((step) => step.phaseId === phaseId);
+      const atOffset = (step, hours) => (bakeAt.getTime() - step.at.getTime()) / 3600000 === hours;
+      const localizedDuration = (hours) => ({
+        hr: `${hours} ${hours === 1 ? 'sat' : 'sati'}`,
+        en: `${hours} ${hours === 1 ? 'hour' : 'hours'}`,
+        de: `${hours} ${hours === 1 ? 'Stunde' : 'Stunden'}`,
+        sl: `${hours} ${hours === 1 ? 'ura' : 'ur'}`,
+      })[lang];
+      const spongePrepStep = getPhase('sponge.preparation');
+      const finalMixStep = getPhase('sponge.finalMix');
+      const finalRoomStep = getPhase('sponge.finalRoom');
+      const shapingStep = getPhase('sponge.balling');
+      const preheatStep = getPhase('sponge.preheat');
+      const bakeStep = getPhase('sponge.bake');
+      const localizedBallRestTitle = ({
+        hr: 'Odmor kuglica na sobnoj temperaturi',
+        en: 'Dough-ball room rest',
+        de: 'Teigkugel-Ruhe bei Raumtemperatur',
+        sl: 'Počitek kroglic pri sobni temperaturi',
+      })[lang];
+      assert.ok(spongePrepStep, `${lang}/${selectedRoomHours}h/${selectedFridgeHours}h includes Sponge preparation`);
+      assert.equal(spongePrepStep.title, spongePreparation.title);
+      assert.ok(atOffset(spongePrepStep, 8 + selectedRoomHours + selectedFridgeHours));
+      assert.ok(finalMixStep, `${lang}/${selectedRoomHours}h/${selectedFridgeHours}h includes final mixing`);
+      assert.equal(finalMixStep.title, copy.refreshTitle);
+      assert.ok(atOffset(finalMixStep, selectedRoomHours + selectedFridgeHours));
+      assert.ok(finalRoomStep, `${lang}/${selectedRoomHours}h/${selectedFridgeHours}h includes final room fermentation`);
+      assert.equal(finalRoomStep.title, localizedBallRestTitle);
+      assert.ok(finalRoomStep.desc.includes(localizedDuration(selectedRoomHours)));
+      assert.ok(atOffset(finalRoomStep, selectedRoomHours));
+      assert.ok(shapingStep, `${lang}/${selectedRoomHours}h/${selectedFridgeHours}h includes shaping`);
+      assert.ok(atOffset(shapingStep, selectedRoomHours));
+      assert.ok(plannerSteps.indexOf(shapingStep) < plannerSteps.indexOf(finalRoomStep), `${lang}: balling precedes the selected room rest`);
+      assert.ok(preheatStep, `${lang}/${selectedRoomHours}h/${selectedFridgeHours}h includes oven preheating`);
+      assert.ok(atOffset(preheatStep, 20 / 60), `${lang}: selected preheat offset is preserved`);
+      assert.ok(bakeStep, `${lang}/${selectedRoomHours}h/${selectedFridgeHours}h includes baking`);
+      assert.equal(bakeStep.at.getTime(), bakeAt.getTime());
+      if (selectedFridgeHours > 0) {
+        const coldStep = getPhase('sponge.fridge');
+        const removalStep = getPhase('sponge.fridgeRemoval');
+        assert.ok(coldStep, `${lang}/${selectedRoomHours}h/${selectedFridgeHours}h includes cold fermentation`);
+        assert.ok(coldStep.desc.includes(localizedDuration(selectedFridgeHours)));
+        assert.ok(atOffset(coldStep, selectedRoomHours + selectedFridgeHours));
+        assert.ok(removalStep, `${lang}/${selectedRoomHours}h/${selectedFridgeHours}h includes fridge removal`);
+        assert.match(removalStep.desc, /shape|oblikuj|formen/i);
+        assert.ok(atOffset(removalStep, selectedRoomHours));
+        assert.ok(plannerSteps.indexOf(finalMixStep) < plannerSteps.indexOf(coldStep));
+        assert.ok(plannerSteps.indexOf(coldStep) < plannerSteps.indexOf(removalStep));
+        assert.ok(plannerSteps.indexOf(removalStep) < plannerSteps.indexOf(shapingStep));
+      } else {
+        assert.equal(getPhase('sponge.fridge'), undefined, `${lang}: no cold phase at 0h fridge`);
+        assert.equal(getPhase('sponge.fridgeRemoval'), undefined, `${lang}: no fridge-removal event at 0h fridge`);
+        assert.ok(plannerSteps.indexOf(finalMixStep) < plannerSteps.indexOf(shapingStep));
+      }
+      assert.ok(plannerSteps.indexOf(finalRoomStep) < plannerSteps.indexOf(preheatStep));
+      assert.ok(plannerSteps.indexOf(preheatStep) < plannerSteps.indexOf(bakeStep));
+    }
 }
 
 for (const style of ['neapolitan', 'romana', 'ny_style']) {
@@ -272,7 +793,8 @@ for (const method of ['direct', 'biga', 'poolish']) {
       for (const style of ['neapolitan', 'newYork', 'romanaTonda', 'romanaTeglia']) {
         for (const yeastType of ['fresh', 'activeDry', 'dry']) {
           const calc = doughFor('direct', makeSchedule('direct'), yeastType, 'caputo00', 'hand', 50, 35, style);
-          const expectedYeastPct = (0.5 / Math.max(0.5, rawExposure(makeSchedule('direct')))) * YEAST_MASS_FACTORS[yeastType];
+          const directSchedule = makeSchedule('direct');
+          const expectedYeastPct = calculateDirectFreshYeastPct(calculateDirectFermentationScheduleExposure(directSchedule.phases)) * YEAST_MASS_FACTORS[yeastType];
           assert.equal(calc.yeastPct, Math.round(expectedYeastPct * 100) / 100);
         }
       }
@@ -320,8 +842,9 @@ const beforeExampleSchedule = getFermentationSchedule({
 const afterExampleSchedule = makeSchedule('direct');
 const beforeExample = doughFor('direct', beforeExampleSchedule);
 const afterExample = doughFor('direct', afterExampleSchedule);
-assert.equal(beforeExample.eTotal, 5.2);
-assert.equal(afterExample.eTotal, 5.9);
+assert.equal(beforeExample.eTotal, Math.round(calculateDirectFermentationScheduleExposure(beforeExampleSchedule.phases) * 10) / 10);
+assert.equal(afterExample.eTotal, Math.round(calculateDirectFermentationScheduleExposure(afterExampleSchedule.phases) * 10) / 10);
+assert.ok(afterExample.eTotal > beforeExample.eTotal);
 assert.ok(afterExample.total.yeast < beforeExample.total.yeast);
 
 const homeNow = new Date('2026-10-18T12:00:00.000Z');
@@ -367,7 +890,7 @@ const actualColdHomeCalc = doughCalc({
   mixing: 'hand',
   fermentationSchedule: actualColdHomeSchedule,
 });
-assert.equal(actualColdHomeCalc.eTotal, Math.round(rawExposure(actualColdHomeSchedule) * 10) / 10);
+assert.equal(actualColdHomeCalc.eTotal, Math.round(calculateDirectFermentationScheduleExposure(actualColdHomeSchedule.phases) * 10) / 10);
 const actualColdHomeSteps = reversePlan(
   actualColdHomePlan.schedule.bakeAt,
   'direct',

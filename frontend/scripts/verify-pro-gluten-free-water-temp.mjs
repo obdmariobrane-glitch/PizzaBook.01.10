@@ -1,16 +1,30 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import vm from 'node:vm';
 import ts from 'typescript';
-import {
+const require = createRequire(import.meta.url);
+require.extensions['.ts'] = (module, filename) => {
+  const source = readFileSync(filename, 'utf8');
+  const output = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  module._compile(output, filename);
+};
+
+const {
   beginnerHydrationFor,
   doughCalc,
   FLOUR_PROFILES,
+  getOvenBehaviorType,
   PIZZA_STYLE_PROFILES,
-} from '../src/calculator.ts';
+} = require('../src/calculator.ts');
+const { getProNapolitanaBulkRestSeconds, PRO_NAPOLITANA_MIX_REST_SECONDS } = require('../src/i18n/proDirectBulk.ts');
 
 const uiPath = new URL('../app/(tabs)/index.tsx', import.meta.url);
 const uiSource = await readFile(uiPath, 'utf8');
+const translationSource = await readFile(new URL('../src/i18n/translations.ts', import.meta.url), 'utf8');
 const sourceFile = ts.createSourceFile('index.tsx', uiSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const runtime = vm.createContext({
   croatianHours: (hours) => `${hours} sati`,
@@ -19,6 +33,10 @@ const runtime = vm.createContext({
   formatTemperature: (temperature) => `${temperature} °C`,
   getBeginnerNewYorkInstantMixerInstructions: () => undefined,
   getBeginnerOvenTimers: () => [],
+  getOvenBehaviorType,
+  getProNapolitanaBulkRestSeconds,
+  PRO_NAPOLITANA_MIX_REST_SECONDS,
+  usesPizzaOvenBehavior: (oven) => getOvenBehaviorType(oven) === 'ooni',
   getTegliaFinalProofPlan: () => ({ totalMinutes: 0, proofMinutes: 0, pressRelaxationMinutes: 0 }),
   getTemperingWindow: () => ({ minimumMinutes: 15, maximumMinutes: 30, initialMinutes: 15 }),
   phaseBBulkRestMinutes: () => 30,
@@ -40,6 +58,19 @@ function loadGenerator(name) {
 
 const generateHr = loadGenerator('getDetailedDirectSteps');
 const generateLocalized = loadGenerator('getDetailedDirectStepsLocalized');
+const rawYeast = 1.519301815463701;
+const yeastFixture = { flour: 1000, water: 650, salt: 20, oil: 0, yeast: rawYeast };
+const proHrInstructions = generateHr('hand', yeastFixture, 1670, 2, 250, 30, 0, 0, 'homePan', 250, 22, 100, 100);
+assert.match(proHrInstructions.flatMap((phase) => phase.steps).join(' '), /1\.52 g/);
+for (const lang of ['en', 'de', 'sl']) {
+  const instructions = generateLocalized(lang, yeastFixture, 1670, 2, 250, 30, 0, 0, 22, 4, 100, 100, 'homePan', 250, '5–7 min', 'hand', 'napolitana', 'glutenFree', { width: 30, length: 40 });
+  assert.match(instructions.flatMap((phase) => phase.steps).join(' '), /1\.52 g/, `${lang}: PRO instruction yeast is rounded to two decimals`);
+  assert.doesNotMatch(instructions.flatMap((phase) => phase.steps).join(' '), /1\.519301815463701/, `${lang}: raw yeast precision is not exposed`);
+  const beginnerInstructions = generateLocalized(lang, yeastFixture, 1670, 2, 250, 30, 0, 0, 22, 4, 100, 100, 'homePan', 250, '5–7 min', 'hand', 'napolitana', 'glutenFree', { width: 30, length: 40 }, undefined, true);
+  assert.match(beginnerInstructions.flatMap((phase) => phase.steps).join(' '), /1\.519301815463701 g/, `${lang}: Beginner yeast formatting is unchanged`);
+}
+const beginnerHrInstructions = generateHr('hand', yeastFixture, 1670, 2, 250, 30, 0, 0, 'homePan', 250, 22, 100, 100, undefined, undefined, 'glutenFree', false, false, false, true, { width: 30, length: 40 }, '5–7 min', undefined, true);
+assert.match(beginnerHrInstructions.flatMap((phase) => phase.steps).join(' '), /1\.519301815463701 g/, 'Beginner instruction text keeps its existing unrounded value');
 const styles = [
   { name: 'napolitana', calculationStyle: 'neapolitan', romanTonda: false, romanaTeglia: false, newYork: false, napolitana: true },
   { name: 'romanaTonda', calculationStyle: 'romana', romanTonda: true, romanaTeglia: false, newYork: false, napolitana: false },
@@ -48,7 +79,6 @@ const styles = [
 ];
 const mixingMethods = ['hand', 'mixer', 'spiral'];
 const fermentationMethods = ['direct', 'biga', 'poolish'];
-const languages = ['hr', 'en', 'de', 'sl'];
 const roomTemperatures = [22, 30];
 const fridgeHoursOptions = [0, 18];
 const bakingTimeRange = '5–7 min';
@@ -163,14 +193,25 @@ assert.match(
 );
 assert.equal(
   [...uiSource.matchAll(/instructionWaterTemperature, beginnerTextMode/g)].length,
-  2,
-  'both Croatian and localized direct generators must receive the selected temperature',
+  3,
+  'Croatian and localized direct/Sponge generators must receive the selected temperature',
 );
 assert.equal(
   [...uiSource.matchAll(/isBeginner \? undefined : dough\.waterTemp, beginnerTextMode/g)].length,
   2,
   'Croatian Biga and Poolish generators receive the PRO temperature while retaining the Beginner fallback',
 );
+assert.match(uiSource, /const displayedYeastPercentage = !isBeginner\s*\? new Intl\.NumberFormat\(lang, \{ maximumFractionDigits: 2 \}\)/);
+assert.equal(
+  [...uiSource.matchAll(/label=\{`\$\{t\.calc\.yeastAmount\} \(\$\{yeastShortLabel\}, \$\{recipeYeastPercentage\}%\)`\}/g)].length,
+  2,
+  'both recipe layouts use one shared yeast percentage row',
+);
+assert.match(uiSource, /const recipeYeastPercentage = isBeginner \? String\(dough\.yeastPct\) : displayedYeastPercentage;/);
+assert.match(uiSource, /<Text style=\{styles\.label\}>\{t\.calc\.useIce\}<\/Text>/);
+assert.match(uiSource, /<Text style=\{styles\.subLabel\}>\{t\.calc\.useIceDescription\}<\/Text>/);
+assert.equal([...translationSource.matchAll(/\buseIce:/g)].length, 4, 'ice control title is translated in all four languages');
+assert.equal([...translationSource.matchAll(/\buseIceDescription:/g)].length, 4, 'ice control description is translated in all four languages');
 
 const outputs = new Map();
 for (const style of styles) {

@@ -12,12 +12,20 @@ const calculatorUi = read('app/(tabs)/index.tsx');
 const planner = read('app/(tabs)/planner.tsx');
 const translations = read('src/i18n/translations.ts');
 
-const compiled = ts.transpileModule(calculator, {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
-}).outputText;
-const moduleRef = { exports: {} };
-vm.runInNewContext(compiled, { module: moduleRef, exports: moduleRef.exports }, { filename: 'calculator.ts' });
-const { reversePlan } = moduleRef.exports;
+function loadTypeScriptModule(filePath) {
+  const source = fs.readFileSync(filePath, 'utf8');
+  const compiled = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  const moduleRef = { exports: {} };
+  const localRequire = (request) => request === './proMethods/bigaPoolish'
+    ? loadTypeScriptModule(path.join(path.dirname(filePath), 'proMethods', 'bigaPoolish.ts'))
+    : require(request);
+  vm.runInNewContext(compiled, { module: moduleRef, exports: moduleRef.exports, require: localRequire }, { filename: filePath });
+  return moduleRef.exports;
+}
+
+const { reversePlan } = loadTypeScriptModule(path.join(__dirname, '..', 'src', 'calculator.ts'));
 
 const plannerCopy = {
   fold1Title: 'First Stretch & Fold',

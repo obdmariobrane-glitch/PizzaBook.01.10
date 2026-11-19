@@ -11,10 +11,45 @@ const uiSource = fs.readFileSync(path.join(__dirname, '..', 'app', '(tabs)', 'in
 const compiled = ts.transpileModule(calculatorSource, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
 }).outputText;
-const moduleRef = { exports: {} };
-vm.runInNewContext(compiled, { module: moduleRef, exports: moduleRef.exports }, { filename: 'calculator.ts' });
+const sourceRoot = path.resolve(__dirname, '..', 'src');
+const moduleCache = new Map();
 
-const { calculateBeginnerPhaseBPlan } = moduleRef.exports;
+function resolveLocalModule(request, parentFile) {
+  if (!request.startsWith('.')) {
+    throw new Error(`Unsupported non-local dependency: ${request}`);
+  }
+  const candidate = path.resolve(path.dirname(parentFile), request);
+  const relative = path.relative(sourceRoot, candidate);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new Error(`Dependency escapes calculator source root: ${request}`);
+  }
+  for (const filePath of [candidate, `${candidate}.ts`, `${candidate}.tsx`, path.join(candidate, 'index.ts')]) {
+    if (fs.existsSync(filePath)) return filePath;
+  }
+  throw new Error(`Cannot resolve local dependency: ${request}`);
+}
+
+function loadTypeScriptModule(filePath) {
+  if (moduleCache.has(filePath)) return moduleCache.get(filePath).exports;
+  const moduleRef = { exports: {} };
+  moduleCache.set(filePath, moduleRef);
+  const moduleSource = fs.readFileSync(filePath, 'utf8');
+  const moduleCompiled = ts.transpileModule(moduleSource, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  const localRequire = (request) => loadTypeScriptModule(resolveLocalModule(request, filePath));
+  vm.runInNewContext(moduleCompiled, {
+    module: moduleRef,
+    exports: moduleRef.exports,
+    require: localRequire,
+    __filename: filePath,
+    __dirname: path.dirname(filePath),
+  }, { filename: filePath });
+  return moduleRef.exports;
+}
+
+const calculator = loadTypeScriptModule(path.join(sourceRoot, 'calculator.ts'));
+const { calculateBeginnerPhaseBPlan } = calculator;
 const plan = (durationMinutes, flourBehavior = 'standard', workflow = 'round') =>
   calculateBeginnerPhaseBPlan({ durationMinutes, flourBehavior, workflow });
 

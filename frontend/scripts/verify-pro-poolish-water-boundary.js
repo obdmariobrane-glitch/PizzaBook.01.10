@@ -8,9 +8,19 @@ const ts = require('typescript');
 const frontendRoot = path.join(__dirname, '..');
 const calculatorSource = fs.readFileSync(path.join(frontendRoot, 'src', 'calculator.ts'), 'utf8');
 const calculator = { exports: {} };
+const localRequire = (request) => {
+  if (!request.startsWith('.')) return require(request);
+  const filePath = path.resolve(frontendRoot, 'src', `${request}.ts`);
+  const source = fs.readFileSync(filePath, 'utf8');
+  const loaded = { exports: {} };
+  new Function('module', 'exports', 'require', `${ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText}\nreturn module.exports;`)(loaded, loaded.exports, localRequire);
+  return loaded.exports;
+};
 new Function('module', 'exports', 'require', `${ts.transpileModule(calculatorSource, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
-}).outputText}\nreturn module.exports;`)(calculator, calculator.exports, require);
+}).outputText}\nreturn module.exports;`)(calculator, calculator.exports, localRequire);
 
 const { doughCalc } = calculator.exports;
 const makeRecipe = (hydration, poolishPct, mixing, flourType = 'caputo00') => doughCalc({
@@ -46,8 +56,8 @@ for (const flourType of ['caputo00', 'manitoba', 'spelt', 'wholeWheat', 'glutenF
 }
 
 const source = fs.readFileSync(path.join(frontendRoot, 'app', '(tabs)', 'index.tsx'), 'utf8');
-assert.match(source, /const maxProPoolishPct = Math\.min\(100, Math\.max\(20, Math\.floor\(hydration \* 100 \/ poolishHydrationPct\)\)\)/);
-assert.match(source, /setPoolishPct\(maxProPoolishPct\)/);
+assert.match(source, /const maxProPoolishPct = combinedPrefermentsActive\s*\?\s*80\s*:\s*Math\.min\(100, Math\.max\(20, Math\.floor\(hydration \* 100 \/ poolishHydrationPct\)\)\)/);
+assert.match(source, /updateProPrefermentShare\('poolish', Math\.min\(maxProPoolishPct, poolishPct \+ 5\)\)/);
 for (const text of [
   'Poolish od ${poolishPct}% nije moguć',
   'A ${poolishPct}% Poolish is not feasible',

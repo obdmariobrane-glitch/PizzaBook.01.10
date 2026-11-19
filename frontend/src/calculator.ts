@@ -1,5 +1,8 @@
 // Pizza calculator logic
+import { calculateBigaPoolishIngredients, type BigaPoolishCalculationResult } from './proMethods/bigaPoolish';
+
 export type Method = 'direct' | 'biga' | 'poolish' | 'sponge';
+export type PoolishFermentationMode = 'rt' | 'ct' | 'rt-ct' | 'ct-rt';
 export type CommercialYeastType = 'fresh' | 'activeDry' | 'dry';
 export type YeastType = CommercialYeastType | 'sourdough';
 export const YEAST_MASS_FACTORS: Record<CommercialYeastType, number> = {
@@ -18,6 +21,37 @@ export const SPONGE_YEAST_REFERENCE = {
   fermentationHours: 4.5,
   provisionalQ10: 2,
 } as const;
+
+export const DIRECT_YEAST_REFERENCE = {
+  Y_REF: 0.2235,
+  Q10: 2.0,
+  T_BASE: 20,
+  E_REF: 4 * Math.pow(2, 0.2) + 24 * Math.pow(2, -1.8),
+} as const;
+
+export function calculateDirectFermentationExposure(phaseHours: number, temperatureC: number): number {
+  return phaseHours * Math.pow(DIRECT_YEAST_REFERENCE.Q10, (temperatureC - DIRECT_YEAST_REFERENCE.T_BASE) / 10);
+}
+
+export function calculateDirectFermentationScheduleExposure(
+  phases: readonly { hours: number; temperature: number }[],
+): number {
+  const hoursByTemperature = new Map<number, number>();
+  for (const phase of phases) {
+    if (phase.hours <= 0) continue;
+    hoursByTemperature.set(phase.temperature, (hoursByTemperature.get(phase.temperature) ?? 0) + phase.hours);
+  }
+  return [...hoursByTemperature.entries()]
+    .sort(([temperatureA], [temperatureB]) => temperatureB - temperatureA)
+    .reduce((total, [temperature, hours]) => total + calculateDirectFermentationExposure(hours, temperature), 0);
+}
+
+export function calculateDirectFreshYeastPct(eActual: number): number {
+  if (!Number.isFinite(eActual) || eActual <= 0) {
+    throw new RangeError('Direct yeast calculation requires positive fermentation exposure.');
+  }
+  return DIRECT_YEAST_REFERENCE.Y_REF * (DIRECT_YEAST_REFERENCE.E_REF / eActual);
+}
 
 export function calculateSpongeAutomaticYeastGrams(
   totalFlourGrams: number,
@@ -129,10 +163,46 @@ export function getPlannerRoomAfterFridgeHours(
   roomTemp: number,
 ): number {
   if (fridgeHours <= 0) return 0;
-  if (method === 'direct' && style === 'romana' && romanFormat === 'teglia') {
+  if (style === 'romana') {
     return Math.max(0, roomHours);
   }
   return getTemperingWindow(roomTemp).initialMinutes / 60;
+}
+
+export function getProFermentationPresentationSchedule(
+  schedule: FermentationSchedule,
+  method: Method,
+  style: PizzaStyle,
+  roomHours: number,
+  fridgeHours: number,
+  roomTemp: number,
+): FermentationSchedule {
+  if (style === 'romana' && fridgeHours > 0) {
+    const phases = schedule.phases.filter((phase) =>
+      !(phase.kind === 'final' && phase.environment === 'room')
+      && !(phase.kind === 'final-rest' && phase.environment === 'room'),
+    );
+    if (roomHours > 0) phases.push({ kind: 'final-rest', environment: 'room', hours: roomHours, temperature: roomTemp });
+    return { ...schedule, phases };
+  }
+
+  if (method === 'direct') {
+    return {
+      ...schedule,
+      phases: schedule.phases.map((phase) =>
+        phase.kind === 'final' && phase.environment === 'room'
+          ? { ...phase, kind: 'final-rest' as const }
+          : phase,
+      ),
+    };
+  }
+  if (fridgeHours > 0) {
+    return {
+      ...schedule,
+      phases: schedule.phases.filter((phase) => !(phase.kind === 'final' && phase.environment === 'room')),
+    };
+  }
+  return schedule;
 }
 
 export const TEGLIA_FINAL_PROOF_MINUTES = {
@@ -360,12 +430,23 @@ export type CalculatorYeastSummary = {
   quantityGrams: number;
   bakerPercentage: number;
   finalDoughQuantityGrams?: number;
+  yeastBudgetGrams?: number;
+  bigaYeastGrams?: number;
+  bigaYeastRequiredGrams?: number;
+  bigaYeastExcessGrams?: number;
+  bigaYeastBudgetExceeded?: boolean;
+  finalDoughYeastGrams?: number;
+  poolishYeastGrams?: number;
 };
 
 export type SharedCalculatorPlanSettings = {
   pizzaStyle: PizzaStyle;
   romanFormat: 'tonda' | 'teglia';
   method: Method;
+  bigaEnabled?: boolean;
+  poolishEnabled?: boolean;
+  bigaStartHours?: number;
+  bigaFermentationTempC?: number;
   mixing: Mixing;
   oven: OvenType;
   ovenTemp: number;
@@ -379,7 +460,14 @@ export type SharedCalculatorPlanSettings = {
   poolishHours: number;
   poolishPct: number;
   poolishHydrationPct: number;
+  poolishStartHours?: number;
   poolishFermentationTempC: number;
+  // null marks a legacy recipe that keeps poolishHours and poolishFermentationTempC.
+  poolishFermentationMode: PoolishFermentationMode | null;
+  poolishRtHours: number;
+  poolishCtHours: number;
+  poolishRtTemperatureC: number;
+  poolishCtTemperatureC: number;
   spongeFlourPct: number;
   spongeHydrationPct: number;
   spongeFermentationTempC: number;
@@ -1112,20 +1200,26 @@ export function calculateDirectHomeCandidateExposure(
   roomTemp: number,
   fridgeTemp: number,
 ): DirectHomeFermentationExposure {
-  const signal = calculateLegacyEquivalentFermentationSignal(
-    candidate.roomBeforeFridgeHours,
-    candidate.fridgeHours,
-    candidate.roomAfterFridgeHours,
-    roomTemp,
-    fridgeTemp,
-  );
+  const roomBeforeHours = Math.max(0, candidate.roomBeforeFridgeHours);
+  const fridgeHours = Math.max(0, candidate.fridgeHours);
+  const roomAfterHours = Math.max(0, candidate.roomAfterFridgeHours);
+  const warmBefore = calculateDirectFermentationExposure(roomBeforeHours, roomTemp);
+  const cold = calculateDirectFermentationExposure(fridgeHours, fridgeTemp);
+  const warmAfter = calculateDirectFermentationExposure(roomAfterHours, roomTemp);
 
   return {
-    roomBeforeExposure: signal.warmBefore,
-    fridgeExposure: signal.cold,
-    roomAfterExposure: signal.warmAfter,
-    roomExposure: signal.warmBefore + signal.warmAfter,
-    totalExposure: signal.total,
+    roomBeforeExposure: warmBefore,
+    fridgeExposure: cold,
+    roomAfterExposure: warmAfter,
+    roomExposure: calculateDirectFermentationScheduleExposure([
+      { hours: roomBeforeHours, temperature: roomTemp },
+      { hours: roomAfterHours, temperature: roomTemp },
+    ]),
+    totalExposure: calculateDirectFermentationScheduleExposure([
+      { hours: roomBeforeHours, temperature: roomTemp },
+      { hours: fridgeHours, temperature: fridgeTemp },
+      { hours: roomAfterHours, temperature: roomTemp },
+    ]),
   };
 }
 
@@ -1166,9 +1260,7 @@ function calculateLegacyEquivalentFermentationSignal(
 export function calculateDirectHomeYeastRequirement(
   exposure: DirectHomeFermentationExposure,
 ): DirectHomeYeastRequirement {
-  // Legacy-equivalent PizzaBook yeast relationship applied to Home candidate exposure.
-  const effectiveExposure = Math.max(0.5, exposure.totalExposure);
-  const freshYeastPct = 0.5 / effectiveExposure;
+  const freshYeastPct = calculateDirectFreshYeastPct(exposure.totalExposure);
   const activeDryYeastPct = freshYeastPct * YEAST_MASS_FACTORS.activeDry;
   const dryYeastPct = freshYeastPct * YEAST_MASS_FACTORS.dry;
 
@@ -2064,10 +2156,18 @@ export type FermentationPhase = {
 
 export type FermentationSchedule = {
   phases: FermentationPhase[];
+  startAtHours?: number;
   prefermentHours: number;
   prefermentRoomHours: number;
   prefermentFridgeHours: number;
   prefermentTemperatureC?: number;
+  poolishMode?: PoolishFermentationMode;
+};
+
+export type PrefermentBranchSchedule = {
+  phases: FermentationPhase[];
+  startAtHours: number;
+  endAtHours: number;
 };
 
 type FermentationScheduleOptions = {
@@ -2083,10 +2183,189 @@ type FermentationScheduleOptions = {
   prefermentFridgeHours?: number;
 };
 
+export type PoolishFermentationOptions = {
+  mode: PoolishFermentationMode;
+  rtTemperatureC: number;
+  ctTemperatureC: number;
+  rtHours: number;
+  ctHours: number;
+  roomHours: number;
+  roomTemp: number;
+  fridgeHours: number;
+  fridgeTemp: number;
+  roomAfterFridgeHours?: number;
+};
+
+export type PoolishPhaseInputs = {
+  rtHours: number;
+  ctHours: number;
+  rtTemperatureC: number;
+  ctTemperatureC: number;
+};
+
+export function normalizePoolishPhaseInputs(
+  mode: PoolishFermentationMode,
+  inputs: PoolishPhaseInputs,
+): PoolishPhaseInputs {
+  const clamp = (value: number, min: number, max: number, fallback: number) =>
+    Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
+  const rtMin = mode === 'rt' ? 4 : mode === 'ct' ? 0 : 1;
+  const ctMin = mode === 'ct' ? 4 : mode === 'rt' ? 0 : 1;
+  return {
+    rtHours: clamp(inputs.rtHours, rtMin, 48, Math.max(rtMin, 24)),
+    ctHours: clamp(inputs.ctHours, ctMin, 120, Math.max(ctMin, 24)),
+    rtTemperatureC: clamp(inputs.rtTemperatureC, 20, 24, 22),
+    ctTemperatureC: clamp(inputs.ctTemperatureC, 4, 6, 4),
+  };
+}
+
+// Returns null for legacy recipes, which have no saved mode and must keep poolishHours and poolishFermentationTempC.
+export function restorePoolishPhaseSettings(saved: {
+  poolishFermentationMode?: unknown;
+  poolishRtHours?: unknown;
+  poolishCtHours?: unknown;
+  poolishRtTemperatureC?: unknown;
+  poolishCtTemperatureC?: unknown;
+}): ({ mode: PoolishFermentationMode } & PoolishPhaseInputs) | null {
+  const mode = saved.poolishFermentationMode;
+  if (mode !== 'rt' && mode !== 'ct' && mode !== 'rt-ct' && mode !== 'ct-rt') return null;
+  const asNumber = (value: unknown) => (typeof value === 'number' ? value : Number.NaN);
+  return {
+    mode,
+    ...normalizePoolishPhaseInputs(mode, {
+      rtHours: asNumber(saved.poolishRtHours),
+      ctHours: asNumber(saved.poolishCtHours),
+      rtTemperatureC: asNumber(saved.poolishRtTemperatureC),
+      ctTemperatureC: asNumber(saved.poolishCtTemperatureC),
+    }),
+  };
+}
+
+function poolishActivityRate(temperatureC: number): number {
+  return temperatureC <= 10
+    ? 0.12 * (1 + 0.05 * (temperatureC - 4))
+    : 1 + 0.08 * (temperatureC - 20);
+}
+
+export function calculatePoolishExposure(
+  phases: readonly Pick<FermentationPhase, 'hours' | 'temperature'>[],
+): number {
+  const totalHours = phases.reduce((total, phase) => total + phase.hours, 0);
+  if (!Number.isFinite(totalHours) || totalHours <= 0 || phases.some((phase) =>
+    !Number.isFinite(phase.hours) || phase.hours <= 0
+      || !Number.isFinite(phase.temperature)
+      || !((phase.temperature >= 20 && phase.temperature <= 24) || (phase.temperature >= 4 && phase.temperature <= 6)))) {
+    throw new RangeError('Poolish exposure requires positive phases at supported RT or CT temperatures.');
+  }
+  return phases.reduce((exposure, phase) => exposure + phase.hours * poolishActivityRate(phase.temperature), 0);
+}
+
+export function getPoolishFermentationSchedule(opts: PoolishFermentationOptions): FermentationSchedule {
+  const values = [opts.rtTemperatureC, opts.ctTemperatureC, opts.rtHours, opts.ctHours];
+  if (!values.every(Number.isFinite)
+    || opts.rtTemperatureC < 20 || opts.rtTemperatureC > 24
+    || opts.ctTemperatureC < 4 || opts.ctTemperatureC > 6
+    || opts.rtHours < 0 || opts.rtHours > 48
+    || opts.ctHours < 0 || opts.ctHours > 120) {
+    throw new RangeError('Poolish phase inputs are outside supported temperature or duration limits.');
+  }
+
+  const poolishPhases: FermentationPhase[] = [];
+  const addPoolishPhase = (environment: FermentationPhase['environment'], hours: number, temperature: number) => {
+    if (hours > 0) poolishPhases.push({ kind: 'preferment', environment, hours, temperature });
+  };
+  switch (opts.mode) {
+    case 'rt':
+      if (opts.rtHours < 4) throw new RangeError('RT Poolish duration must be between 4 and 48 hours.');
+      addPoolishPhase('room', opts.rtHours, opts.rtTemperatureC);
+      break;
+    case 'ct':
+      if (opts.ctHours < 4) throw new RangeError('CT Poolish duration must be between 4 and 120 hours.');
+      addPoolishPhase('fridge', opts.ctHours, opts.ctTemperatureC);
+      break;
+    case 'rt-ct':
+      if (opts.rtHours < 1 || opts.ctHours < 1) throw new RangeError('RT->CT requires positive RT and CT phase durations.');
+      addPoolishPhase('room', opts.rtHours, opts.rtTemperatureC);
+      addPoolishPhase('fridge', opts.ctHours, opts.ctTemperatureC);
+      break;
+    case 'ct-rt':
+      if (opts.ctHours < 1 || opts.rtHours < 1) throw new RangeError('CT->RT requires positive CT and RT phase durations.');
+      addPoolishPhase('fridge', opts.ctHours, opts.ctTemperatureC);
+      addPoolishPhase('room', opts.rtHours, opts.rtTemperatureC);
+      break;
+    default:
+      throw new RangeError('Poolish fermentation mode is invalid.');
+  }
+
+  const finalSchedule = getFermentationSchedule({
+    method: 'poolish',
+    roomHours: opts.roomHours,
+    roomTemp: opts.roomTemp,
+    fridgeHours: opts.fridgeHours,
+    fridgeTemp: opts.fridgeTemp,
+    roomAfterFridgeHours: opts.roomAfterFridgeHours,
+  });
+  const prefermentHours = poolishPhases.reduce((total, phase) => total + phase.hours, 0);
+  return {
+    ...finalSchedule,
+    phases: [...poolishPhases, ...finalSchedule.phases],
+    prefermentHours,
+    prefermentRoomHours: poolishPhases.filter((phase) => phase.environment === 'room').reduce((total, phase) => total + phase.hours, 0),
+    prefermentFridgeHours: poolishPhases.filter((phase) => phase.environment === 'fridge').reduce((total, phase) => total + phase.hours, 0),
+    poolishMode: opts.mode,
+    ...(opts.mode === 'rt' ? { prefermentTemperatureC: opts.rtTemperatureC }
+      : opts.mode === 'ct' ? { prefermentTemperatureC: opts.ctTemperatureC } : {}),
+  };
+}
+
+export type PoolishPlannerFallbackSettings = PoolishPhaseInputs & {
+  poolishFermentationMode: PoolishFermentationMode | null;
+  poolishHours: number;
+  poolishFermentationTempC: number;
+  roomHours: number;
+  roomTemp: number;
+  fridgeHours: number;
+  fridgeTemp: number;
+};
+
+// Planner schedule without shared Calculator state: legacy recipes keep poolishHours and their saved temperature.
+export function getPoolishPlannerFallbackSchedule(
+  settings: PoolishPlannerFallbackSettings,
+  roomAfterFridgeHours: number,
+): FermentationSchedule {
+  const final = {
+    roomHours: settings.roomHours,
+    roomTemp: settings.roomTemp,
+    fridgeHours: settings.fridgeHours,
+    fridgeTemp: settings.fridgeTemp,
+    roomAfterFridgeHours,
+  };
+  if (settings.poolishFermentationMode === null) {
+    return getFermentationSchedule({
+      method: 'poolish',
+      ...final,
+      prefermentHours: settings.poolishHours,
+      prefermentTempC: settings.poolishFermentationTempC,
+    });
+  }
+  const phases = normalizePoolishPhaseInputs(settings.poolishFermentationMode, settings);
+  return getPoolishFermentationSchedule({
+    mode: settings.poolishFermentationMode,
+    rtTemperatureC: phases.rtTemperatureC,
+    ctTemperatureC: phases.ctTemperatureC,
+    rtHours: phases.rtHours,
+    ctHours: phases.ctHours,
+    ...final,
+  });
+}
+
 export function getFermentationSchedule(opts: FermentationScheduleOptions): FermentationSchedule {
   const roomHours = Math.max(0, opts.roomHours);
   const fridgeHours = Math.max(0, opts.fridgeHours);
   const phases: FermentationPhase[] = [];
+  const poolishIsCold = opts.method === 'poolish'
+    && opts.prefermentTempC !== undefined
+    && opts.prefermentTempC <= 10;
   const addPhase = (phase: FermentationPhase) => {
     if (phase.hours > 0) phases.push(phase);
   };
@@ -2102,27 +2381,62 @@ export function getFermentationSchedule(opts: FermentationScheduleOptions): Ferm
     0,
     opts.prefermentHours ?? Math.max(0, opts.prefermentRoomHours ?? 0) + Math.max(0, opts.prefermentFridgeHours ?? 0),
   );
+  if (opts.method === 'biga') {
+    const hasExplicitPrefermentDuration = opts.prefermentHours !== undefined
+      || opts.prefermentRoomHours !== undefined
+      || opts.prefermentFridgeHours !== undefined;
+    if (!Number.isFinite(prefermentHours)
+      || (hasExplicitPrefermentDuration && (prefermentHours < 4 || prefermentHours > 48))) {
+      throw new RangeError('Biga preferment duration must be between 4 and 48 hours.');
+    }
+    if (![opts.roomHours, opts.roomTemp, opts.fridgeHours, opts.fridgeTemp, opts.roomAfterFridgeHours ?? 0]
+      .every(Number.isFinite)
+      || opts.roomHours < 0 || opts.roomHours > 24
+      || opts.roomTemp < 10 || opts.roomTemp > 35
+      || opts.fridgeHours < 0 || opts.fridgeHours > 72
+      || opts.fridgeTemp < 2 || opts.fridgeTemp > 10
+      || (opts.roomAfterFridgeHours ?? 0) < 0 || (opts.roomAfterFridgeHours ?? 0) > 24) {
+      throw new RangeError('Biga final fermentation schedule values are outside supported limits.');
+    }
+  }
   if (opts.method === 'poolish'
     && opts.prefermentTempC !== undefined
     && (!Number.isFinite(opts.prefermentTempC) || opts.prefermentTempC < 4 || opts.prefermentTempC > 35)) {
     throw new RangeError('Poolish fermentation temperature must be between 4°C and 35°C.');
   }
+  if (opts.method === 'poolish' && ![
+    opts.prefermentHours ?? 0,
+    opts.prefermentRoomHours ?? 0,
+    opts.prefermentFridgeHours ?? 0,
+    opts.roomHours,
+    opts.roomTemp,
+    opts.fridgeHours,
+    opts.fridgeTemp,
+    opts.roomAfterFridgeHours ?? 0,
+  ].every(Number.isFinite)) {
+    throw new RangeError('Poolish fermentation schedule values must be finite.');
+  }
   const prefermentRoomHours = opts.method === 'poolish' && opts.prefermentTempC !== undefined
-    ? prefermentHours
+    ? poolishIsCold ? 0 : prefermentHours
     : opts.method === 'biga'
       ? Math.min(8, prefermentHours)
       : Math.min(1, prefermentHours);
   const prefermentFridgeHours = opts.method === 'poolish' && opts.prefermentTempC !== undefined
-    ? 0
+    ? poolishIsCold ? prefermentHours : 0
     : Math.max(0, prefermentHours - prefermentRoomHours);
 
   addPhase({
     kind: 'preferment',
-    environment: 'room',
+    environment: poolishIsCold ? 'fridge' : 'room',
     hours: prefermentRoomHours,
     temperature: opts.method === 'poolish' && opts.prefermentTempC !== undefined ? opts.prefermentTempC : opts.roomTemp,
   });
-  addPhase({ kind: 'preferment', environment: 'fridge', hours: prefermentFridgeHours, temperature: opts.fridgeTemp });
+  addPhase({
+    kind: 'preferment',
+    environment: 'fridge',
+    hours: prefermentFridgeHours,
+    temperature: opts.method === 'poolish' && opts.prefermentTempC !== undefined ? opts.prefermentTempC : opts.fridgeTemp,
+  });
   addPhase({ kind: 'final', environment: 'room', hours: roomHours, temperature: opts.roomTemp });
   addPhase({ kind: 'final', environment: 'fridge', hours: fridgeHours, temperature: opts.fridgeTemp });
   addPhase({ kind: 'final-rest', environment: 'room', hours: Math.max(0, opts.roomAfterFridgeHours ?? 0), temperature: opts.roomTemp });
@@ -2298,15 +2612,95 @@ export function dimensionsCalc(diameter: number, pizzas: number) {
   };
 }
 
+export function getProTegliaToppingAmounts(widthCm: number, lengthCm: number) {
+  const trayAreaFactor = (widthCm * lengthCm) / (30 * 40);
+  return {
+    sauce: Math.round(85 * trayAreaFactor),
+    cheese: Math.round(90 * trayAreaFactor),
+  };
+}
+
+export type BigaYeastAllocation = {
+  bigaYeastGrams: number;
+  finalDoughYeastGrams: number;
+  excessGrams: number;
+  exceedsBudget: boolean;
+};
+
+export function calculateBigaYeastGrams(
+  bigaFlourGrams: number,
+  bigaPhases: readonly FermentationPhase[],
+  yeastType: CommercialYeastType,
+): number {
+  if (!Number.isFinite(bigaFlourGrams) || bigaFlourGrams <= 0) {
+    throw new RangeError('Biga yeast calculation requires positive Biga flour.');
+  }
+  if (bigaPhases.length === 0 || !bigaPhases.every((phase) =>
+    Number.isFinite(phase.hours) && phase.hours > 0 && Number.isFinite(phase.temperature))) {
+    throw new RangeError('Biga yeast calculation requires finite positive fermentation phases.');
+  }
+  const rawExposure = bigaPhases.reduce((total, phase) => {
+    const rate = phase.environment === 'room'
+      ? 1 + 0.08 * (phase.temperature - 20)
+      : 0.12 * (1 + 0.05 * (phase.temperature - 4));
+    return total + phase.hours * rate;
+  }, 0);
+  if (!Number.isFinite(rawExposure) || rawExposure < 0) {
+    throw new RangeError('Biga yeast calculation requires finite nonnegative exposure.');
+  }
+  const exposure = Math.max(0.5, rawExposure);
+  const freshYeastPct = 0.5 / exposure;
+  return bigaFlourGrams * (freshYeastPct / 100) * YEAST_MASS_FACTORS[yeastType];
+}
+
+export function calculateBigaYeastAllocation(
+  totalYeastBudgetGrams: number,
+  requiredBigaYeastGrams: number,
+): BigaYeastAllocation {
+  if (!Number.isFinite(totalYeastBudgetGrams) || totalYeastBudgetGrams < 0
+    || !Number.isFinite(requiredBigaYeastGrams) || requiredBigaYeastGrams < 0) {
+    throw new RangeError('Biga yeast allocation requires finite nonnegative quantities.');
+  }
+  const bigaYeastGrams = requiredBigaYeastGrams;
+  const finalDoughYeastGrams = Math.max(0, totalYeastBudgetGrams - bigaYeastGrams);
+  const excessGrams = Math.max(0, requiredBigaYeastGrams - totalYeastBudgetGrams);
+  const equalityTolerance = Math.max(1, totalYeastBudgetGrams, requiredBigaYeastGrams) * Number.EPSILON * 8;
+  return {
+    bigaYeastGrams,
+    finalDoughYeastGrams,
+    excessGrams,
+    exceedsBudget: excessGrams > equalityTolerance,
+  };
+}
+
 interface DoughCalculationResult {
   method: Method;
+  bigaPoolishModel?: BigaPoolishCalculationResult;
   preferment: { flour: number; water: number; yeast: number } | null;
+  preferments?: {
+    biga: { flour: number; water: number; yeast: number } | null;
+    poolish: { flour: number; water: number; yeast: number } | null;
+  };
+  prefermentSchedules?: {
+    biga: PrefermentBranchSchedule | null;
+    poolish: PrefermentBranchSchedule | null;
+    finalMixStartHours: number;
+  };
   main: { flour: number; water: number; salt: number; oil: number; yeast: number; psyllium: number };
   total: { flour: number; water: number; salt: number; oil: number; yeast: number; psyllium: number };
   totalDough: number;
   waterTemp: number;
   waterTemperature?: BeginnerDirectWaterTemperature;
   yeastPct: number;
+  preciseYeastPct?: number;
+  preciseYeastGrams?: number;
+  yeastBudgetGrams?: number;
+  bigaYeastGrams?: number;
+  bigaYeastRequiredGrams?: number;
+  bigaYeastExcessGrams?: number;
+  bigaYeastBudgetExceeded?: boolean;
+  finalDoughYeastGrams?: number;
+  poolishYeastGrams?: number;
   eTotal: number;
   spongeYeastPct?: number;
 }
@@ -2314,6 +2708,8 @@ interface DoughCalculationResult {
 export function doughCalc(opts: {
   pizzas: number; ballWeight: number; hydration: number; saltPct: number; oilPct: number;
   method: Method;
+  bigaEnabled?: boolean;
+  poolishEnabled?: boolean;
   bigaPct?: number;
   poolishPct?: number;
   bigaHydrationPct?: number;
@@ -2338,11 +2734,16 @@ export function doughCalc(opts: {
   flourType?: FlourType;
   beginnerDirectStyle?: BeginnerDirectDoughStyle;
   beginnerDirectMixing?: BeginnerDirectMixing;
+  useDirectYeastModelForBiga?: boolean;
   // When provided, the method's Home schedule replaces legacy timing inputs for yeast calculation.
   bigaHomeSchedule?: BigaHomePizzaSchedule;
   poolishHomeSchedule?: PoolishHomePizzaSchedule;
   fermentationSchedule?: FermentationSchedule;
+  bigaFermentationSchedule?: FermentationSchedule;
+  poolishFermentationSchedule?: FermentationSchedule;
 }): DoughCalculationResult {
+  const bigaEnabled = opts.bigaEnabled ?? opts.method === 'biga';
+  const poolishEnabled = opts.poolishEnabled ?? opts.method === 'poolish';
   // === Fermentation math (dynamic yeast) ===
   const baseFermentation = opts.fermentationSchedule ?? (opts.method === 'biga' && opts.bigaHomeSchedule
     ? getBigaHomeFermentationSchedule(opts.bigaHomeSchedule, opts.roomTemp, opts.fridgeTemp)
@@ -2372,34 +2773,65 @@ export function doughCalc(opts: {
       const prefermentHours = baseFermentation.phases
         .filter((phase) => phase.kind === 'preferment')
         .reduce((total, phase) => total + phase.hours, 0);
+      const poolishIsCold = opts.poolishFermentationTempC <= 10;
       return {
         ...baseFermentation,
         phases: [
           ...(prefermentHours > 0 ? [{
             kind: 'preferment' as const,
-            environment: 'room' as const,
+            environment: poolishIsCold ? 'fridge' as const : 'room' as const,
             hours: prefermentHours,
             temperature: opts.poolishFermentationTempC,
           }] : []),
           ...baseFermentation.phases.filter((phase) => phase.kind !== 'preferment'),
         ],
-        prefermentRoomHours: prefermentHours,
-        prefermentFridgeHours: 0,
+        prefermentRoomHours: poolishIsCold ? 0 : prefermentHours,
+        prefermentFridgeHours: poolishIsCold ? prefermentHours : 0,
         prefermentTemperatureC: opts.poolishFermentationTempC,
       };
     })()
     : baseFermentation;
-  const eTotal = Math.max(0.5, fermentation.phases.reduce((total, phase) => {
+  const useDirectYeastModel = opts.method === 'direct'
+    || (opts.method === 'biga' && opts.useDirectYeastModelForBiga === true);
+  const scheduleExposure = fermentation.phases.reduce((total, phase) => {
     const rate = phase.environment === 'room'
       ? 1 + 0.08 * (phase.temperature - 20)
       : 0.12 * (1 + 0.05 * (phase.temperature - 4));
     return total + phase.hours * rate;
-  }, 0)); // clamp min to avoid explosion
-  // yeastPct = K / E_total (K = factor constant; 0.5 gives ~0.1% fresh yeast for 24h cold ferment @4°C + 2h RT @22°C)
-  const K = 0.5;
-  const freshYeastPct = K / eTotal;
+  }, 0);
+  if (opts.method === 'poolish' && (!Number.isFinite(scheduleExposure) || scheduleExposure <= 0)) {
+    throw new RangeError('Poolish fermentation requires positive finite schedule exposure.');
+  }
+  const eTotal = useDirectYeastModel
+    ? calculateDirectFermentationScheduleExposure(fermentation.phases)
+    : opts.method === 'poolish' ? scheduleExposure : Math.max(0.5, scheduleExposure);
+  const directFreshYeastPct = useDirectYeastModel
+    ? calculateDirectFreshYeastPct(eTotal)
+    : 0;
+  const legacyFreshYeastPct = 0.5 / eTotal;
+  const freshYeastPct = useDirectYeastModel ? directFreshYeastPct : legacyFreshYeastPct;
   const yeastType = opts.yeastType === 'sourdough' ? 'fresh' : opts.yeastType ?? 'fresh';
-  const yeastPct = freshYeastPct * YEAST_MASS_FACTORS[yeastType];
+  const explicitPoolishSchedule = opts.method === 'poolish' && fermentation.poolishMode !== undefined;
+  const poolishYeastShare = Math.max(20, Math.min(100, opts.poolishPct ?? 35)) / 100;
+  const poolishPhases = explicitPoolishSchedule
+    ? fermentation.phases.filter((phase) => phase.kind === 'preferment')
+    : [];
+  const finalDoughPhases = explicitPoolishSchedule
+    ? fermentation.phases.filter((phase) => phase.kind === 'final' || phase.kind === 'final-rest')
+    : [];
+  const poolishExposure = poolishPhases.length > 0 ? calculatePoolishExposure(poolishPhases) : 0;
+  const finalDoughExposure = finalDoughPhases.reduce((total, phase) => {
+    const rate = phase.environment === 'room'
+      ? 1 + 0.08 * (phase.temperature - 20)
+      : 0.12 * (1 + 0.05 * (phase.temperature - 4));
+    return total + phase.hours * rate;
+  }, 0);
+  const poolishYeastPct = poolishExposure > 0 ? (0.5 / poolishExposure) * YEAST_MASS_FACTORS[yeastType] : 0;
+  const finalDoughYeastPct = finalDoughExposure > 0 ? (0.5 / finalDoughExposure) * YEAST_MASS_FACTORS[yeastType] : 0;
+  const useSeparatePoolishYeastModel = explicitPoolishSchedule && opts.yeastMode !== 'manual';
+  const yeastPct = useSeparatePoolishYeastModel
+    ? poolishYeastShare * poolishYeastPct + (1 - poolishYeastShare) * finalDoughYeastPct
+    : freshYeastPct * YEAST_MASS_FACTORS[yeastType];
   // === Baker's percentages ===
   const totalDough = opts.pizzas * opts.ballWeight;
   const psylliumPct = opts.flourType === 'glutenFree' ? 2 : 0;
@@ -2482,14 +2914,136 @@ export function doughCalc(opts: {
     psyllium: R0(psyllium),
   });
 
-  if (opts.method === 'biga') {
+  if (bigaEnabled && poolishEnabled) {
+    const model = calculateBigaPoolishIngredients({
+      totalFlourGrams: flour,
+      totalHydrationPct: opts.hydration,
+      totalSaltPct: opts.saltPct,
+      allocationMode: 'manual',
+      bigaFlourPct: opts.bigaPct ?? 50,
+      poolishFlourPct: opts.poolishPct ?? 35,
+      bigaHydrationPct: opts.bigaHydrationPct ?? 45,
+      poolishHydrationPct: opts.poolishHydrationPct ?? 100,
+      requirePositiveFinalFlour: false,
+    });
+    const totalFlour = R0(model.total.flourGrams);
+    const totalWater = R0(model.total.waterGrams);
+    const bigaFlour = R0(model.biga.flourGrams);
+    const bigaWater = R0(model.biga.waterGrams);
+    const poolishFlour = R0(model.poolish.flourGrams);
+    const poolishWater = R0(model.poolish.waterGrams);
+    const mainFlour = totalFlour - bigaFlour - poolishFlour;
+    const mainWater = totalWater - bigaWater - poolishWater;
+    const totalYeast = R2(yeast);
+    const prefermentFlour = bigaFlour + poolishFlour;
+    const bigaYeast = prefermentFlour > 0 ? R2(totalYeast * bigaFlour / prefermentFlour) : 0;
+    const poolishYeast = prefermentFlour > 0 ? R2(totalYeast * poolishFlour / prefermentFlour) : 0;
+    const mainYeast = R2(totalYeast - bigaYeast - poolishYeast);
+    const toBranchSchedule = (schedule: FermentationSchedule | undefined, fallbackTemperature: number): PrefermentBranchSchedule => {
+      const phases = (schedule?.phases ?? []).filter((phase) => phase.kind === 'preferment');
+      const normalizedPhases = phases.length > 0
+        ? phases
+        : [{ kind: 'preferment' as const, environment: 'room' as const, hours: opts.prefermentHours ?? 24, temperature: fallbackTemperature }];
+      const startAtHours = schedule?.startAtHours ?? 0;
+      if (!Number.isFinite(startAtHours) || startAtHours < 0) {
+        throw new RangeError('Preferment branch start time must be finite and nonnegative.');
+      }
+      return {
+        phases: normalizedPhases,
+        startAtHours,
+        endAtHours: normalizedPhases.reduce((total, phase) => total + phase.hours, startAtHours),
+      };
+    };
+    const bigaSchedule = toBranchSchedule(opts.bigaFermentationSchedule, opts.roomTemp);
+    const poolishSchedule = toBranchSchedule(opts.poolishFermentationSchedule, opts.roomTemp);
+    return {
+      method: opts.method,
+      bigaPoolishModel: model,
+      preferment: null,
+      preferments: {
+        biga: { flour: bigaFlour, water: bigaWater, yeast: bigaYeast },
+        poolish: { flour: poolishFlour, water: poolishWater, yeast: poolishYeast },
+      },
+      prefermentSchedules: {
+        biga: bigaSchedule,
+        poolish: poolishSchedule,
+        finalMixStartHours: Math.max(bigaSchedule.endAtHours, poolishSchedule.endAtHours),
+      },
+      main: {
+        flour: mainFlour, water: mainWater,
+        salt: R1(salt), oil: R0(oil), yeast: mainYeast,
+        psyllium: R0(psyllium),
+      },
+      total: { ...buildBlock(), yeast: R2(bigaYeast + poolishYeast + mainYeast) },
+      totalDough: R0(totalDough),
+      waterTemp: R0(waterTemp),
+      yeastPct: R2(effectiveYeastPct),
+      eTotal: R1(eTotal),
+    };
+  }
+
+  if (bigaEnabled) {
     // Split the calculated total yeast dose in proportion to the displayed flour quantities.
-    const bigaFlour = flour * (Math.max(20, Math.min(100, opts.bigaPct ?? 50)) / 100);
+    const bigaPct = opts.bigaPct ?? 50;
+    if (!Number.isFinite(bigaPct)) {
+      throw new RangeError('Biga flour percentage must be finite.');
+    }
     const bigaHydrationPct = opts.bigaHydrationPct ?? 45;
     if (!Number.isFinite(bigaHydrationPct) || bigaHydrationPct <= 0 || bigaHydrationPct > 200) {
       throw new RangeError('Biga hydration must be greater than 0% and no more than 200%.');
     }
-    const bigaWater = bigaFlour * (bigaHydrationPct / 100);
+    const bigaPoolishModel = calculateBigaPoolishIngredients({
+      totalFlourGrams: flour,
+      totalHydrationPct: opts.hydration,
+      totalSaltPct: opts.saltPct,
+      allocationMode: 'manual',
+      bigaFlourPct: Math.max(20, Math.min(100, bigaPct)),
+      poolishFlourPct: 0,
+      bigaHydrationPct,
+      poolishHydrationPct: opts.poolishHydrationPct ?? 100,
+      requirePositiveFinalFlour: false,
+    });
+    const bigaFlour = bigaPoolishModel.biga.flourGrams;
+    const bigaWater = bigaPoolishModel!.biga.waterGrams;
+
+    if (opts.useDirectYeastModelForBiga) {
+      const bigaPrefermentPhases = fermentation.phases.filter((phase) => phase.kind === 'preferment');
+      const bigaYeastRequiredGrams = bigaPrefermentPhases.length > 0
+        ? calculateBigaYeastGrams(bigaFlour, bigaPrefermentPhases, yeastType)
+        : 0;
+      const yeastBudgetGrams = yeast;
+      const allocation = calculateBigaYeastAllocation(yeastBudgetGrams, bigaYeastRequiredGrams);
+      const { bigaYeastGrams, finalDoughYeastGrams, excessGrams: bigaYeastExcessGrams } = allocation;
+      const actualTotalYeastGrams = bigaYeastGrams + finalDoughYeastGrams;
+      const actualYeastPct = actualTotalYeastGrams / flour * 100;
+      const totalFlour = R0(flour);
+      const roundedBigaFlour = R0(bigaFlour);
+
+      return {
+        method: 'biga' as const,
+        bigaPoolishModel,
+        preferment: { flour: roundedBigaFlour, water: R0(bigaWater), yeast: bigaYeastGrams },
+        main: {
+          flour: totalFlour - roundedBigaFlour, water: R0(water) - R0(bigaWater),
+          salt: R1(salt), oil: R0(oil), yeast: finalDoughYeastGrams,
+          psyllium: R0(psyllium),
+        },
+        total: { ...buildBlock(), yeast: actualTotalYeastGrams },
+        totalDough: R0(totalDough),
+        waterTemp: R0(waterTemp),
+        yeastPct: R2(actualYeastPct),
+        preciseYeastPct: actualYeastPct,
+        preciseYeastGrams: actualTotalYeastGrams,
+        yeastBudgetGrams,
+        bigaYeastGrams,
+        bigaYeastRequiredGrams,
+        bigaYeastExcessGrams,
+        bigaYeastBudgetExceeded: allocation.exceedsBudget,
+        finalDoughYeastGrams,
+        eTotal: R1(eTotal),
+      };
+    }
+
     const totalFlour = R0(flour);
     const roundedBigaFlour = R0(bigaFlour);
     const totalYeast = R2(yeast);
@@ -2497,6 +3051,7 @@ export function doughCalc(opts: {
     const mainYeast = R2(totalYeast - bigaYeast);
     return {
       method: 'biga' as const,
+      bigaPoolishModel,
       preferment: { flour: roundedBigaFlour, water: R0(bigaWater), yeast: R2(bigaYeast) },
       main: {
         flour: totalFlour - roundedBigaFlour, water: R0(water) - R0(bigaWater),
@@ -2511,21 +3066,42 @@ export function doughCalc(opts: {
     };
   }
 
-  if (opts.method === 'poolish') {
+  if (poolishEnabled) {
     // Split the existing total yeast dose by the Poolish flour share.
-    const pFlour = flour * (Math.max(20, Math.min(100, opts.poolishPct ?? 35)) / 100);
+    const poolishPct = opts.poolishPct ?? 35;
+    if (!Number.isFinite(poolishPct)) {
+      throw new RangeError('Poolish flour percentage must be finite.');
+    }
+    const poolishFlourShare = Math.max(20, Math.min(100, poolishPct)) / 100;
     const poolishHydrationPct = opts.poolishHydrationPct ?? 100;
     if (!Number.isFinite(poolishHydrationPct) || poolishHydrationPct <= 0 || poolishHydrationPct > 200) {
       throw new RangeError('Poolish hydration must be greater than 0% and no more than 200%.');
     }
-    const pWater = pFlour * (poolishHydrationPct / 100);
+    const bigaPoolishModel = calculateBigaPoolishIngredients({
+      totalFlourGrams: flour,
+      totalHydrationPct: opts.hydration,
+      totalSaltPct: opts.saltPct,
+      allocationMode: 'manual',
+      bigaFlourPct: 0,
+      poolishFlourPct: Math.max(20, Math.min(100, poolishPct)),
+      bigaHydrationPct: opts.bigaHydrationPct ?? 45,
+      poolishHydrationPct,
+      requirePositiveFinalFlour: false,
+    });
+    const pWater = bigaPoolishModel!.poolish.waterGrams;
     const totalFlour = R0(flour);
-    const roundedPoolishFlour = R0(pFlour);
+    const roundedPoolishFlour = R0(totalFlour * poolishFlourShare);
     const totalYeast = R2(yeast);
-    const pYeast = R2(totalYeast * roundedPoolishFlour / totalFlour);
-    const mainYeast = R2(totalYeast - pYeast);
+    const proportionalPoolishYeast = R2(totalYeast * roundedPoolishFlour / totalFlour);
+    const pYeast = useSeparatePoolishYeastModel
+      ? R2(roundedPoolishFlour * poolishYeastPct / 100)
+      : proportionalPoolishYeast;
+    const mainYeast = useSeparatePoolishYeastModel
+      ? R2((totalFlour - roundedPoolishFlour) * finalDoughYeastPct / 100)
+      : R2(totalYeast - pYeast);
     return {
       method: 'poolish' as const,
+      ...(explicitPoolishSchedule ? { bigaPoolishModel } : {}),
       preferment: { flour: roundedPoolishFlour, water: R0(pWater), yeast: R2(pYeast) },
       main: {
         flour: totalFlour - roundedPoolishFlour, water: R0(water) - R0(pWater),
@@ -2536,6 +3112,7 @@ export function doughCalc(opts: {
       totalDough: R0(totalDough),
       waterTemp: R0(waterTemp),
       yeastPct: R2(effectiveYeastPct),
+      ...(useSeparatePoolishYeastModel ? { poolishYeastGrams: pYeast, finalDoughYeastGrams: mainYeast } : {}),
       eTotal: R1(eTotal),
     };
   }
@@ -2585,15 +3162,19 @@ export function doughCalc(opts: {
   }
 
   // Direct
+  const directYeastPct = yeastMode === 'manual' ? R2(effectiveYeastPct) : effectiveYeastPct;
+  const directYeastGrams = yeastMode === 'manual' ? R2(yeast) : yeast;
+  const directBlock = () => ({ ...buildBlock(), yeast: directYeastGrams });
   return {
     method: 'direct' as const,
     preferment: null,
-    main: buildBlock(),
-    total: buildBlock(),
+    main: directBlock(),
+    total: directBlock(),
     totalDough: R0(totalDough),
     waterTemp: R0(waterTemp),
     ...(beginnerDirectWaterTemperature ? { waterTemperature: beginnerDirectWaterTemperature } : {}),
     yeastPct: R2(effectiveYeastPct),
+    ...(yeastMode === 'manual' ? {} : { preciseYeastPct: directYeastPct, preciseYeastGrams: directYeastGrams }),
     eTotal: R1(eTotal),
   };
 }
@@ -2804,14 +3385,91 @@ export function reversePlan(
   };
   if (method === 'sponge') {
     if (!spongePreparation) return [];
-    const scheduleMinutes = selectedFermentationSchedule?.phases
-      .reduce((total, phase) => total + phase.hours * 60, 0) ?? 0;
-    return [{
-      at: new Date(bakeAt.getTime() - scheduleMinutes * 60000),
-      title: spongePreparation.title,
-      desc: spongePreparation.steps.join('\n'),
-      phaseId: 'sponge.preparation',
-    }];
+    if (!selectedFermentationSchedule) {
+      return [{
+        at: bakeAt,
+        title: spongePreparation.title,
+        desc: spongePreparation.steps.join('\n'),
+        phaseId: 'sponge.preparation',
+      }];
+    }
+    const phases = selectedFermentationSchedule.phases;
+    const spongeHours = phases
+      .filter((phase) => phase.kind === 'preferment')
+      .reduce((total, phase) => total + phase.hours, 0);
+    const fridgePhases = phases.filter((phase) => phase.kind === 'final' && phase.environment === 'fridge');
+    const fridgeHours = fridgePhases.reduce((total, phase) => total + phase.hours, 0);
+    const roomPhases = phases.filter((phase) => fridgeHours > 0
+      ? phase.kind === 'final-rest' && phase.environment === 'room'
+      : phase.kind === 'final' && phase.environment === 'room');
+    const roomHours = roomPhases.reduce((total, phase) => total + phase.hours, 0);
+    const finalFermentationMinutes = (fridgeHours + roomHours) * 60;
+    const roomStartOffset = roomHours * 60;
+    const localizedHours = (hours: number) => formatTemperingDuration(hours * 60, bakingLanguage);
+    const spongePreheatDesc = plannerPreheatMinutes === undefined
+      ? copy.ovenDesc
+      : fillPlannerCopy(copy.ovenPreheatDesc?.[ovenType] ?? copy.ovenDesc, {
+        OVEN_TEMP: bakingTemperatureLabel ?? `${ovenTemp}°C`,
+        PREHEAT_MINUTES: plannerPreheatMinutes,
+      });
+    const fridgeTemperature = fridgePhases[0]?.temperature ?? 4;
+    const coldTitle = ({
+      hr: 'Hladna fermentacija završnog tijesta',
+      en: 'Cold fermentation of the final dough',
+      de: 'Kalte Gare des fertigen Teigs',
+      sl: 'Hladna fermentacija končnega testa',
+    })[bakingLanguage];
+    const takeOutTitle = ({
+      hr: 'Izvadi tijesto iz hladnjaka',
+      en: 'Remove the dough from the fridge',
+      de: 'Den Teig aus dem Kühlschrank nehmen',
+      sl: 'Vzemi testo iz hladilnika',
+    })[bakingLanguage];
+    const coldDesc = ({
+      hr: `Pokrijte završno tijesto i ostavite ga u hladnjaku pri ${fridgeTemperature}°C tijekom ${localizedHours(fridgeHours)}.`,
+      en: `Cover the final dough and refrigerate it at ${fridgeTemperature}°C for ${localizedHours(fridgeHours)}.`,
+      de: `Decken Sie den fertigen Teig ab und stellen Sie ihn bei ${fridgeTemperature}°C für ${localizedHours(fridgeHours)} in den Kühlschrank.`,
+      sl: `Končno testo pokrijte in ga pri ${fridgeTemperature}°C postavite v hladilnik za ${localizedHours(fridgeHours)}.`,
+    })[bakingLanguage];
+    const takeOutDesc = ({
+      hr: 'Izvadite završno tijesto iz hladnjaka; podijelite ga i oblikujte kuglice prije sobnog odmora.',
+      en: 'Remove the final dough from the fridge; divide it and shape the dough balls before their room rest.',
+      de: 'Nehmen Sie den fertigen Teig aus dem Kühlschrank; teilen Sie ihn und formen Sie die Teigkugeln vor der Ruhezeit bei Raumtemperatur.',
+      sl: 'Končno testo vzemite iz hladilnika; razdelite ga in oblikujte kroglice pred počitkom pri sobni temperaturi.',
+    })[bakingLanguage];
+    const ballRestTitle = ({
+      hr: 'Odmor kuglica na sobnoj temperaturi',
+      en: 'Dough-ball room rest',
+      de: 'Teigkugel-Ruhe bei Raumtemperatur',
+      sl: 'Počitek kroglic pri sobni temperaturi',
+    })[bakingLanguage];
+    const ballRestDesc = ({
+      hr: `Oblikovane kuglice ostavite pokrivene na sobnoj temperaturi ${localizedHours(roomHours)} prije pečenja.`,
+      en: `Leave the shaped dough balls covered at room temperature for ${localizedHours(roomHours)} before baking.`,
+      de: `Lassen Sie die geformten Teigkugeln vor dem Backen ${localizedHours(roomHours)} abgedeckt bei Raumtemperatur ruhen.`,
+      sl: `Oblikovane kroglice pred peko pokrite pustite pri sobni temperaturi ${localizedHours(roomHours)}.`,
+    })[bakingLanguage];
+
+    push(
+      finalFermentationMinutes + spongeHours * 60,
+      spongePreparation.title,
+      spongePreparation.steps.join('\n'),
+      'sponge.preparation',
+    );
+    push(finalFermentationMinutes, copy.refreshTitle, copy.refreshDesc, 'sponge.finalMix');
+    if (fridgeHours > 0) {
+      push(finalFermentationMinutes, coldTitle, coldDesc, 'sponge.fridge');
+      push(roomStartOffset, takeOutTitle, takeOutDesc, 'sponge.fridgeRemoval');
+    }
+    push(roomStartOffset, copy.ballsTitle, fillPlannerCopy(copy.ballsDesc, {
+      WEIGHT: PIZZA_STYLE_PROFILES[style].ballWeight,
+    }), 'sponge.balling');
+    if (roomHours > 0) {
+      push(roomStartOffset, ballRestTitle, ballRestDesc, 'sponge.finalRoom');
+    }
+    push(plannerPreheatMinutes ?? 60, copy.ovenTitle, spongePreheatDesc, 'sponge.preheat');
+    push(0, copy.bakeTitle ?? copy.ovenTitle, copy.bakeDesc ?? copy.ovenDesc, 'sponge.bake');
+    return steps.sort((a, b) => a.at.getTime() - b.at.getTime());
   }
   const preheatDesc = (fallback: string) => plannerPreheatMinutes === undefined
     ? fallback
@@ -2955,6 +3613,59 @@ export function reversePlan(
       ? copy.directHomeTegliaCopy
       : copy.directHomeCopy;
     if (!homeSchedule!.strategy) {
+      if (style === 'neapolitan' && homeSchedule!.roomBeforeFridgeHours === 0) {
+        const tempering = formatTemperingDuration(roomAfterFridgeHours * 60, bakingLanguage);
+        const fridgeTemperature = `${homeSchedule!.fridgeTemp ?? 4}°C`;
+        const roomRestCopy = ({
+          hr: {
+            title: 'Završni sobni odmor',
+            desc: `Držite kuglice pokrivene na sobnoj temperaturi ${tempering} prije pečenja.`,
+          },
+          en: {
+            title: 'Final room rest',
+            desc: `Keep the dough balls covered at room temperature for ${tempering} before baking.`,
+          },
+          de: {
+            title: 'Abschließende Raumgare',
+            desc: `Lassen Sie die Teigkugeln vor dem Backen ${tempering} abgedeckt bei Raumtemperatur ruhen.`,
+          },
+          sl: {
+            title: 'Končni sobni počitek',
+            desc: `Kroglice naj bodo pred peko ${tempering} pokrite pri sobni temperaturi.`,
+          },
+        })[bakingLanguage];
+        const removalDesc = ({
+          hr: 'Izvadite kuglice iz hladnjaka i držite ih pokrivene.',
+          en: 'Take the dough balls out of the refrigerator and keep them covered.',
+          de: 'Nehmen Sie die Teigkugeln aus dem Kühlschrank und lassen Sie sie abgedeckt.',
+          sl: 'Kroglice vzemite iz hladilnika in jih pustite pokrite.',
+        })[bakingLanguage];
+        const bakeDesc = ovenType === 'kamado'
+          ? ({
+            hr: 'Pečenje Kamado pizze je blokirano dok se ne odobri ciljna temperatura i trajanje pečenja.',
+            en: 'Kamado baking is blocked until a baking target temperature and duration are approved.',
+            de: 'Das Backen im Kamado bleibt gesperrt, bis Zieltemperatur und Backdauer freigegeben sind.',
+            sl: 'Peka v Kamadu je blokirana, dokler nista odobrena ciljna temperatura in trajanje peke.',
+          })[bakingLanguage]
+          : copy.bakeDesc ?? copy.ovenDesc;
+
+        push((roomAfterFridgeHours + fridgeHours) * 60, directTitle, directDesc, 'direct.mix');
+        if (fridgeHours > 0) {
+          push((roomAfterFridgeHours + fridgeHours) * 60, copy.coldTitle, fillPlannerCopy(copy.coldDesc, {
+            HOURS: formatHoursLabel(fridgeHours),
+            STYLE: styleName,
+            TEMPERING: tempering,
+            FRIDGE_TEMP: fridgeTemperature,
+          }), 'direct.fridge');
+          push(roomAfterFridgeHours * 60, copy.warmTitle, removalDesc, 'direct.fridgeRemoval');
+        }
+        if (roomAfterFridgeHours > 0) {
+          push(roomAfterFridgeHours * 60, roomRestCopy.title, roomRestCopy.desc, 'direct.finalRoom');
+        }
+        push(plannerPreheatMinutes ?? 60, copy.ovenTitle, preheatDesc(copy.ovenDesc), 'direct.preheat');
+        push(0, copy.bakeTitle ?? copy.ovenTitle, bakeDesc, 'direct.bake');
+        return steps.sort((a, b) => a.at.getTime() - b.at.getTime());
+      }
       const ovenDesc = isRoman ? copy.ovenRomanDesc : isNy ? copy.ovenNyDesc : copy.ovenDesc;
       push(plannerPreheatMinutes ?? 60, copy.ovenTitle, preheatDesc(ovenDesc), 'direct.preheat');
       const tempering = formatTemperingDuration(roomAfterFridgeHours * 60, bakingLanguage);
@@ -3175,6 +3886,39 @@ export function reversePlan(
       push(finalRoomOffset, finalMixTitle, finalMixDesc);
     } else {
       if (prefermentHours > 0) {
+        if (method === 'poolish' && selectedFermentationSchedule.poolishMode) {
+          const poolishPhases = selectedFermentationSchedule.phases.filter((phase) => phase.kind === 'preferment');
+          let remainingPoolishHours = prefermentHours;
+          const localizedHours = (value: number) => bakingLanguage === 'de'
+            ? formatHoursLabel(value).replace(/^(\d+) h/, '$1 Std.')
+            : formatHoursLabel(value);
+          poolishPhases.forEach((phase, index) => {
+            const phaseNumber = `${index + 1}/${poolishPhases.length}`;
+            const phaseHours = localizedHours(phase.hours);
+            const phaseTemperature = `${phase.temperature}°C`;
+            const phaseEnvironment = phase.environment === 'room'
+              ? ({ hr: 'na sobnoj temperaturi', en: 'at room temperature', de: 'bei Raumtemperatur', sl: 'pri sobni temperaturi' }[bakingLanguage])
+              : ({ hr: 'u hladnjaku', en: 'in the refrigerator', de: 'im Kühlschrank', sl: 'v hladilniku' }[bakingLanguage]);
+            const transfer = index === 0
+              ? ({ hr: 'Pokrijte Poolish i držite ga', en: 'Cover the Poolish and keep it', de: 'Decken Sie den Poolish ab und halten Sie ihn', sl: 'Poolish pokrijte in ga hranite' }[bakingLanguage])
+              : ({ hr: 'Nakon prethodne faze premjestite Poolish', en: 'After the previous phase, move the Poolish', de: 'Bewegen Sie den Poolish nach der vorherigen Phase', sl: 'Po prejšnji fazi prestavite Poolish' }[bakingLanguage]);
+            const total = localizedHours(prefermentHours);
+            const phaseDesc = ({
+              hr: `Faza ${phaseNumber}: ${transfer} ${phaseEnvironment} pri ${phaseTemperature} ${phaseHours}.${index === poolishPhases.length - 1 ? ` Ukupno vrijeme Poolisha: ${total}.` : ''}`,
+              en: `Phase ${phaseNumber}: ${transfer} ${phaseEnvironment} at ${phaseTemperature} for ${phaseHours}.${index === poolishPhases.length - 1 ? ` Total Poolish time: ${total}.` : ''}`,
+              de: `Phase ${phaseNumber}: ${transfer} ${phaseEnvironment} bei ${phaseTemperature} für ${phaseHours}.${index === poolishPhases.length - 1 ? ` Gesamte Poolish-Zeit: ${total}.` : ''}`,
+              sl: `Faza ${phaseNumber}: ${transfer} ${phaseEnvironment} pri ${phaseTemperature} za ${phaseHours}.${index === poolishPhases.length - 1 ? ` Skupni čas Poolisha: ${total}.` : ''}`,
+            }[bakingLanguage]);
+            const phaseLabel = phase.environment === 'room' ? 'RT' : 'CT';
+            push(
+              finalRoomOffset + poolishMixDurationMinutes + remainingPoolishHours * 60,
+              `${copy.poolishTitle} · ${phaseLabel} ${index + 1}`,
+              phaseDesc,
+              `poolish.phase.${index + 1}`,
+            );
+            remainingPoolishHours -= phase.hours;
+          });
+        } else {
         const prefermentValues = {
           HOURS: formatHoursLabel(prefermentHours),
           ROOM_HOURS: formatHoursLabel(prefermentRoomHours),
@@ -3195,6 +3939,7 @@ export function reversePlan(
           }[bakingLanguage], prefermentValues)
           : fillPlannerCopy(method === 'biga' ? bigaDesc : copy.poolishDesc, prefermentValues);
         push(finalRoomOffset + prefermentHours * 60 + poolishMixDurationMinutes, method === 'biga' ? copy.bigaTitle : copy.poolishTitle, prefermentDesc);
+        }
       }
       push(finalRoomOffset + poolishMixDurationMinutes, fillPlannerCopy(copy.finalMixTitle, {
         PREFERMENT: method === 'biga' ? copy.bigaName : copy.poolishName,

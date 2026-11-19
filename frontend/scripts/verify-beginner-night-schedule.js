@@ -14,7 +14,16 @@ function loadTypeScript(relativePath) {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   }).outputText;
   const moduleRef = { exports: {} };
-  vm.runInNewContext(compiled, { module: moduleRef, exports: moduleRef.exports }, { filename: relativePath });
+  vm.runInNewContext(compiled, {
+    module: moduleRef,
+    exports: moduleRef.exports,
+    require: (specifier) => {
+      if (specifier === './proMethods/bigaPoolish') {
+        return loadTypeScript('src/proMethods/bigaPoolish.ts');
+      }
+      throw new Error(`Unexpected dependency in ${relativePath}: ${specifier}`);
+    },
+  }, { filename: relativePath });
   return moduleRef.exports;
 }
 

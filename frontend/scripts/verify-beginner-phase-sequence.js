@@ -97,6 +97,7 @@ module.exports = {
   buildBeginnerDirectHomeSteps,
   buildBeginnerFinalPhaseInfo,
   buildBeginnerTegliaHomeSteps,
+  getBeginnerPhaseCTimers,
   getBeginnerOvenTimers,
   getBeginnerRoomOnlyEnd,
   getBeginnerTegliaRoomOnlyEnd,
@@ -127,6 +128,7 @@ const {
   buildBeginnerDirectHomeSteps,
   buildBeginnerFinalPhaseInfo,
   buildBeginnerTegliaHomeSteps,
+  getBeginnerPhaseCTimers,
   getBeginnerOvenTimers,
   getBeginnerRoomOnlyEnd,
   getBeginnerTegliaRoomOnlyEnd,
@@ -227,27 +229,33 @@ function roundPhases(flour, style) {
 }
 
 for (const lang of languages) {
-  const beginnerOvenPhases = (oven) => buildBeginnerDirectHomeSteps(
-    roundPhases('caputo00', 'neapolitan'),
-    schedule(8, 2, 3, oven),
-    phaseBPlanFor('caputo00', 2),
-    22,
-    4,
-    oven === 'kamado' ? 380 : 450,
-    oven,
-    oven === 'kamado' ? '' : '60 s–90 s',
-    lang,
-    'fresh',
-    'neapolitan',
-    30,
-    70,
-    100,
-    'caputo00',
-    '1250 g',
-    '250 g',
-    5,
-    oven === 'kamado' ? { maximumTemperatureC: 380 } : null,
-  );
+  const beginnerOvenPhases = (oven, fridgeHours = 8, roomAfterFridgeHours = 3, preheatMinutes) => {
+    const selectedSchedule = schedule(fridgeHours, 2, roomAfterFridgeHours, oven);
+    if (preheatMinutes !== undefined) {
+      selectedSchedule.preheatAt = new Date(selectedSchedule.bakeAt.getTime() - preheatMinutes * 60000);
+    }
+    return buildBeginnerDirectHomeSteps(
+      roundPhases('caputo00', 'neapolitan'),
+      selectedSchedule,
+      phaseBPlanFor('caputo00', 2),
+      22,
+      4,
+      oven === 'kamado' ? 380 : 450,
+      oven,
+      oven === 'kamado' ? '' : '60 s–90 s',
+      lang,
+      'fresh',
+      'neapolitan',
+      30,
+      70,
+      100,
+      'caputo00',
+      '1250 g',
+      '250 g',
+      5,
+      oven === 'kamado' ? { maximumTemperatureC: 380 } : null,
+    );
+  };
   const kamadoPhases = beginnerOvenPhases('kamado');
   const ooniPhases = beginnerOvenPhases('ooni');
   assert.equal(kamadoPhases.length, ooniPhases.length + 1, 'Kamado adds one distinct preheating phase');
@@ -261,6 +269,24 @@ for (const lang of languages) {
   const pizzaOvenFinalInfo = buildBeginnerFinalPhaseInfo(lang, 'neapolitan', 'caputo00', 'ooni');
   assert.notDeepEqual(kamadoFinalInfo, pizzaOvenFinalInfo, `Kamado guidance is separate from Pizza-oven guidance in ${lang}`);
   assert.match(kamadoFinalInfo[7].body, /not approved|no approved|nema odobrenu|keine freigegebene|nima odobrene/i);
+  const kamadoFinalPhase = kamadoPhases.at(-1);
+  assert.equal(kamadoFinalPhase.steps.length, kamadoFinalPhase.stepInfo.length, `Kamado final INFO count matches rendered steps in ${lang}`);
+  assert.deepEqual(kamadoFinalPhase.stepInfo.slice(1), kamadoFinalInfo.slice(2), `Kamado INFO follows the rendered final-step order in ${lang}`);
+  assert.ok(!kamadoFinalPhase.stepInfo.some((info) => /preheating|predgrijavanje|vorheizen|predgrevanje/i.test(info.title)), `separate Kamado preheating has no leftover final-phase INFO in ${lang}`);
+  const roomOnlyKamadoFinal = beginnerOvenPhases('kamado', 0).at(-1);
+  assert.equal(roomOnlyKamadoFinal.steps.length, roomOnlyKamadoFinal.stepInfo.length, `room-only Kamado final INFO count matches rendered steps in ${lang}`);
+  assert.deepEqual(roomOnlyKamadoFinal.stepInfo, kamadoFinalInfo.slice(2), `room-only Kamado INFO removes both omitted carry and preheat entries in ${lang}`);
+  const splitDurationSchedule = schedule(8, 2, 1.92, 'kamado');
+  splitDurationSchedule.preheatAt = new Date(splitDurationSchedule.bakeAt.getTime() - 38 * 60000);
+  assert.deepEqual(Array.from(getBeginnerPhaseCTimers(splitDurationSchedule, Math.round(splitDurationSchedule.roomAfterFridgeHours * 60)), (timer) => [timer.id, timer.seconds]), [
+    ['beginner-phase-c-tempering', 6900],
+    ['beginner-phase-c-preheat', 2280],
+  ], `selected 1.92-hour tempering and 38-minute preheat are separate schedule durations in ${lang}`);
+  const splitDurationFinal = beginnerOvenPhases('kamado', 8, 1.92, 38).at(-1);
+  assert.match(splitDurationFinal.steps[0], /1 h 55 min/, `selected 1.92-hour tempering text is schedule-derived in ${lang}`);
+  assert.deepEqual(Array.from(splitDurationFinal.timers, (timer) => [timer.id, timer.seconds]), [
+    ['beginner-phase-c-tempering', 6900],
+  ], `Kamado final phase retains the full selected tempering duration in ${lang}`);
   for (const style of styles) {
     for (const flour of [...flours, 'glutenFree']) {
       for (const fridgeHours of [0, 1, 8]) {
@@ -629,7 +655,7 @@ assert.equal(tegliaWithFridge[2].steps.length, 6);
 assert.equal(tegliaWithFridge[2].stepInfo.length, 6);
 assert.ok(!tegliaWithFridge.some((phase) => phase.steps.some((step) => /ball|kugli|kroglic/i.test(step))));
 
-assert.match(source, /timers=\{beginnerDirectHomeSteps \? phase\.timers : directHomeSchedule \? \[\] : phase\.timers\}/);
+assert.match(source, /timers=\{beginnerDirectHomeSteps \? phase\.timers : directHomeSchedule \? \[\] : getDisplayedDirectTimers\(phase, index\)\}/);
 assert.match(source, /scheduleLocalAt\(copy\.title, notificationBody, event\.at/);
 const mixRestFormula = source.match(/const mixRestMinutes = ([\s\S]*?);/);
 assert.ok(mixRestFormula, 'the shared mix-rest duration formula must remain explicit');

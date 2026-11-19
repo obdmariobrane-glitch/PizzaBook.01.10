@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import vm from 'node:vm';
 
 const require = createRequire(import.meta.url);
 const ts = require('typescript');
@@ -178,10 +179,11 @@ assert.match(appSource, /rawProfile !== null[\s\S]*?parseKamadoOvenProfile\(JSON
 assert.match(appSource, /normalizeKamadoProOvenProfile\(savedProfile\)/);
 assert.match(appSource, /savedProfile\.maximumTemperatureC !== KAMADO_MAXIMUM_TEMPERATURE_C[\s\S]*?savedProfile\.bakingTemperatureC <= KAMADO_MAXIMUM_TEMPERATURE_C[\s\S]*?JSON\.stringify\(profile\)/);
 assert.match(appSource, /if \(profile\.isDefault && isBeginner\)[\s\S]*?setKamadoProfile\(null\)/);
-assert.match(appSource, /commitKamadoBakingTemperature = async \(\)[\s\S]*?bakingTemperatureC,\s*\}\)/);
+assert.match(appSource, /commitKamadoBakingTemperature = async \([^)]*\)[\s\S]*?bakingTemperatureC,\s*\}\)/);
 assert.match(appSource, /const profile = parseKamadoOvenProfile\(\{\s*maximumTemperatureC: kamadoMaxTemperature \?\? KAMADO_MAXIMUM_TEMPERATURE_C,\s*bakingTemperatureC,\s*\}\)/);
+assert.match(appSource, /onEndEditing=\{\(event\) => \{\s*if \(oven === 'kamado'\) void commitKamadoBakingTemperature\(event\.nativeEvent\.text\);/);
 assert.match(appSource, /bakingTemperatureC > kamadoMaxTemperature[\s\S]*?maksimalne dopuštene temperature Kamada[\s\S]*?must not exceed the Kamado maximum[\s\S]*?darf die Kamado-Maximaltemperatur nicht überschreiten[\s\S]*?ne sme biti višja od najvišje dovoljene temperature Kamada/);
-assert.match(appSource, /kamadoTemperatureDraft,\s*kamadoPizzaStyle,\s*kamadoMaxTemperature,\s*lang/);
+assert.match(appSource, /const kamadoBakeTimeRange = isBeginner && kamadoTemperatureWithinMaximum\s*&& kamadoTemperatureDraft !== null\s*\? getKamadoBakeTimeRange\(kamadoTemperatureDraft, kamadoPizzaStyle\)/);
 assert.match(appSource, /setKamadoProfile\(profile\);[\s\S]*?setKamadoBakingTemperatureInput/);
 assert.match(appSource, /setKamadoProfile\(profile\);[\s\S]*?bakingTemperatureC !== undefined[\s\S]*?setKamadoBakingTemperatureInput/);
 assert.equal(appSource.includes("testID=\"oven-kamado\""), true);
@@ -190,19 +192,25 @@ assert.equal(appSource.includes("'kamado-baking-temperature'"), true);
 assert.equal(appSource.includes("({ hr: 'Kamado — postavke pečenja'"), false);
 assert.equal(appSource.includes('Odabrana temperatura pečenja ne smije prelaziti spremljeni maksimum uređaja.'), false);
 assert.match(appSource, /testID=\{oven === 'kamado' \? 'kamado-baking-temperature' : 'oven-temperature'\}/);
-assert.match(appSource, /testID="kamado-bake-time-recommendation" style=\{styles\.bakeText\}>\{kamadoBakeTimeRecommendation\}/);
+assert.match(appSource, /formattedKamadoBakeTimeRange && selectedKamadoTemperature !== null\s*\? `\$\{formatTemperature\(selectedKamadoTemperature, temperatureUnit\)\} · \$\{formattedKamadoBakeTimeRange\}`/);
 assert.match(appSource, /isKamadoBakingTemperatureAllowed\(kamadoTemperatureDraft, kamadoMaxTemperature\)/);
-assert.match(appSource, /const kamadoBakeTimeRange = !isBeginner && kamadoTemperatureWithinMaximum/);
-assert.match(appSource, /const kamadoBake = bakingTimeRange/);
+assert.match(appSource, /const formattedKamadoBakeTimeRange = kamadoBakeTimeRange\s*\? formatKamadoBakeTimeRange\(kamadoBakeTimeRange, lang\)/);
+assert.match(appSource, /const bakingTimeRange = oven === 'kamado'\s*\? isBeginner \? formattedKamadoBakeTimeRange \?\? ''\s*: ''\s*: formatBakingTimeRange\(oven, ovenTemp, lang\)/);
 assert.match(appSource, /const kamadoPizzaStyle = isRomanTeglia[\s\S]*?pizzaStyle === 'romana'[\s\S]*?'romanaTonda'[\s\S]*?pizzaStyle === 'ny_style'[\s\S]*?'newYork'[\s\S]*?'neapolitan'/);
 assert.match(appSource, /const isRomanTeglia = pizzaStyle === 'romana' && romanFormat === 'teglia'/);
 assert.doesNotMatch(appSource, /minMinutes|maxMinutes/);
 assert.equal(appSource.includes("require('../../assets/images/Roter Kamado-Keramikgrill mit Holztischen.png')"), true);
 assert.match(appSource, /const kamadoProDirectSteps = oven === 'kamado'[\s\S]*?replaceProPhaseE\(yeastAwareDetailedDirectSteps, proPhaseEOptions\)/);
+assert.match(appSource, /direct && finalRestMinutes <= 0 \? \[\] : \[\{ id: 'tempering'/);
+assert.match(appSource, /isProKamado \? getProKamadoGuidance\(lang, proStyle\)\.bake : getKamadoBakeBlockedText\(lang\)/);
 assert.match(appSource, /stepInfo: copy\.info\.map\(\(\[title, body\]\) => \(\{ title, body \}\)\)/);
 assert.match(appSource, /steps: copy\.steps,/);
 assert.match(appSource, /if \(oven !== 'kamado'\) \{\s*steps\.push\(\{\s*id: 'preheat',/);
-assert.match(appSource, /timers: \[\],[\s\S]*?insertKamadoPhaseOnce\(phases, phase/);
+assert.match(appSource, /includeStoneHeatingTimer = false/);
+assert.match(appSource, /timers: includeStoneHeatingTimer \? \[\{[\s\S]*?seconds: 20 \* 60,[\s\S]*?label: copy\.timerLabel,[\s\S]*?\}\] : \[\],[\s\S]*?insertKamadoPhaseOnce\(phases, phase/);
+assert.match(appSource, /buildKamadoPrefermentPhases\(\s*path\.p3,\s*combinedP3Steps,[\s\S]*?combinedP3Timers \?\? \[\] : standaloneBigaP3Timers,[\s\S]*?!isRomanTeglia/);
+assert.match(appSource, /timers: timers\.filter\(\(timer\) => timer\.kind !== 'preBake'\)/);
+assert.match(appSource, /timers: timers\.filter\(\(timer\) => timer\.kind === 'preBake'\)/);
 assert.match(appSource, /timers: candidate\.timers\?\.filter\(\(timer\) => !\['preheat', 'bake', 'rotate'\]\.includes\(timer\.kind\)\)/);
 assert.equal(appSource.includes('insertKamadoPreheatPhase'), true);
 assert.match(appSource, /insertKamadoPhaseOnce\(phases, phase/);
@@ -211,5 +219,129 @@ assert.doesNotMatch((await readFile(new URL('../app/(tabs)/planner.tsx', import.
 for (const languageCopy of ['Temperatura pećnice', 'Oven temperature', 'Ofentemperatur', 'Temperatura pečice']) {
   assert.equal(appSource.includes(languageCopy), true, `Missing localized standard temperature label: ${languageCopy}`);
 }
+
+const plannerSource = await readFile(new URL('../app/(tabs)/planner.tsx', import.meta.url), 'utf8');
+const plannerAst = ts.createSourceFile('planner.tsx', plannerSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+function plannerExpression(name) {
+  let initializer;
+  function visit(node) {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name) initializer = node.initializer.getText(plannerAst);
+    ts.forEachChild(node, visit);
+  }
+  visit(plannerAst);
+  assert.ok(initializer, `${name} must exist in Planner`);
+  return initializer;
+}
+function evaluate(expression, context) {
+  const compiledExpression = ts.transpileModule(`globalThis.result = (${expression});`, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  const sandbox = { ...context };
+  vm.runInNewContext(compiledExpression, sandbox);
+  return sandbox.result;
+}
+async function loadTypeScript(relativePath, dependencies = {}) {
+  const source = await readFile(new URL(relativePath, import.meta.url), 'utf8');
+  const module = { exports: {} };
+  const compiledModule = ts.transpileModule(source, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  vm.runInNewContext(compiledModule, {
+    module, exports: module.exports,
+    require: (name) => {
+      assert.ok(name in dependencies, `unexpected dependency: ${name}`);
+      return dependencies[name];
+    },
+  });
+  return module.exports;
+}
+const bigaPoolish = await loadTypeScript('../src/proMethods/bigaPoolish.ts');
+const calculator = await loadTypeScript('../src/calculator.ts', { './proMethods/bigaPoolish': bigaPoolish });
+const { translations } = await loadTypeScript('../src/i18n/translations.ts');
+const blockedExpression = plannerExpression('beginnerKamadoPlanBlocked');
+const baseStepsExpression = plannerExpression('plannerBaseSteps');
+const targetReadyExpression = plannerExpression('plannerBakeTargetReady');
+const reconcileExpression = plannerExpression('canReconcilePlannerNotifications');
+const now = new Date('2026-11-11T08:00:00Z');
+const bakeAt = new Date('2026-11-12T08:00:00Z');
+for (const style of ['neapolitan', 'romana', 'ny_style']) {
+  const pizza = calculator.PIZZA_STYLE_PROFILES[style];
+  const homePlan = calculator.createDirectHomePizzaPlan({
+    style, romanFormat: 'tonda', pizzas: 4, ballWeight: pizza.ballWeight, method: 'direct',
+    bakeAt, roomTemp: 22, fridgeTemp: 4, ovenType: 'kamado', ovenTemp: 300, mixing: 'hand',
+  }, { source: 'unknown' }, pizza.hydration, 'fresh', now, true);
+  assert.ok(homePlan, `${style}: Beginner schedule exists`);
+  let kamadoCalls = 0;
+  const context = {
+    isBeginner: true, plannerDirectHomeSchedule: homePlan.schedule,
+    isProKamadoPlan: false,
+    isProNapolitanaColdPlan: false,
+    kamadoInitialIntervals: [], proNapolitanaCombined: false,
+    buildProKamadoPlannerSteps: () => { kamadoCalls += 1; return []; },
+    sharedCalculatorPlanSettings: { oven: 'kamado' }, plannerOvenTemp: 300,
+    getBakingTimeRange: calculator.getBakingTimeRange,
+    bakeAt, hasCurrentBeginnerDirectSchedule: true, roomTempLoaded: true, hasCurrentCalculatorRecipe: true,
+    method: 'direct', effectiveStyle: style, plannerStepCopy: translations.hr.planner.stepCopy,
+    plannerBigaHomeSchedule: null, plannerPoolishHomeSchedule: null, lang: 'hr', temperatureUnit: 'celsius', measurementSystem: 'metric',
+    formatTemperature: (temperature) => `${temperature}°C`, activeCalculatorPlanSettings: { roomTemp: 22 },
+    plannerFermentationSchedule: undefined, activePlannerTegliaSettings: { romanFormat: 'tonda' },
+    plannerOvenType: 'kamado', getBeginnerPreheatMinutes: calculator.getBeginnerPreheatMinutes,
+    activeMixing: 'hand', plannerMixTitles: [], plannerYeastType: 'fresh', formatUnitText: (text) => text,
+    plannerBakeTargetLoadedFor: null, hasSharedCalculatorPlanSettings: true,
+    plannerRestoreStatus: 'ready', planKey: 'existing-plan', shouldReconcilePlannerNotifications: () => true,
+  };
+  let calls = 0;
+  context.reversePlan = (...args) => { calls += 1; return calculator.reversePlan(...args); };
+  context.beginnerKamadoPlanBlocked = evaluate(blockedExpression, context);
+  assert.equal(context.beginnerKamadoPlanBlocked, true, `${style}: Kamado is blocked`);
+  assert.equal(evaluate(baseStepsExpression, context).length, 0, `${style}: no invalid instructions`);
+  assert.equal(calls, 0, `${style}: reversePlan is never called`);
+  assert.equal(evaluate(targetReadyExpression, context), false, `${style}: plan generation is disabled`);
+  assert.equal(evaluate(reconcileExpression, context), false, `${style}: notifications are not reconciled`);
+  context.plannerDirectHomeSchedule = { ...homePlan.schedule, ovenType: 'homeStone' };
+  context.sharedCalculatorPlanSettings = { oven: 'homeStone' };
+  context.plannerOvenType = 'homeStone';
+  context.beginnerKamadoPlanBlocked = evaluate(blockedExpression, context);
+  assert.equal(context.beginnerKamadoPlanBlocked, false, `${style}: switching oven clears the block`);
+  assert.ok(evaluate(baseStepsExpression, context).length > 0, `${style}: steps regenerate without a refresh`);
+  assert.equal(calls, 1, `${style}: valid oven invokes the real reversePlan`);
+  assert.equal(evaluate(targetReadyExpression, context), true);
+  assert.equal(evaluate(reconcileExpression, context), true);
+  context.isBeginner = false;
+  context.plannerDirectHomeSchedule = homePlan.schedule;
+  context.sharedCalculatorPlanSettings = { oven: 'kamado' };
+  context.isProKamadoPlan = true;
+  assert.equal(evaluate(blockedExpression, context), false, `${style}: PRO is not blocked`);
+  context.beginnerKamadoPlanBlocked = false;
+  context.plannerBakeTargetLoadedFor = 'pro';
+  context.reversePlan = () => { calls += 1; return []; };
+  evaluate(baseStepsExpression, context);
+  assert.equal(calls, 1, `${style}: PRO Kamado does not invoke the generic plan path`);
+  assert.equal(kamadoCalls, 1, `${style}: PRO invokes the Kamado plan path`);
+  assert.equal(evaluate(targetReadyExpression, context), true, `${style}: PRO generation stays available`);
+}
+assert.equal(evaluate(blockedExpression, { isBeginner: true, plannerDirectHomeSchedule: null, sharedCalculatorPlanSettings: { oven: 'kamado' }, plannerOvenTemp: 300, getBakingTimeRange: calculator.getBakingTimeRange }), true, 'selected Kamado is blocked before a schedule exists');
+assert.equal(evaluate(blockedExpression, { isBeginner: true, plannerDirectHomeSchedule: { ovenType: 'kamado' }, sharedCalculatorPlanSettings: null, plannerOvenTemp: 300, getBakingTimeRange: calculator.getBakingTimeRange }), true, 'restored Kamado schedule is blocked before settings arrive');
+assert.equal(evaluate(blockedExpression, { isBeginner: true, plannerDirectHomeSchedule: { ovenType: 'kamado' }, sharedCalculatorPlanSettings: { oven: 'kamado' }, plannerOvenTemp: 300, getBakingTimeRange: () => ({ min: 1, max: 2 }) }), false, 'an approved future range clears the block');
+for (const oven of ['homeStone', 'homePan', 'ooni']) {
+  assert.equal(evaluate(blockedExpression, { isBeginner: true, plannerDirectHomeSchedule: { ovenType: oven }, sharedCalculatorPlanSettings: { oven }, plannerOvenTemp: 300, getBakingTimeRange: calculator.getBakingTimeRange }), false, `${oven}: Beginner is not blocked`);
+}
+assert.equal(evaluate(reconcileExpression, { beginnerKamadoPlanBlocked: false, isBeginner: true, hasSharedCalculatorPlanSettings: false, shouldReconcilePlannerNotifications: () => true }), false, 'unrestored settings cannot cancel notifications');
+const blockedGenerate = evaluate(plannerExpression('generate'), { plannerBakeTargetReady: false });
+assert.equal(await blockedGenerate(new Date('2030-01-01')), false, 'blocked generation returns before changing saved plan state');
+const blockedAlarms = evaluate(plannerExpression('scheduleAll'), { beginnerKamadoPlanBlocked: true });
+assert.equal(await blockedAlarms(), undefined, 'blocked alarm action returns before changing notifications');
+assert.match(plannerSource, /testID="beginner-kamado-plan-warning" accessibilityRole="alert"/);
+for (const text of ['Plan za Kamado trenutačno nije dostupan', 'A Kamado plan is currently unavailable', 'Ein Kamado-Plan ist derzeit nicht verfügbar', 'Načrt za Kamado trenutno ni na voljo']) {
+  assert.ok(plannerSource.includes(text), `missing localized warning: ${text}`);
+}
+assert.match(plannerSource, /if \(!plannerBakeTargetReady\) return false/);
+assert.match(plannerSource, /if \(beginnerKamadoPlanBlocked \|\| schedulingAlarms\.current/);
+assert.match(plannerSource, /experienceLoaded && isBeginner && hasSharedCalculatorPlanSettings && !beginnerKamadoPlanBlocked/);
+assert.match(plannerSource, /testID="web-apply"[^\n]*disabled=\{!plannerBakeTargetReady\}/);
+assert.match(plannerSource, /testID="open-datepicker"[^\n]*disabled=\{!plannerBakeTargetReady\}/);
+assert.match(plannerSource, /testID=\{`preset-\$\{i\}`\}[\s\S]{0,120}disabled=\{!plannerBakeTargetReady\}/);
+assert.match(plannerSource, /testID="phase-edit-save"[^\n]*disabled=\{beginnerKamadoPlanBlocked\}/);
+assert.match(plannerSource, /\) : beginnerKamadoPlanBlocked \? null : \(\s*<View style=\{styles\.empty\}/);
 
 console.log('Kamado bare temperature row, persistence, icon, phase and language checks passed.');

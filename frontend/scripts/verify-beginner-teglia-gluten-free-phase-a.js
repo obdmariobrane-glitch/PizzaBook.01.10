@@ -16,7 +16,7 @@ assert.match(source, /isTegliaGlutenFreeBeginnerMixer \|\| isNeapolitanGlutenFre
 assert.match(source, /isTegliaGlutenFreeBeginnerHand \|\| isNeapolitanGlutenFreeBeginnerHand/);
 assert.match(source, /isTargetTegliaGlutenFreeHandPhaseA/);
 assert.match(source, /isTargetTegliaGlutenFreeMixerPhaseA/);
-assert.match(source, /Ulijte svu vodu, odnosno \$\{ingredients\.water\} g/);
+assert.match(source, /U svu vodu, odnosno \$\{ingredients\.water\} g, otopite kvasac/);
 assert.match(source, /homogenu, ljepljivu masu/);
 assert.match(source, /5 minuta kako bi psyllium/);
 assert.doesNotMatch(source, /TegliaGlutenFreeBeginner[\s\S]{0,1200}90%/);

@@ -16,7 +16,9 @@ function loadTypeScriptModule(filePath) {
   new Function('module', 'exports', 'require', `${compiled}\nreturn module.exports;`)(
     loadedModule,
     loadedModule.exports,
-    require,
+    (request) => request.startsWith('.')
+      ? loadTypeScriptModule(path.resolve(path.dirname(filePath), `${request}.ts`))
+      : require(request),
   );
   return loadedModule.exports;
 }

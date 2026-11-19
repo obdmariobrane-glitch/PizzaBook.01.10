@@ -39,8 +39,15 @@ const replaceProPhaseE = loadFunction(
   'replaceProPhaseE',
   {
     formatDuration: (seconds) => `${Math.round(seconds / 60)} min`,
+    getRomanTegliaPressRestTimer: (lang) => ({
+      id: 'teglia-press-rest',
+      seconds: 5 * 60,
+      kind: 'rest',
+      label: ({ hr: 'Odmor za razvlačenje tijesta', en: 'Dough pressing rest', de: 'Teigruhe zum Eindrücken', sl: 'Počitek testa za vtiskovanje' })[lang],
+    }),
     getBeginnerPreheatMinutes: () => 20,
     getTegliaFinalProofPlan: () => ({ proofMinutes: 0, pressRelaxationMinutes: 0 }),
+    usesPizzaOvenBehavior: (oven) => oven === 'ooni',
   },
   ts.ScriptKind.TSX,
 );
@@ -247,7 +254,7 @@ assert.deepEqual(
   ],
 );
 
-assert.match(indexSource, /const proPhaseESteps = !isBeginner && detailedDirectSteps\s*\?\s*replaceProPhaseE/);
+assert.match(indexSource, /const proPhaseEStepsBase = !isBeginner && detailedDirectSteps\s*\?\s*replaceProPhaseE/);
 assert.match(indexSource, /getYeastAwarePrefermentSteps\(lang, 'biga',[^;]*dough\.main\.oil > 0, flour, isProEffectivelyGlutenFree, remainingFlourDescription, fridgeTemp, proSpiralRecipe\)/);
 assert.match(indexSource, /getYeastAwarePrefermentSteps\(lang, 'poolish',[^;]*dough\.main\.oil > 0, flour, isProEffectivelyGlutenFree, undefined, fridgeTemp, proSpiralRecipe\)/);
 assert.match(indexSource, /glutenFree: isWorkflowGlutenFree/);

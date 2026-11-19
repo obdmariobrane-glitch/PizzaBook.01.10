@@ -29,7 +29,12 @@ function evaluate(source, context = {}) {
   const compiled = ts.transpileModule(`module.exports = (${source});`, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   }).outputText;
-  vm.runInNewContext(compiled, { module, exports: module.exports, ...context });
+  vm.runInNewContext(compiled, {
+    module,
+    exports: module.exports,
+    poolishFinalMixYeastType: context.preferredYeastType,
+    ...context,
+  });
   return module.exports;
 }
 
@@ -45,6 +50,9 @@ function loadTypeScriptModule(filePath) {
     }
     if (request === './proIceWaterInstructions') {
       return loadTypeScriptModule(path.join(frontendRoot, 'src', 'i18n', 'proIceWaterInstructions.ts'));
+    }
+    if (request === './proMethods/bigaPoolish') {
+      return loadTypeScriptModule(path.join(frontendRoot, 'src', 'proMethods', 'bigaPoolish.ts'));
     }
     throw new Error(`Unexpected runtime import in ${filePath}: ${request}`);
   };
@@ -78,12 +86,12 @@ const poolishMixStepsInitializer = findInitializer(indexFile, 'poolishMixSteps')
 const poolishPreparationSource = poolishPreparationInitializer.getText(indexFile);
 const poolishMixStepsSource = poolishMixStepsInitializer.getText(indexFile);
 const detailedP1Guard = findPoolishP1Guard(indexFile);
-assert.equal(detailedP1Guard, 'isBeginner || !poolishPreparation');
+assert.equal(detailedP1Guard, '!isSponge && (isBeginner || !poolishPreparation)');
 assert.match(indexSource, /poolishPreparation && !poolishHomeSchedule/);
 assert.match(indexSource, /const poolishHomeSchedule = isBeginner && method === 'poolish'/);
-assert.equal((indexSource.match(/<PhaseBlock title=\{path\.p2\.title\} steps=\{withProIceWaterInstruction\(poolishMixSteps/g) ?? []).length, 1);
+assert.equal((indexSource.match(/steps=\{withProIceWaterInstruction\(displayedFinalMixSteps\)\}/g) ?? []).length, 1);
 
-const { getFermentationSchedule } = loadTypeScriptModule(path.join(frontendRoot, 'src', 'calculator.ts'));
+const { doughCalc, getFermentationSchedule } = loadTypeScriptModule(path.join(frontendRoot, 'src', 'calculator.ts'));
 const { getYeastAwarePrefermentSteps } = loadTypeScriptModule(
   path.join(frontendRoot, 'src', 'i18n', 'prefermentSteps.ts'),
 );
@@ -109,7 +117,126 @@ const fermentationModes = [
   { id: 'cold', prefermentHours: 24, roomHours: 2, fridgeHours: 18 },
 ];
 const yeastTypes = ['fresh', 'activeDry', 'dry'];
+const standardPoolishTiming = { roomHours: 2, roomTemp: 22, fridgeHours: 24, fridgeTemp: 4 };
+const standardPoolishOptions = {
+  pizzas: 1,
+  ballWeight: 1000,
+  hydration: 62,
+  saltPct: 2.8,
+  oilPct: 0,
+  method: 'poolish',
+  poolishPct: 35,
+  poolishHydrationPct: 100,
+  ...standardPoolishTiming,
+};
+
+function assertPoolishIngredientTotals(result, label) {
+  assert.ok(result.eTotal >= 0, `${label}: fermentation exposure cannot be negative`);
+  assert.ok(result.yeastPct >= 0 && result.total.yeast >= 0, `${label}: yeast cannot be negative`);
+  assert.ok(result.preferment.yeast >= 0 && result.main.yeast >= 0, `${label}: phase yeast cannot be negative`);
+  assert.equal(result.preferment.flour + result.main.flour, result.total.flour, `${label}: flour total is preserved`);
+  assert.equal(result.preferment.water + result.main.water, result.total.water, `${label}: water total is preserved`);
+  assert.ok(result.preferment.flour >= 0 && result.preferment.water >= 0, `${label}: preferment ingredients are nonnegative`);
+  assert.ok(result.main.flour >= 0 && result.main.water >= 0, `${label}: final dough ingredients are nonnegative`);
+}
+
+let temperatureDoseChecks = 0;
+for (let temperature = 4; temperature <= 35; temperature += 1) {
+  const expectedEnvironment = temperature <= 10 ? 'fridge' : 'room';
+  const poolishRate = temperature <= 10
+    ? 0.12 * (1 + 0.05 * (temperature - 4))
+    : 1 + 0.08 * (temperature - 20);
+  for (const yeastType of yeastTypes) {
+    let previousYeastPct = Number.POSITIVE_INFINITY;
+    for (let hours = 4; hours <= 48; hours += 1) {
+      const schedule = getFermentationSchedule({
+        method: 'poolish',
+        prefermentHours: hours,
+        prefermentTempC: temperature,
+        ...standardPoolishTiming,
+        roomAfterFridgeHours: 2,
+      });
+      const prefermentPhases = schedule.phases.filter((phase) => phase.kind === 'preferment');
+      assert.equal(prefermentPhases.length, 1, `${temperature}°C/${hours}h: one Poolish phase`);
+      assert.equal(prefermentPhases[0].environment, expectedEnvironment, `${temperature}°C: correct temperature regime`);
+      assert.equal(prefermentPhases[0].hours, hours, `${temperature}°C: selected duration is retained`);
+      assert.equal(schedule.prefermentRoomHours + schedule.prefermentFridgeHours, hours);
+
+      const result = doughCalc({
+        ...standardPoolishOptions,
+        prefermentHours: hours,
+        poolishFermentationTempC: temperature,
+        yeastType,
+        fermentationSchedule: schedule,
+      });
+      const expectedExposure = hours * poolishRate
+        + 2 * (1 + 0.08 * (standardPoolishTiming.roomTemp - 20))
+        + standardPoolishTiming.fridgeHours * 0.12 * (1 + 0.05 * (standardPoolishTiming.fridgeTemp - 4))
+        + 2 * (1 + 0.08 * (standardPoolishTiming.roomTemp - 20));
+      assert.equal(result.eTotal, Math.round(expectedExposure * 10) / 10,
+        `${temperature}°C/${hours}h/${yeastType}: exposure follows the existing temperature curves`);
+      assert.ok(result.yeastPct <= previousYeastPct + 1e-9,
+        `${temperature}°C/${yeastType}: longer fermentation cannot increase yeast dose`);
+      previousYeastPct = result.yeastPct;
+      assertPoolishIngredientTotals(result, `${temperature}°C/${hours}h/${yeastType}`);
+      temperatureDoseChecks += 1;
+    }
+  }
+}
+
+for (let roomTemp = 10; roomTemp <= 35; roomTemp += 1) {
+  for (let fridgeTemp = 2; fridgeTemp <= 10; fridgeTemp += 1) {
+    const schedule = getFermentationSchedule({
+      method: 'poolish', prefermentHours: 24, prefermentTempC: 22,
+      ...standardPoolishTiming, roomTemp, fridgeTemp, roomAfterFridgeHours: 2,
+    });
+    const result = doughCalc({
+      ...standardPoolishOptions, roomTemp, fridgeTemp,
+      prefermentHours: 24, poolishFermentationTempC: 22, fermentationSchedule: schedule,
+    });
+    assertPoolishIngredientTotals(result, `room ${roomTemp}°C/fridge ${fridgeTemp}°C`);
+  }
+}
+
+let hydrationChecks = 0;
+for (const overallHydration of [50, 62, 70, 80, 100, 150, 200]) {
+  for (let poolishPct = 20; poolishPct <= 100; poolishPct += 5) {
+    for (let poolishHydrationPct = 10; poolishHydrationPct <= 200; poolishHydrationPct += 10) {
+      if (poolishPct * poolishHydrationPct / 100 > overallHydration) continue;
+      for (const yeastType of yeastTypes) {
+        const schedule = getFermentationSchedule({
+          method: 'poolish', prefermentHours: 24, prefermentTempC: 22,
+          ...standardPoolishTiming, roomAfterFridgeHours: 2,
+        });
+        const result = doughCalc({
+          ...standardPoolishOptions,
+          hydration: overallHydration,
+          poolishPct,
+          poolishHydrationPct,
+          prefermentHours: 24,
+          poolishFermentationTempC: 22,
+          yeastType,
+          fermentationSchedule: schedule,
+        });
+        assertPoolishIngredientTotals(result,
+          `${overallHydration}% overall/${poolishPct}% Poolish/${poolishHydrationPct}% hydration/${yeastType}`);
+        hydrationChecks += 1;
+      }
+    }
+  }
+}
+
+const durationRegressionSchedule = getFermentationSchedule({
+  method: 'poolish', prefermentHours: 24, prefermentTempC: 22,
+  ...standardPoolishTiming, roomAfterFridgeHours: 2,
+});
+assert.equal(durationRegressionSchedule.phases.reduce((total, phase) => total + phase.hours, 0), 52,
+  '24h Poolish + 2h final room + 24h fridge + 2h final rest totals 52h');
+assert.equal(durationRegressionSchedule.phases.filter((phase) => phase.kind === 'final').reduce((total, phase) => total + phase.hours, 0), 26);
+assert.equal(durationRegressionSchedule.phases.filter((phase) => phase.kind === 'final-rest').reduce((total, phase) => total + phase.hours, 0), 2);
+
 const coldLabels = { hr: 'hladnjak', en: 'refrigerator', de: 'Kühlschrank', sl: 'hladilnik' };
+const zeroHourPhrases = { hr: '0 sati', en: '0 hours', de: '0 Stunden', sl: '0 ur' };
 const finalIngredientWords = {
   hr: { flour: /brašn/i, water: /vod/i, salt: /sol/i, oil: /ulj/i, yeast: /kvas/i },
   en: { flour: /flour/i, water: /water/i, salt: /salt/i, oil: /oil/i, yeast: /yeast/i },
@@ -122,6 +249,37 @@ const dough = {
   main: { flour: 325, water: 205, yeast: 0.2 },
   total: { salt: 14, oil: 12 },
 };
+
+for (const lang of languages) {
+  for (const temperature of [4, 11]) {
+    const schedule = getFermentationSchedule({
+      method: 'poolish', prefermentHours: 24, prefermentTempC: temperature,
+      ...standardPoolishTiming, roomAfterFridgeHours: 2,
+    });
+    const preparation = evaluate(poolishPreparationSource, {
+      method: 'poolish', lang, poolishPct: 35, poolishHydrationPct: 100,
+      dough, yeastShortLabel: 'fresh', preferredYeastType: 'fresh', mixing: 'hand',
+      isRomanTeglia: false, prefermentRoomHours: schedule.prefermentRoomHours,
+      prefermentRoomTemperature: `${temperature} °C`, isBeginner: false,
+      prefermentFridgeHours: schedule.prefermentFridgeHours,
+      prefermentFridgeTemperature: `${temperature} °C`, poolishHours: 24,
+      croatianHours: (hours) => `${hours} sati`,
+      fermentationSchedule: schedule, selectedPrefermentHours: schedule.prefermentHours,
+      formatDuration: (seconds) => `${seconds / 3600} h`,
+      formatTemperature: (value) => `${value} °C`, temperatureUnit: 'celsius',
+    });
+    const preparationText = preparation.steps.join(' ');
+    if (temperature <= 10) {
+      assert.equal(schedule.prefermentRoomHours, 0);
+      assert.ok(!preparationText.includes(zeroHourPhrases[lang]), `${lang}: cold Poolish omits the zero-hour room step`);
+      assert.ok(preparationText.toLowerCase().includes(coldLabels[lang].toLowerCase()), `${lang}: cold Poolish instructions retain the refrigerator step`);
+    } else {
+      assert.equal(schedule.prefermentRoomHours, 24);
+      assert.ok(preparationText.includes('24'), `${lang}: room-temperature Poolish retains its room step`);
+      assert.ok(!preparationText.toLowerCase().includes(coldLabels[lang].toLowerCase()), `${lang}: room Poolish omits the refrigerator step`);
+    }
+  }
+}
 
 let checked = 0;
 for (const lang of languages) {
@@ -155,6 +313,11 @@ for (const lang of languages) {
               prefermentFridgeTemperature: '4 °C',
               poolishHours: fermentation.prefermentHours,
               croatianHours: (hours) => `${hours} sati`,
+              fermentationSchedule: schedule,
+              selectedPrefermentHours: schedule.prefermentHours,
+              formatDuration: (seconds) => `${seconds / 3600} h`,
+              formatTemperature: (value) => `${value} °C`,
+              temperatureUnit: 'celsius',
             });
             const detailedPath = getYeastAwarePrefermentSteps(
               lang,
@@ -246,4 +409,4 @@ for (const lang of languages) {
   }
 }
 
-console.log(`F16 Poolish phase sequence passed: ${checked} generated combinations across HR/EN/DE/SL.`);
+console.log(`F16 Poolish phase sequence passed: ${checked} generated combinations across HR/EN/DE/SL; ${temperatureDoseChecks} temperature-duration-yeast cases and ${hydrationChecks} feasible hydration cases.`);

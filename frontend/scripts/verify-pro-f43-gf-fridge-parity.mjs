@@ -24,6 +24,9 @@ const languages = ['hr', 'en', 'de', 'sl'];
 const mixingMethods = ['hand', 'mixer', 'spiral'];
 const styles = ['napolitana', 'romanaTonda', 'romanaTeglia', 'newYork'];
 const selectedTemperatures = [2, 4, 6];
+assert.match(indexSource, /if \(isProEffectivelyGlutenFree\) \{[\s\S]*?setMethod\('direct'\)[\s\S]*?setBigaEnabled\(false\)[\s\S]*?setPoolishEnabled\(false\)/);
+assert.match(indexSource, /if \(f === 'glutenFree'\) \{\s*setMethod\('direct'\);\s*if \(!isBeginner\) \{\s*setBigaEnabled\(false\);\s*setPoolishEnabled\(false\);/);
+assert.match(indexSource, /if \(isEffectivelyGlutenFreeBlend\(a, b, p\)\) \{\s*setMethod\('direct'\);\s*setBigaEnabled\(false\);\s*setPoolishEnabled\(false\);/);
 const gfFlourPaths = [
   ['glutenFree', false],
   ['custom', true],
@@ -109,8 +112,8 @@ const detailedStepBuilderStart = indexSource.indexOf('const buildDetailedDirectS
 const detailedStepBuilderEnd = indexSource.indexOf('const generatedDetailedDirectSteps =', detailedStepBuilderStart);
 const detailedStepBuilder = indexSource.slice(detailedStepBuilderStart, detailedStepBuilderEnd);
 assert.match(detailedStepBuilder, /pct: bigaPct,[\s\S]*?proFinalRestMinutes, undefined, fridgeTemp\)/);
-assert.match(detailedStepBuilder, /pct: poolishPct,[\s\S]*?proFinalRestMinutes, undefined, fridgeTemp\)/);
-assert.match(detailedStepBuilder, /getDetailedDirectSteps\(mixingForExperience, beginnerTextMode \? directStepIngredients : proDirectStepIngredients,[\s\S]*?proFinalRestMinutes, preferredYeastType, fridgeTemp\)/);
+assert.match(detailedStepBuilder, /pct: method === 'sponge' \? spongeFlourPct : poolishPct,[\s\S]*?proFinalRestMinutes, undefined, fridgeTemp\)/);
+assert.match(detailedStepBuilder, /getDetailedDirectSteps\(mixingForExperience, beginnerTextMode \? directStepIngredients : proDirectStepIngredients,[\s\S]*?proFinalRestMinutes, activeYeastType, fridgeTemp\)/);
 assert.match(detailedStepBuilder, /getDetailedDirectStepsLocalized\(lang,[\s\S]*?directRecipeRoomHours, roomTemp, fridgeTemp,/);
 for (const styleMarker of ["pizzaStyle === 'romana'", 'isRomanTeglia', "pizzaStyle === 'ny_style'", "pizzaStyle === 'neapolitan'"]) {
   assert.ok(detailedStepBuilder.includes(styleMarker), `GF recipe generation retains ${styleMarker} style routing`);

@@ -38,6 +38,12 @@ function loadTypeScript(relativePath) {
   vm.runInNewContext(compiled, {
     module: moduleRef,
     exports: moduleRef.exports,
+    require: (specifier) => {
+      if (specifier === './proMethods/bigaPoolish') {
+        return loadTypeScript('src/proMethods/bigaPoolish.ts');
+      }
+      throw new Error(`Unexpected dependency in ${relativePath}: ${specifier}`);
+    },
   }, { filename: relativePath });
   return moduleRef.exports;
 }
@@ -173,7 +179,8 @@ assert.match(croatianDirectSource, /const isNewYorkInstantMixerBeginner = isNewY
 assert.match(croatianDirectSource, /\] : instantMixerInstructions \? \[/);
 assert.match(croatianDirectSource, /instantMixerInstructions\.initialMix/);
 assert.match(croatianDirectSource, /instantMixerInstructions\.addYeast/);
-assert.match(indexSource, /getDetailedDirectSteps\(mixingForExperience, beginnerTextMode \? directStepIngredients : proDirectStepIngredients,[^\n]*proFinalRestMinutes, preferredYeastType, fridgeTemp\)/);
+assert.match(indexSource, /const activeYeastType = preferredYeastType;/);
+assert.match(indexSource, /proFinalRestMinutes, activeYeastType, fridgeTemp\)/);
 const localizedFunction = indexFile.statements.find((statement) =>
   ts.isFunctionDeclaration(statement) && statement.name?.text === 'getDetailedDirectStepsLocalized');
 assert.ok(localizedFunction);
@@ -181,7 +188,7 @@ const localizedSource = localizedFunction.getText(indexFile);
 assert.match(localizedSource, /isNewYorkMixerBeginner && preferredYeastType === 'dry'/);
 assert.match(localizedSource, /instantMixerInstructions\?\.initialMix/);
 assert.match(localizedSource, /instantMixerInstructions\?\.addYeast/);
-assert.match(indexSource, /proFinalRestMinutes, preferredYeastType\)/);
+assert.match(indexSource, /proFinalRestMinutes, activeYeastType\)/);
 
 assert.match(indexSource, /const mixRestMinutes = isNewYorkMixerBeginner \? 6 :/);
 assert.match(indexSource, /const mixRestLabel = isGlutenFree && beginnerMode \? '5 minuta' : isNeapolitanBeginner \? '5 minuta' : isNewYorkMixerBeginner \? '6 minuta'/);

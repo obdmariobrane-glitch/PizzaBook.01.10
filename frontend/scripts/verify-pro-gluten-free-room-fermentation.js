@@ -104,16 +104,12 @@ for (const lang of languages) {
               { ...initialMixingPhase, steps: [...initialMixingPhase.steps], timers: [...initialMixingPhase.timers] },
               'hand',
             );
-            assert.equal(
-              adaptedMixingPhase.timers.some((timer) => timer.kind === 'rest'),
-              false,
-              `${lang}/${style}/${minutes}m does not retain a separate post-mix hydration timer`,
-            );
-            assert.equal(
-              [...adaptedMixingPhase.timers, ...result.timers].reduce((total, timer) => total + timer.seconds, 0),
-              scheduledRoomSeconds,
-              `${lang}/${style}/${minutes}m mixing and room timers do not extend the selected initial room period`,
-            );
+            assert.equal(adaptedMixingPhase.timers.find((timer) => timer.id === 'post-mix-rest')?.seconds, 300,
+              `${lang}/${style}/${minutes}m keeps the independent Psyllium rest timer`);
+            assert.ok(adaptedMixingPhase.steps.at(-1).includes('5 minutes'),
+              `${lang}/${style}/${minutes}m keeps the matching Psyllium rest instruction`);
+            assert.equal(result.timers.reduce((total, timer) => total + timer.seconds, 0), scheduledRoomSeconds,
+              `${lang}/${style}/${minutes}m room timers alone preserve the selected initial room period`);
 
             const expectedRestSeconds = Math.min(15 * 60, scheduledRoomSeconds);
             const expectedRemainingRoomSeconds = scheduledRoomSeconds - expectedRestSeconds;
@@ -171,7 +167,7 @@ for (const lang of languages) {
 
 assert.match(indexSource, /const proInitialRoomFermentationSeconds = proFermentationSchedule\?\.phases[\s\S]*?phase\.kind === 'final' && phase\.environment === 'room'/);
 assert.match(indexSource, /!isBeginner[\s\S]*?method === 'direct'[\s\S]*?flour === 'glutenFree'[\s\S]*?adaptProGlutenFreeRoomPhaseB/);
-assert.match(indexSource, /if \(f === 'glutenFree'\) setMethod\('direct'\)/);
+assert.match(indexSource, /setMethod\(saved\.flour === 'glutenFree' \? 'direct' : saved\.method\)/);
 assert.match(indexSource, /phaseIndex === 0\) return adaptProGlutenFreeMixingPhaseA\(phase, mixingForExperience\)/);
 assert.match(indexSource, /adaptProGlutenFreeRoomPhaseB\(/);
 for (const flour of ['glutenFree', 'custom']) {

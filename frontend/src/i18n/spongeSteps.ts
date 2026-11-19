@@ -11,8 +11,8 @@ export type SpongePreparationInput = {
   flour: string;
   water: string;
   yeast: string;
-  yeastType: CommercialYeastType;
   yeastPct: string;
+  yeastType: CommercialYeastType;
   fermentationTemp: string;
   fermentationHours: number;
 };
@@ -29,9 +29,6 @@ export const SPONGE_COPY: Record<Lang, {
   manualYeast: string;
   spongeYeastLabel: string;
   finalDoughYeastLabel: string;
-  yeastPercentage: string;
-  automaticReference: string;
-  automaticCaution: string;
   fresh: string;
   activeDry: string;
   instantDry: string;
@@ -55,9 +52,6 @@ export const SPONGE_COPY: Record<Lang, {
     manualYeast: 'Kvasac za Sponge (g)',
     spongeYeastLabel: 'Kvasac za Sponge',
     finalDoughYeastLabel: 'Kvasac za završno tijesto',
-    yeastPercentage: 'Udio kvasca prema brašnu za Sponge',
-    automaticReference: 'Referenca: 2,2% svježeg kvasca prema ukupnom brašnu pri 27 °C tijekom 4,5 h; suhi kvasac preračunava se faktorima 0,40 (aktivni suhi) i 0,33 (instant suhi).',
-    automaticCaution: 'Procjena koristi privremeni Q10 = 2 i nije potvrđena kućnim testovima fermentacije Spongea.',
     fresh: 'Svježi',
     activeDry: 'Aktivni suhi',
     instantDry: 'Instant suhi',
@@ -81,9 +75,6 @@ export const SPONGE_COPY: Record<Lang, {
     manualYeast: 'Sponge yeast (g)',
     spongeYeastLabel: 'Sponge yeast',
     finalDoughYeastLabel: 'Final-dough yeast',
-    yeastPercentage: 'Yeast relative to Sponge flour',
-    automaticReference: 'Reference: 2.2% fresh yeast by total flour at 27°C for 4.5 hours; dry yeast is converted using factors 0.40 (active dry) and 0.33 (instant dry).',
-    automaticCaution: 'This estimate uses a provisional Q10 = 2 and has not been validated with home Sponge fermentation tests.',
     fresh: 'Fresh',
     activeDry: 'Active dry',
     instantDry: 'Instant dry',
@@ -107,9 +98,6 @@ export const SPONGE_COPY: Record<Lang, {
     manualYeast: 'Sponge-Hefe (g)',
     spongeYeastLabel: 'Sponge-Hefe',
     finalDoughYeastLabel: 'Hefe für den Hauptteig',
-    yeastPercentage: 'Hefe bezogen auf das Sponge-Mehl',
-    automaticReference: 'Referenz: 2,2 % Frischhefe bezogen auf das Gesamtmehl bei 27 °C für 4,5 Stunden; Umrechnungsfaktoren für Trockenhefe: 0,40 (Aktiv-Trockenhefe) und 0,33 (Instant-Trockenhefe).',
-    automaticCaution: 'Die Schätzung verwendet einen vorläufigen Q10-Wert von 2 und wurde nicht durch Sponge-Gärtests im Haushalt validiert.',
     fresh: 'Frischhefe',
     activeDry: 'Aktiv-Trockenhefe',
     instantDry: 'Instant-Trockenhefe',
@@ -133,9 +121,6 @@ export const SPONGE_COPY: Record<Lang, {
     manualYeast: 'Kvas za Sponge (g)',
     spongeYeastLabel: 'Kvas za Sponge',
     finalDoughYeastLabel: 'Kvas za končno testo',
-    yeastPercentage: 'Delež kvasa glede na moko za Sponge',
-    automaticReference: 'Referenca: 2,2 % svežega kvasa glede na skupno moko pri 27 °C za 4,5 ure; pretvorbena faktorja za suhi kvas sta 0,40 (aktivni suhi) in 0,33 (instant suhi).',
-    automaticCaution: 'Ocena uporablja začasni Q10 = 2 in ni bila potrjena s testi fermentacije Spongea doma.',
     fresh: 'Sveži',
     activeDry: 'Aktivni suhi',
     instantDry: 'Instant suhi',

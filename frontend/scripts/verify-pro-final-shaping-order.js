@@ -10,6 +10,15 @@ const frontendRoot = path.join(path.dirname(module.filename), '..');
 const indexPath = path.join(frontendRoot, 'app', '(tabs)', 'index.tsx');
 const indexSource = fs.readFileSync(indexPath, 'utf8');
 const indexFile = ts.createSourceFile(indexPath, indexSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+const pressRestFunction = indexFile.statements.find(
+  (statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === 'getRomanTegliaPressRestTimer',
+);
+assert.ok(pressRestFunction, 'production Romana Teglia press-rest timer must exist');
+const pressRestModule = { exports: {} };
+vm.runInNewContext(ts.transpileModule(
+  `${pressRestFunction.getText(indexFile)}\nmodule.exports = getRomanTegliaPressRestTimer;`,
+  { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } },
+).outputText, { module: pressRestModule, exports: pressRestModule.exports });
 const phaseFunction = indexFile.statements.find(
   (statement) => ts.isFunctionDeclaration(statement) && statement.name?.text === 'replaceProPhaseE',
 );
@@ -25,6 +34,7 @@ vm.runInNewContext(compiledPhaseFunction, {
   formatDuration: (seconds) => `${Math.round(seconds / 60)} min`,
   usesPizzaOvenBehavior: (oven) => oven === 'ooni' || oven === 'kamado',
   getBeginnerPreheatMinutes: () => 20,
+  getRomanTegliaPressRestTimer: pressRestModule.exports,
   getTegliaFinalProofPlan: () => ({ proofMinutes: 0, pressRelaxationMinutes: 0, totalMinutes: 0 }),
   getKamadoBakeBlockedText: () => 'Kamado bake settings are not defined.',
 });
@@ -124,6 +134,42 @@ function assertInOrder(text, expressions, label) {
     assert.ok(match.index > previousIndex, `${label}: ${expression} must follow the prior instruction`);
     previousIndex = match.index;
   }
+}
+
+const slovenianTrayCases = [
+  [1, '1 pekač', '1 enako porcijo'],
+  [2, '2 pekača', '2 enaki porciji'],
+  [3, 'vse 3 pekače', '3 enake porcije'],
+  [4, 'vse 4 pekače', '4 enake porcije'],
+  [5, 'vseh 5 pekačev', '5 enakih porcij'],
+  [12, 'vseh 12 pekačev', '12 enakih porcij'],
+  [22, '22 pekača', '22 enaki porciji'],
+];
+
+for (const [trayCount, trayText, portionText] of slovenianTrayCases) {
+  const phases = replaceProPhaseE(
+    [{ title: 'Phase D: Existing romanaTeglia phase', steps: ['Existing phase'] }],
+    {
+      lang: 'sl',
+      variant: 'romanaTeglia',
+      glutenFree: false,
+      oven: 'homeStone',
+      ovenTemp: 280,
+      fridgeHours: 24,
+      finalRestMinutes: 30,
+      diameter: 30,
+      sauceAmount: 100,
+      cheeseAmount: 100,
+      trayCount,
+      bakingTimeRange: '20–25 min',
+      trayDimensions: { width: 30, length: 40 },
+    },
+  );
+  const steps = phases.at(-1).steps;
+  assert.equal(steps.length, 8, `sl/${trayCount}: Teglia keeps exactly eight final steps`);
+  assert.match(steps[2], new RegExp(trayText), `sl/${trayCount}: correct tray form`);
+  assert.match(steps[3], new RegExp(portionText), `sl/${trayCount}: correct portion form`);
+  assert.match(steps[5], /po vsakem pekaču/, `sl/${trayCount}: toppings are stated per tray`);
 }
 
 for (const [lang, terms] of Object.entries(languages)) {
