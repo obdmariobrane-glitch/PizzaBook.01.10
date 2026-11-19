@@ -2991,6 +2991,16 @@ export default function CalculatorHome() {
     }
     return formatWeight(grams, measurementSystem, precise);
   };
+  const formatProDirectYeastAmount = (grams: number) => {
+    const locale = ({ hr: 'hr-HR', en: 'en-US', de: 'de-DE', sl: 'sl-SI' } as const)[lang];
+    if (grams > 0 && Math.round(grams * 100) === 0) {
+      return `<${new Intl.NumberFormat(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(0.01)}`;
+    }
+    return new Intl.NumberFormat(locale, { maximumFractionDigits: 2 }).format(grams);
+  };
+  const proDirectYeastWeight = (grams: number) => {
+    return `${formatProDirectYeastAmount(grams)} g`;
+  };
   const formatCombinedWeight = (grams: number, precise = false) => {
     const formatted = weight(grams, precise);
     if (grams <= 0 || !/^0(?:[,.]0+)?\s*(?:g|oz|lb)$/i.test(formatted)) return formatted;
@@ -3716,6 +3726,7 @@ export default function CalculatorHome() {
       isProGlutenFreeBlend,
       isProEffectivelyGlutenFree,
       fridgeTemperatureText: formatTemperature(fridgeTemp, 'celsius'),
+      yeastDisplay: method === 'direct' ? formatProDirectYeastAmount(dough.total.yeast) : undefined,
     })
     : generatedDetailedDirectSteps;
   const addProPrefermentFinalYeast = !isBeginner
@@ -4786,7 +4797,7 @@ export default function CalculatorHome() {
             <ResultRow label={`${t.calc.totalWater} (${formatTemperature(dough.waterTemp, temperatureUnit)})`} value={weight(dough.main.water)} highlight />
           )}
           <ResultRow label={t.calc.saltAmount} value={weight(dough.main.salt, true)} />
-            <ResultRow label={`${t.calc.yeastAmount} (${yeastShortLabel}, ${recipeYeastPercentage}%)`} value={weight(dough.main.yeast, true)} />
+            <ResultRow label={`${t.calc.yeastAmount} (${yeastShortLabel}, ${recipeYeastPercentage}%)`} value={!isBeginner && method === 'direct' ? proDirectYeastWeight(dough.main.yeast) : weight(dough.main.yeast, true)} />
           <ResultRow label={t.calc.oilAmount} value={weight(dough.main.oil)} />
         </>
       )}
@@ -6449,7 +6460,7 @@ export default function CalculatorHome() {
                 <ResultRow label={`${t.calc.totalWater} (${formatTemperature(dough.waterTemp, temperatureUnit)})`} value={weight(dough.main.water)} highlight />
               )}
               <ResultRow label={t.calc.saltAmount} value={weight(dough.main.salt, true)} />
-              <ResultRow label={`${t.calc.yeastAmount} (${yeastShortLabel}, ${recipeYeastPercentage}%)`} value={weight(dough.main.yeast, true)} />
+              <ResultRow label={`${t.calc.yeastAmount} (${yeastShortLabel}, ${recipeYeastPercentage}%)`} value={!isBeginner && method === 'direct' ? proDirectYeastWeight(dough.main.yeast) : weight(dough.main.yeast, true)} />
               <ResultRow label={t.calc.oilAmount} value={weight(dough.main.oil)} />
             </>
           )}

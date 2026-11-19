@@ -121,8 +121,33 @@ assert.deepEqual(
   'non-GF instructions retain existing Beginner-reference text',
 );
 
+for (const { caseName, isProGlutenFreeBlend } of [
+  { caseName: 'Tipo 0/00', isProGlutenFreeBlend: false },
+  { caseName: 'flour blend', isProGlutenFreeBlend: true },
+]) {
+  const generated = [{
+    steps: ['Izmjerite 1000 g brašna, 20 g soli, 1.65 g kvasca i 650 g vode.'],
+  }];
+  const beginnerReference = [{
+    steps: ['Izmjerite 1000 g brašna, 20 g soli, 1.6544415396601928 g kvasca i 650 g vode.'],
+  }];
+  const aligned = alignProDirectSteps(generated, beginnerReference, {
+    isProGlutenFreeBlend,
+    isProEffectivelyGlutenFree: isProGlutenFreeBlend,
+    fridgeTemperatureText: '4°C',
+    yeastDisplay: new Intl.NumberFormat('hr', { maximumFractionDigits: 2 }).format(1.6544415396601928),
+  });
+  assert.equal(aligned[0].steps[0], 'Izmjerite 1000 g brašna, 20 g soli, 1,65 g kvasca i 650 g vode.', `${caseName}: rendered measurement step uses localized two-decimal yeast`);
+  assert.equal(beginnerReference[0].steps[0].includes('1.6544415396601928'), true, `${caseName}: Beginner reference remains unchanged`);
+}
+
 assert.match(indexSource, /alignProDirectSteps\(generatedDetailedDirectSteps, proTextReferenceSteps/);
 assert.match(indexSource, /fridgeTemperatureText: formatTemperature\(fridgeTemp, 'celsius'\)/);
 assert.match(indexSource, /const proTextReferenceSteps = !isBeginner && generatedDetailedDirectSteps \? buildDetailedDirectSteps\(true\) : null/);
+assert.match(indexSource, /yeastDisplay: method === 'direct' \? formatProDirectYeastAmount\(dough\.total\.yeast\) : undefined/);
+assert.match(indexSource, /const formatProDirectYeastAmount = \(grams: number\) =>/);
+assert.match(indexSource, /const proDirectYeastWeight = \(grams: number\) =>/);
+assert.match(indexSource, /!isBeginner && method === 'direct' \? proDirectYeastWeight\(dough\.main\.yeast\) : weight\(dough\.main\.yeast, true\)/);
+assert.equal(new Intl.NumberFormat('hr', { maximumFractionDigits: 2 }).format(1.6544415396601928), '1,65', 'Croatian PRO Direct summary uses a decimal comma');
 
 console.log('F43 final rendered-step alignment regression passed.');
