@@ -1103,7 +1103,7 @@ export default function Planner() {
     if (isProKamadoPlan) return shiftedSteps;
     const adjustedFinalMix = method === 'sponge'
       ? shiftedSteps.find((step) => step.phaseId === 'sponge.finalMix')
-      : (isProNyCombinedColdPlan || isProRomanaTondaCombinedColdPlan)
+      : (isProNyCombinedColdPlan || isProRomanaTondaCombinedColdPlan || isProNeapolitanCombinedColdPlan)
         ? shiftedSteps[finalMixStepIndex] ?? finalMixStep
         : finalMixStep;
     const mixAt = adjustedFinalMix?.at ?? finalMixStep.at;

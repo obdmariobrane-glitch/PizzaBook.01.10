@@ -273,6 +273,7 @@ assert.match(plannerIntegrationSource, /getProNapolitanaPlannerWindow\([\s\S]*?p
 assert.match(plannerIntegrationSource, /buildProNapolitanaFermentationSchedule\([\s\S]*?proFinalRoomHours/);
 assert.match(plannerIntegrationSource, /applyPlannerPhaseOverrides\(generatedSteps, activePhaseOverrides\)/);
 assert.match(plannerIntegrationSource, /shiftedSteps\[finalMixStepIndex\] \?\? finalMixStep/);
+assert.match(plannerIntegrationSource, /\(isProNyCombinedColdPlan \|\| isProRomanaTondaCombinedColdPlan \|\| isProNeapolitanCombinedColdPlan\)\s*\?\s*shiftedSteps\[finalMixStepIndex\]/, 'combined Napolitana initial events use the aligned final-mix time');
 assert.match(plannerIntegrationSource, /const isProRomanaTondaCombinedColdPlan = isProNapolitanaColdPlan[\s\S]*?romanFormat === 'tonda'[\s\S]*?proNapolitanaCombined/);
 assert.match(plannerIntegrationSource, /\(isProNyCombinedColdPlan \|\| isProRomanaTondaCombinedColdPlan\)\s*&& event\.kind === 'balling'[\s\S]*?phaseId: 'pro\.initial\.ball-rest'/);
 assert.match(plannerIntegrationSource, /step\.phaseId === 'pro\.initial\.balling'[\s\S]*?step\.phaseId === 'pro\.initial\.ball-rest'/);
@@ -922,6 +923,14 @@ for (const style of standardStyles) {
         assert.equal(window.fridgeEndAt.getTime() - window.fridgeStartAt.getTime(), 24 * 3600000, `${style}/${mixing}/${method}: fridge remains 24 h`);
         assert.equal(bakeTarget.getTime() - window.fridgeEndAt.getTime(), finalRestHours * 3600000, `${style}/${mixing}/${method}: final room rest is exact`);
         assert.equal(initialSeconds, getProNapolitanaInitialIntervals(method, isCombined, 22).reduce((total, interval) => total + interval.seconds, 0), `${style}/${mixing}/${method}: initial durations do not depend on final-rest setting`);
+        if (style === 'neapolitan' && mixing === 'hand' && method === 'biga' && isCombined) {
+          const expectedFridgeStart = finalRestHours === 2 ? '2030-01-01T17:00:00.000Z' : '2030-01-01T15:00:00.000Z';
+          const expectedBallingAt = finalRestHours === 2 ? '2030-01-01T16:45:00.000Z' : '2030-01-01T14:45:00.000Z';
+          assert.equal(window.fridgeStartAt.toISOString(), expectedFridgeStart, `${finalRestHours} h: Biga + Poolish Napolitana fridge starts at the selected schedule time`);
+          assert.equal(balling.at.toISOString(), expectedBallingAt, `${finalRestHours} h: balling starts 15 minutes before refrigeration`);
+          assert.equal(window.fridgeStartAt.getTime() - balling.at.getTime(), 15 * 60000, `${finalRestHours} h: all 15 minutes for the ball rest are preserved`);
+          console.log(`PRO Napolitana Biga + Poolish ${finalRestHours} h: balling ${balling.at.toISOString().slice(11, 16)}, fridge ${window.fridgeStartAt.toISOString().slice(11, 16)}, bake ${bakeTarget.toISOString().slice(11, 16)}`);
+        }
         if (method === 'sponge') {
           const spongeSteps = alignProNapolitanaSpongePlannerSteps([
             { phaseId: 'sponge.preparation', at: window.fridgeStartAt },
