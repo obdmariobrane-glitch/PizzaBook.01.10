@@ -8660,7 +8660,9 @@ function getDetailedDirectSteps(
         'Bezglutenska smjesa se ne mijesi za razvoj glutena; miješajte je samo dok se svi sastojci ne povežu u homogenu, ljepljivu masu.',
         `Dodajte ${ingredients.oil} g maslinovog ulja i miješajte dok se potpuno ne sjedini sa smjesom.`,
         'Zamjes je gotov kada je masa ujednačena, glatka i ljepljiva.',
-        'Ostavite smjesu 5 minuta kako bi psyllium povukao vlagu i dao joj potrebnu čvrstoću.',
+        !beginnerMode && isNapolitana && hand
+          ? 'Nakon zamjesa pokrijte smjesu i ostavite je 5 minuta kako bi psyllium povukao vlagu i dao joj potrebnu čvrstoću.'
+          : 'Ostavite smjesu 5 minuta kako bi psyllium povukao vlagu i dao joj potrebnu čvrstoću.',
       ] : instantMixerInstructions ? [
         'Operite i temeljito osušite ruke.',
         'Pripremite mikser i njegovu posudu.',
@@ -9568,9 +9570,11 @@ function getDetailedDirectStepsLocalized(
             : pick('Der Teig ist fertig geknetet, wenn er glatt, elastisch und homogen ist.', 'The dough is fully mixed when it is smooth, elastic, and homogeneous.', 'Gnetenje je končano, ko je testo gladko, elastično in homogeno.'),
         ] : []),
         isGlutenFree
-          ? (hand
-            ? pick('Lassen Sie die Masse 5 Minuten ruhen, damit das Psyllium Feuchtigkeit bindet und Struktur gibt.', 'Let the mass rest for 5 minutes so the psyllium absorbs moisture and builds structure.', 'Maso pustite počivati 5 minut, da psyllium vpije vlago in da strukturo.')
-            : pick('Lassen Sie die Masse 5 Minuten in der Mixerschüssel ruhen, damit das Psyllium Feuchtigkeit bindet und Struktur gibt.', 'Let the mass rest for 5 minutes in the mixer bowl so the psyllium absorbs moisture and builds structure.', 'Maso pustite počivati 5 minut v posodi mešalnika, da psyllium vpije vlago in da strukturo.'))
+          ? (!beginnerMode && variant === 'napolitana' && hand
+            ? pick('Decken Sie die Masse nach dem Mischen ab und lassen Sie sie 5 Minuten ruhen, damit das Psyllium Feuchtigkeit bindet und Struktur gibt.', 'After mixing, cover the mass and let it rest for 5 minutes so the psyllium absorbs moisture and builds structure.', 'Po končanem mešanju maso pokrijte in jo pustite počivati 5 minut, da psyllium vpije vlago in ji da strukturo.')
+            : hand
+              ? pick('Lassen Sie die Masse 5 Minuten ruhen, damit das Psyllium Feuchtigkeit bindet und Struktur gibt.', 'Let the mass rest for 5 minutes so the psyllium absorbs moisture and builds structure.', 'Maso pustite počivati 5 minut, da psyllium vpije vlago in da strukturo.')
+              : pick('Lassen Sie die Masse 5 Minuten in der Mixerschüssel ruhen, damit das Psyllium Feuchtigkeit bindet und Struktur gibt.', 'Let the mass rest for 5 minutes in the mixer bowl so the psyllium absorbs moisture and builds structure.', 'Maso pustite počivati 5 minut v posodi mešalnika, da psyllium vpije vlago in da strukturo.'))
           : hand
           ? pick(`Lassen Sie den Teig ${mixRestLabel} ruhen.`, `Let the dough rest for ${mixRestLabel}.`, `Testo pustite počivati ${mixRestLabel}.`)
           : pick(`Lassen Sie den Teig ${mixRestLabel} in der Mixerschüssel ruhen.`, `Let the dough rest for ${mixRestLabel} in the mixer bowl.`, `Testo pustite počivati ${mixRestLabel} v posodi mešalnika.`),

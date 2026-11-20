@@ -28,10 +28,16 @@ const expectedPhaseBTitles = {
   sl: 'Faza B: Začetna fermentacija pri sobni temperaturi',
 };
 const expectedHydrationTitles = {
-  hr: 'Faza B: Hidratacijski odmor',
-  en: 'Phase B: Hydration rest',
-  de: 'Phase B: Hydratationsruhe',
-  sl: 'Faza B: Hidratacijski počitek',
+  hr: 'Faza B: Dodatni hidratacijski odmor',
+  en: 'Phase B: Additional hydration rest',
+  de: 'Phase B: Zusätzliche Hydratationsruhe',
+  sl: 'Faza B: Dodaten hidratacijski počitek',
+};
+const expectedNoRoomTitles = {
+  hr: 'Faza B: Bez dodatne početne faze',
+  en: 'Phase B: No additional initial phase',
+  de: 'Phase B: Keine zusätzliche Anfangsphase',
+  sl: 'Faza B: Brez dodatne začetne faze',
 };
 const expectedNoRemainingFermentation = {
   hr: 'ne preostaje vrijeme za fermentaciju',
@@ -40,22 +46,40 @@ const expectedNoRemainingFermentation = {
   sl: 'za fermentacijo ne ostane časa',
 };
 const expectedNoRoomPeriod = {
-  hr: 'dodatni hidratacijski odmor u ovoj fazi nije zakazan',
-  en: 'no extra hydration rest is scheduled in this phase',
-  de: 'keine zusätzliche Hydratationsruhe eingeplant',
-  sl: 'v tej fazi ni načrtovan dodaten hidratacijski počitek',
+  hr: 'nema dodatne početne sobne faze',
+  en: 'No additional initial room phase',
+  de: 'keine zusätzliche anfängliche Raumphase',
+  sl: 'ni dodatne začetne sobne faze',
 };
 const expectedShortHydrationLimitation = {
-  hr: 'kraće je od preporučenih 15 minuta',
-  en: 'shorter than the 15-minute hydration target',
-  de: 'kürzer als die vorgesehenen 15 Minuten',
-  sl: 'krajše od predvidenih 15 minut',
+  hr: 'kraće je od preporučenih 15 minuta za dodatni odmor',
+  en: 'shorter than the 15-minute additional-rest target',
+  de: 'kürzer als die vorgesehenen 15 Minuten für die zusätzliche Ruhe',
+  sl: 'krajše od predvidenih 15 minut za dodatni počitek',
 };
 const expectedNoHydrationLimitation = {
-  hr: 'nije moguće odraditi 15-minutnu hidrataciju',
-  en: '15-minute psyllium hydration cannot be accommodated',
-  de: '15-minütige Psyllium-Hydratation ist daher nicht möglich',
-  sl: '15-minutne hidracije psylliuma ni mogoče izvesti',
+  hr: 'dodatni 15-minutni odmor nije zakazan',
+  en: 'no separate 15-minute rest is scheduled',
+  de: 'keine separate 15-minütige Ruhephase ist eingeplant',
+  sl: 'ločen 15-minutni počitek ni načrtovan',
+};
+const expectedAdditionalRestTerms = {
+  hr: 'Dodatni hidratacijski odmor',
+  en: 'additional',
+  de: 'zusätzliche',
+  sl: 'Dodaten hidratacijski počitek',
+};
+const expectedNoRoomInfo = {
+  hr: 'Petominutna hidratacija psylliuma nakon zamjesa',
+  en: '5-minute psyllium hydration after mixing',
+  de: '5-minütige Psyllium-Hydratation nach dem Mischen',
+  sl: '5-minutna hidracija psylliuma po mešanju',
+};
+const expectedAdditionalRestInfo = {
+  hr: 'Dodatni hidratacijski odmor',
+  en: 'additional hydration rest',
+  de: 'zusätzliche Hydratationsruhe',
+  sl: 'Dodaten hidratacijski počitek',
 };
 
 const initialPhase = {
@@ -113,8 +137,13 @@ for (const lang of languages) {
 
             const expectedRestSeconds = Math.min(15 * 60, scheduledRoomSeconds);
             const expectedRemainingRoomSeconds = scheduledRoomSeconds - expectedRestSeconds;
-            assert.equal(result.title, expectedRemainingRoomSeconds > 0 ? expectedPhaseBTitles[lang] : expectedHydrationTitles[lang], `${lang}/${style}/${minutes}m title matches the remaining fermentation`);
+            const expectedTitle = expectedRemainingRoomSeconds > 0
+              ? expectedPhaseBTitles[lang]
+              : scheduledRoomSeconds > 0 ? expectedHydrationTitles[lang] : expectedNoRoomTitles[lang];
+            assert.equal(result.title, expectedTitle, `${lang}/${style}/${minutes}m title matches the scheduled room phase`);
             assert.ok(result.fermentationInfo, `${lang}/${style}/${minutes}m explains that rest is included in the selected room period`);
+            assert.ok(result.fermentationInfo.includes(scheduledRoomSeconds > 0 ? expectedAdditionalRestInfo[lang] : expectedNoRoomInfo[lang]),
+              `${lang}/${style}/${minutes}m fermentation info distinguishes additional rest from post-mix hydration`);
             assert.equal(result.steps[0], initialPhase.steps[0], `${lang}/${style}/${minutes}m preserves the opening step`);
             assert.equal(result.steps.at(-1), initialPhase.steps.at(-1), `${lang}/${style}/${minutes}m preserves trailing steps`);
 
@@ -129,7 +158,9 @@ for (const lang of languages) {
             );
 
             if (expectedRestSeconds > 0) {
-              assert.ok(result.steps.some((step) => step.includes(formatDuration(expectedRestSeconds, lang))), `${lang}/${style}/${minutes}m instructions use the capped hydration-rest duration`);
+              const additionalRestStep = result.steps.find((step) => step.includes(formatDuration(expectedRestSeconds, lang)));
+              assert.ok(additionalRestStep, `${lang}/${style}/${minutes}m instructions use the capped hydration-rest duration`);
+              assert.ok(additionalRestStep.toLocaleLowerCase().includes(expectedAdditionalRestTerms[lang].toLocaleLowerCase()), `${lang}/${style}/${minutes}m names Phase B hydration as an additional rest`);
             }
             if (expectedRemainingRoomSeconds > 0) {
               assert.equal(roomTimer?.seconds, expectedRemainingRoomSeconds, `${lang}/${style}/${minutes}m room timer is only the remaining schedule time`);

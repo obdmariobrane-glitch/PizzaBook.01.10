@@ -167,7 +167,16 @@ function assertMixingRestAdaptation(phase, mixing, context, lang = 'hr') {
     de: 'Psyllium-Hydratation',
     sl: 'Hidracija psylliuma',
   };
+  const afterMixingCopy = {
+    hr: /nakon (?:zavrsetka )?zamjesa/i,
+    en: /after (?:the )?mixing/i,
+    de: /nach dem mischen/i,
+    sl: /po (?:končanem )?mešanju/i,
+  };
   assert.ok(adapted.steps.at(-1).match(/\b5\s*(?:minutes?|minuta|minut|Minuten)\b/i), `${context}: separate Psyllium rest instruction remains for ${mixing} mixing`);
+  if (context.includes('/napolitana/') && mixing === 'hand') {
+    assert.match(adapted.steps.at(-1), afterMixingCopy[lang], `${context}: Psyllium hydration is identified as the post-mix rest`);
+  }
   assert.equal(adapted.timers.find((timer) => timer.kind === 'rest')?.seconds, 5 * 60, `${context}: separate Psyllium rest timer remains for ${mixing} mixing`);
   assert.equal(adapted.timers.find((timer) => timer.kind === 'rest')?.label, timerLabels[lang], `${context}: timer label is localized`);
 }
@@ -253,7 +262,9 @@ const noInitialRoomPhase = adaptProGlutenFreeRoomPhaseB({
   timers: [],
 }, 'en', 'neapolitan', 0, '22 °C', true);
 assert.equal(noInitialRoomPhase.timers.length, 0, 'zero initial room time adds no extra gluten-free rest timer');
-assert.ok(noInitialRoomPhase.steps.some((step) => step.includes('No initial room period is selected')));
+assert.ok(noInitialRoomPhase.steps.some((step) => step.includes('No additional initial room phase is selected')));
+assert.ok(noInitialRoomPhase.steps.some((step) => step.includes('5 minutes of psyllium hydration after mixing')));
+assert.ok(noInitialRoomPhase.steps.some((step) => step.includes('no separate 15-minute rest is scheduled')));
 
 const rawYeastGrams = 0.126789;
 const yeastIngredients = { ...ingredients, yeast: rawYeastGrams };
@@ -313,11 +324,9 @@ for (const lang of ['hr', 'en', 'de', 'sl']) {
   }
 }
 
-assertRestMatchesTimer(
-  generateHrPhase({ style: 'napolitana', mixing: 'hand', flour: 'glutenFree', beginner: true }),
-  5,
-  'beginner/direct/napolitana/glutenFree/hand',
-);
+const beginnerGlutenFreeNapolitana = generateHrPhase({ style: 'napolitana', mixing: 'hand', flour: 'glutenFree', beginner: true });
+assertRestMatchesTimer(beginnerGlutenFreeNapolitana, 5, 'beginner/direct/napolitana/glutenFree/hand');
+assert.doesNotMatch(beginnerGlutenFreeNapolitana.steps.join(' '), /Nakon zamjesa/, 'Beginner wording remains unchanged');
 assertRestMatchesTimer(
   generateHrPhase({ style: 'newYork', mixing: 'mixer', flour: 'glutenFree', beginner: true, yeast: 'dry' }),
   5,
